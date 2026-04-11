@@ -20,11 +20,17 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # 1. Add column
-    op.add_column('material_chunks', sa.Column('search_vector', postgresql.TSVECTOR(), nullable=True))
+    # Check if column exists
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    columns = [c['name'] for c in inspector.get_columns('material_chunks')]
     
-    # 2. Basic GIN index
-    op.create_index('ix_material_chunks_search_vector', 'material_chunks', ['search_vector'], unique=False, postgresql_using='gin')
+    if 'search_vector' not in columns:
+        # 1. Add column
+        op.add_column('material_chunks', sa.Column('search_vector', postgresql.TSVECTOR(), nullable=True))
+        
+        # 2. Basic GIN index
+        op.create_index('ix_material_chunks_search_vector', 'material_chunks', ['search_vector'], unique=False, postgresql_using='gin')
     
     # 3. Create trigger function (using 'english' dictionary for Nigerian curriculum)
     op.execute("""
@@ -36,10 +42,15 @@ def upgrade() -> None:
         $$ LANGUAGE plpgsql;
     """)
     
-    # 4. Create trigger
+    # 4. Create trigger (safely)
     op.execute("""
-        CREATE TRIGGER tsvector_update BEFORE INSERT OR UPDATE
-        ON material_chunks FOR EACH ROW EXECUTE FUNCTION material_chunks_tsvector_trigger();
+        DO $$
+        BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'tsvector_update') THEN
+                CREATE TRIGGER tsvector_update BEFORE INSERT OR UPDATE
+                ON material_chunks FOR EACH ROW EXECUTE FUNCTION material_chunks_tsvector_trigger();
+            END IF;
+        END $$;
     """)
     
     # 5. Backfill existing data

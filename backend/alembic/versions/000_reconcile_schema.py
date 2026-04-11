@@ -48,7 +48,7 @@ def upgrade() -> None:
         )
     """)
 
-    # 3. Create material_chunks table safely
+    # 3. Create material_chunks table safely (base columns only)
     op.execute("""
         CREATE TABLE IF NOT EXISTS material_chunks (
             id UUID PRIMARY KEY,
@@ -56,18 +56,9 @@ def upgrade() -> None:
             content TEXT NOT NULL,
             page_number INTEGER,
             chunk_index INTEGER NOT NULL,
-            chunk_metadata JSONB DEFAULT '{}'::jsonb,
             embedding vector(384),
-            search_vector tsvector,
             created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
         )
-    """)
-
-    # 4. Create indexes safely
-    op.execute("""
-        CREATE INDEX IF NOT EXISTS ix_material_chunks_embedding_hnsw 
-        ON material_chunks USING hnsw (embedding vector_cosine_ops)
-        WITH (m = 16, ef_construction = 64)
     """)
 
 

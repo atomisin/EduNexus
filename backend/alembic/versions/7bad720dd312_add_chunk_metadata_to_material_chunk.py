@@ -22,7 +22,14 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Upgrade schema."""
-    op.add_column('material_chunks', sa.Column('chunk_metadata', postgresql.JSONB(astext_type=sa.Text()), nullable=True))
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    columns = [c['name'] for c in inspector.get_columns('material_chunks')]
+    
+    if 'chunk_metadata' not in columns:
+        op.add_column('material_chunks', sa.Column('chunk_metadata', postgresql.JSONB(astext_type=sa.Text()), nullable=True))
+    
+    # Safely alter column type
     op.execute("ALTER TABLE material_chunks ALTER COLUMN created_at TYPE TIMESTAMP WITH TIME ZONE")
 
 

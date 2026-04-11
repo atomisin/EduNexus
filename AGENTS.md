@@ -1,5 +1,5 @@
 # EduNexus 2.0 — Agent Context
-Last updated: 2026-04-10 (Smart Classroom Workflows & Live Pop Quizzes)
+Last updated: 2026-04-11 (OOM Hardening & Interactive Analytics)
 
 ## Project
 Nigerian EdTech platform. Creche through SS3 + professional.
@@ -37,6 +37,8 @@ Exam Student: deleted per user request (2026-04-07)
 - ALWAYS verify password hashes using `verify_password` from `security.py` rather than strength validators during login (discovered 2026-04-10)
 - ALWAYS delegate scrolling to an inner `ScrollArea` in `StudentDashboard.tsx` to maintain a static sidebar and header (discovered 2026-04-10)
 - ALWAYS ensure the AI Tutor input box is anchored at the bottom of the card using `min-h-0` on flex children to prevent layout jumping (discovered 2026-04-10)
+- NEVER import `matplotlib`, `seaborn`, `pandas`, `torch`, or `numpy` at the module level in the backend API because they exceed the 512MB RAM limit on Render (discovered 2026-04-11)
+- ALWAYS return structured JSON for charts and delegate rendering to Recharts on the frontend to keep the backend footprint lean (discovered 2026-04-11)
 
 ## Architecture
 Backend:  backend/app/api/v1/endpoints/
@@ -49,6 +51,7 @@ Mock Exams: backend/app/api/v1/endpoints/mock_exams.py
 Mock Engine: frontend/src/features/student/learning/MockExamEngine.tsx
 Math Render: frontend/src/components/MathText.tsx
 Student Layout: frontend/src/features/student/components/
+Performance Charts: frontend/src/features/student/components/PerformanceCharts.tsx (Recharts library)
 App Routes:     frontend/src/routes/
 Session Modals: frontend/src/components/session/FloatingContentModal.tsx
 
@@ -64,6 +67,9 @@ Session Modals: frontend/src/components/session/FloatingContentModal.tsx
 - backend/app/api/v1/endpoints/students.py (Self-healing logic stable)
 - frontend/src/features/landing/LandingPage.tsx (Floating auth integrated)
 - frontend/src/components/auth/RegistrationForm.tsx (Hardened subject selection)
+- backend/app/services/chart_generator.py (Now returns JSON)
+- backend/app/api/v1/endpoints/student_progress.py (Refactored to JSON)
+- frontend/src/features/student/dashboard/ProgressView.tsx (Refactored for Recharts)
 
 ## Current open issues
 See HANDOFF.md for full details on remaining bugs.
@@ -130,6 +136,9 @@ See HANDOFF.md for full details on remaining bugs.
 - ✅ FIXED 2026-04-10: Real-time Content Delivery established — Pop Quizzes and Lesson Notes can be launched by the teacher during a Live Session. They appear immediately on the student's screen via WebSockets (`FloatingContentModal.tsx`).
 - ✅ FIXED 2026-04-10: Enhanced Reporting Architecture — Refactored `ReportService` to natively separate and track `live_pop_score` vs `pre_score`/`post_score`, affording teachers clear feedback loops on mid-lecture student comprehension.
 - ✅ FIXED 2026-04-10: Persistent Session Content — Implemented synchronous Notification seeding within the WebSocket `push-content` endpoint to ensure shared lecture notes automatically store themselves in the student dashboard Inbox.
+- ✅ FIXED 2026-04-11: Resolved critical Production OOM crashes by purging heavy dependencies (torch, pandas, matplotlib) and refactoring the backend into a "Lean Data" service.
+- ✅ FIXED 2026-04-11: Launched high-fidelity interactive student analytics using Recharts, replacing static backend images with animated responsive components.
+- ✅ FIXED 2026-04-11: Resolved 'Unable to connect' error on Vercel deployment by hardening backend CORS defaults and enhancing frontend API diagnostic logging.
 
 ## No open issues remain at this time.
 

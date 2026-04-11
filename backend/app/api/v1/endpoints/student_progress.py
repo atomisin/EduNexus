@@ -366,12 +366,14 @@ async def get_performance_analytics(
             "attendance_percentage": round(attendance_pct, 1),
             "total_time_spent": sum(a.time_spent_minutes for a in activities),
         },
-        "chart_data": {
-            "labels": [
-                a.timestamp.strftime("%Y-%m-%d") for a in reversed(activities[-10:])
-            ],
-            "scores": [a.score or 0 for a in reversed(activities[-10:])],
-        },
+        "chart_data": [
+            {
+                "date": a.timestamp.strftime("%Y-%m-%d"),
+                "score": a.score or 0,
+                "type": a.activity_type,
+                "name": a.activity_name
+            } for a in reversed(activities[-10:])
+        ],
         "recent_activities": [
             {
                 "type": a.activity_type,

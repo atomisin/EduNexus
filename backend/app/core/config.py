@@ -87,7 +87,7 @@ class Settings(BaseSettings):
     APP_BASE_URL: str = "http://localhost:5174"
 
     # CORS
-    CORS_ORIGINS: str = "http://localhost:3000,http://localhost:5173,http://localhost:5174,http://127.0.0.1:3000,http://127.0.0.1:5173,http://127.0.0.1:5174"
+    CORS_ORIGINS: str = "http://localhost:3000,http://localhost:5173,http://localhost:5174,https://edu-nexus-beta.vercel.app"
     
     ALLOWED_ORIGINS: Any = [
         "http://localhost:3000",
@@ -96,6 +96,7 @@ class Settings(BaseSettings):
         "http://127.0.0.1:3000",
         "http://127.0.0.1:5173",
         "http://127.0.0.1:5174",
+        "https://edu-nexus-beta.vercel.app",
     ]
 
     @field_validator("ALLOWED_ORIGINS", mode="before")

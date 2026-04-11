@@ -15,21 +15,30 @@ export async function fetchWithAuth(endpoint: string, options: RequestInit & { s
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-    ...fetchOptions,
-    headers,
-    credentials: 'include', // CRITICAL: Send cookies with request
-  });
+  const targetUrl = `${API_BASE_URL}${endpoint}`;
+  try {
+    const response = await fetch(targetUrl, {
+      ...fetchOptions,
+      headers,
+      credentials: 'include', // CRITICAL: Send cookies with request
+    });
 
-  if (!response.ok) {
-    if (response.status === 401 && !silentAuth) {
-      window.dispatchEvent(new Event('auth:unauthorized'));
+    if (!response.ok) {
+      if (response.status === 401 && !silentAuth) {
+        window.dispatchEvent(new Event('auth:unauthorized'));
+      }
+      const error = await response.json().catch(() => ({ detail: 'An error occurred' }));
+      throw new Error(error.detail || `HTTP ${response.status}: ${response.statusText}`);
     }
-    const error = await response.json().catch(() => ({ detail: 'An error occurred' }));
-    throw new Error(error.detail || `HTTP ${response.status}: ${response.statusText}`);
-  }
 
-  return response.json();
+    return response.json();
+  } catch (err: any) {
+    // Distinguish between API errors and Network/CORS errors
+    if (err.name === 'TypeError' || err.message?.includes('Failed to fetch')) {
+      console.error(`🚨 EduNexus Network Error: Failed to reach ${targetUrl}. Check VITE_API_URL and CORS settings.`, err);
+    }
+    throw err;
+  }
 }
 
 // Auth API
@@ -99,32 +108,40 @@ export const authAPI = {
     formData.append('username', email);
     formData.append('password', password);
 
-    const response = await fetch(`${API_BASE_URL}/auth/login`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: formData,
-      credentials: 'include', // CRITICAL: Receive cookies
-    });
+    const targetUrl = `${API_BASE_URL}/auth/login`;
+    try {
+      const response = await fetch(targetUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: formData,
+        credentials: 'include', // CRITICAL: Receive cookies
+      });
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ detail: 'Login failed' }));
-      // If detail is an object, stringify it so the Error message preserves it
-      const message = typeof errorData.detail === 'object' 
-        ? JSON.stringify(errorData.detail) 
-        : (errorData.detail || 'Login failed');
-      throw new Error(message);
-    }
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ detail: 'Login failed' }));
+        // If detail is an object, stringify it so the Error message preserves it
+        const message = typeof errorData.detail === 'object' 
+          ? JSON.stringify(errorData.detail) 
+          : (errorData.detail || 'Login failed');
+        throw new Error(message);
+      }
 
-    const data = await response.json();
-    
-    // Store access_token for Authorization header fallback (C-05)
-    if (data && data.access_token) {
-      localStorage.setItem('edunexus_token', data.access_token);
+      const data = await response.json();
+      
+      // Store access_token for Authorization header fallback (C-05)
+      if (data && data.access_token) {
+        localStorage.setItem('edunexus_token', data.access_token);
+      }
+      
+      return data;
+    } catch (err: any) {
+      if (err.name === 'TypeError' || err.message?.includes('Failed to fetch')) {
+        console.error(`🚨 Login Network Error: Failed to reach ${targetUrl}.`, err);
+      }
+      throw err;
     }
-    
-    return data;
   },
 
   // Logout (Clears HttpOnly cookies via backend)
@@ -220,28 +237,36 @@ export const adminAPI = {
     formData.append('username', email);
     formData.append('password', password);
 
-    const response = await fetch(`${API_BASE_URL}/auth/login`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: formData,
-      credentials: 'include',
-    });
+    const targetUrl = `${API_BASE_URL}/auth/login`;
+    try {
+      const response = await fetch(targetUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: formData,
+        credentials: 'include',
+      });
 
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ detail: 'Login failed' }));
-      throw new Error(error.detail || 'Login failed');
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ detail: 'Login failed' }));
+        throw new Error(error.detail || 'Login failed');
+      }
+
+      const data = await response.json();
+
+      // Store access_token for Authorization header fallback (C-05)
+      if (data && data.access_token) {
+        localStorage.setItem('edunexus_token', data.access_token);
+      }
+
+      return data;
+    } catch (err: any) {
+      if (err.name === 'TypeError' || err.message?.includes('Failed to fetch')) {
+        console.error(`🚨 Admin Login Network Error: Failed to reach ${targetUrl}.`, err);
+      }
+      throw err;
     }
-
-    const data = await response.json();
-
-    // Store access_token for Authorization header fallback (C-05)
-    if (data && data.access_token) {
-      localStorage.setItem('edunexus_token', data.access_token);
-    }
-
-    return data;
   },
 
   // List all users

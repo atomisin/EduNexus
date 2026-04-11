@@ -21,15 +21,22 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Add guardian_name, guardian_email, guardian_phone to student_profiles"""
-    op.add_column(
-        "student_profiles", sa.Column("guardian_name", sa.String(200), nullable=True)
-    )
-    op.add_column(
-        "student_profiles", sa.Column("guardian_email", sa.String(200), nullable=True)
-    )
-    op.add_column(
-        "student_profiles", sa.Column("guardian_phone", sa.String(50), nullable=True)
-    )
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    columns = [c['name'] for c in inspector.get_columns('student_profiles')]
+
+    if "guardian_name" not in columns:
+        op.add_column(
+            "student_profiles", sa.Column("guardian_name", sa.String(200), nullable=True)
+        )
+    if "guardian_email" not in columns:
+        op.add_column(
+            "student_profiles", sa.Column("guardian_email", sa.String(200), nullable=True)
+        )
+    if "guardian_phone" not in columns:
+        op.add_column(
+            "student_profiles", sa.Column("guardian_phone", sa.String(50), nullable=True)
+        )
 
 
 def downgrade() -> None:

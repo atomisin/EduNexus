@@ -20,7 +20,13 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Upgrade schema."""
-    op.add_column('subject_outlines', sa.Column('topic_name', sa.VARCHAR(length=200), nullable=True))
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    
+    if 'subject_outlines' in inspector.get_table_names():
+        columns = [c['name'] for c in inspector.get_columns('subject_outlines')]
+        if 'topic_name' not in columns:
+            op.add_column('subject_outlines', sa.Column('topic_name', sa.VARCHAR(length=200), nullable=True))
 
 
 def downgrade() -> None:

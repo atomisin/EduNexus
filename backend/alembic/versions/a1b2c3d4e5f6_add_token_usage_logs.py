@@ -16,18 +16,21 @@ branch_labels = None
 depends_on = None
 
 def upgrade() -> None:
-    op.create_table('token_usage_logs',
-    sa.Column('id', postgresql.UUID(as_uuid=True), nullable=False),
-    sa.Column('user_id', postgresql.UUID(as_uuid=True), nullable=True),
-    sa.Column('model', sa.String(length=100), nullable=False),
-    sa.Column('prompt_tokens', sa.Integer(), nullable=True),
-    sa.Column('completion_tokens', sa.Integer(), nullable=True),
-    sa.Column('total_tokens', sa.Integer(), nullable=True),
-    sa.Column('cost', sa.Float(), nullable=True),
-    sa.Column('created_at', sa.DateTime(timezone=True), nullable=True),
-    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='SET NULL'),
-    sa.PrimaryKeyConstraint('id')
-    )
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    if 'token_usage_logs' not in inspector.get_table_names():
+        op.create_table('token_usage_logs',
+        sa.Column('id', postgresql.UUID(as_uuid=True), nullable=False),
+        sa.Column('user_id', postgresql.UUID(as_uuid=True), nullable=True),
+        sa.Column('model', sa.String(length=100), nullable=False),
+        sa.Column('prompt_tokens', sa.Integer(), nullable=True),
+        sa.Column('completion_tokens', sa.Integer(), nullable=True),
+        sa.Column('total_tokens', sa.Integer(), nullable=True),
+        sa.Column('cost', sa.Float(), nullable=True),
+        sa.Column('created_at', sa.DateTime(timezone=True), nullable=True),
+        sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='SET NULL'),
+        sa.PrimaryKeyConstraint('id')
+        )
 
 def downgrade() -> None:
     op.drop_table('token_usage_logs')

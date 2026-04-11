@@ -20,38 +20,49 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    """Add subject_id FK to subject_outlines, replacing subject string column.
-
-    Steps:
-    1. Add subject_id column as nullable first
-    2. Backfill subject_id from subjects table by matching name
-    3. Drop old subject column
-    4. Add NOT NULL constraint to subject_id
-    """
-    # Step 1: Add subject_id column (nullable initially)
-    op.add_column("subject_outlines", sa.Column("subject_id", sa.UUID(), nullable=True))
+    """Add subject_id FK to subject_outlines, replacing subject string column."""
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    
+    if 'subject_outlines' not in inspector.get_table_names():
+        return # Table not created yet, skip
+        
+    columns = [c['name'] for c in inspector.get_columns('subject_outlines')]
+    
+    # Step 1: Add subject_id column (nullable initially) safely
+    if 'subject_id' not in columns:
+        op.add_column("subject_outlines", sa.Column("subject_id", sa.UUID(), nullable=True))
 
     # Step 2: Backfill subject_id by matching subject name to subjects table
     # This joins subject_outlines.subject (name) with subjects.id
-    op.execute("""
-        UPDATE subject_outlines so
-        SET subject_id = s.id
-        FROM subjects s
-        WHERE so.subject = s.name
-    """)
+    if 'subject' in columns:
+        op.execute("""
+            UPDATE subject_outlines so
+            SET subject_id = s.id
+            FROM subjects s
+            WHERE so.subject = s.name
+            AND so.subject_id IS NULL
+        """)
 
-    # Step 3: Drop the old subject string column
-    op.drop_column("subject_outlines", "subject")
+        # Step 3: Drop the old subject string column safely
+        op.drop_column("subject_outlines", "subject")
 
-    # Step 4: Add NOT NULL constraint and FK
-    op.alter_column("subject_outlines", "subject_id", nullable=False)
-    op.create_foreign_key(
-        "fk_subject_outlines_subject_id",
-        "subject_outlines",
-        "subjects",
-        ["subject_id"],
-        ["id"],
-    )
+    # Step 4: Add NOT NULL constraint and FK safely
+    # Check if FK already exists
+    fks = inspector.get_foreign_keys('subject_outlines')
+    fk_names = [fk['name'] for fk in fks]
+    
+    if 'subject_id' in [c['name'] for c in inspector.get_columns('subject_outlines')]:
+        op.alter_column("subject_outlines", "subject_id", nullable=False)
+        
+        if "fk_subject_outlines_subject_id" not in fk_names:
+            op.create_foreign_key(
+                "fk_subject_outlines_subject_id",
+                "subject_outlines",
+                "subjects",
+                ["subject_id"],
+                ["id"],
+            )
 
 
 def downgrade() -> None:

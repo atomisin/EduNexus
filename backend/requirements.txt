@@ -17,21 +17,14 @@ celery
 python-dotenv
 email-validator
 pgvector
-# AI & Viz Dependencies (Cached via BuildKit)
-# $env:DOCKER_BUILDKIT=1; $env:COMPOSE_DOCKER_CLI_BUILD=1; docker-compose up -d --build
-docling
-sentence-transformers
-pandas
+# Messaging & Real-time
 livekit
 livekit-api
-matplotlib
-seaborn
-numpy
+# Visualization & AI (Moved to Frontend/Remote)
 alembic
 slowapi
-langchain-text-splitters
-apscheduler
 litellm>=1.0.0
+apscheduler
 pytest-asyncio>=0.23.0
 httpx>=0.27.0
 pytest-cov>=4.0.0

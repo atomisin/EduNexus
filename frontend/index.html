@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="version" content="1.0.0" />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <link rel="icon" type="image/png" href="https://i.imgur.com/B6dmS2B.png" />
+    <title>EduNexus - AI-Powered Learning Platform</title>
+    <script>
+      // Global error handler for LiveKit video processing errors - suppress but log
+      window.onerror = function(msg, src, line, col, error) {
+        if (msg && (msg.toString().includes('getImageData') || msg.toString().includes('The source width is 0'))) {
+          console.warn('LiveKit video initialization: Canvas not ready (normal during startup)');
+          return true; // Suppress error
+        }
+        return false;
+      };
+      
+      // Handle unhandled promise rejections
+      window.addEventListener('unhandledrejection', function(e) {
+        const reason = e.reason;
+        if (reason && (reason.message || '').toString().includes('getImageData')) {
+          console.warn('LiveKit video promise rejected (normal during startup):', reason.message);
+          e.preventDefault();
+        }
+      });
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

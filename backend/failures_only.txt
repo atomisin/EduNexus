@@ -1,0 +1,8 @@
+tests/test_assignment_generator.py::TestAssignmentGenerator::test_generate_assignment FAILED [ 21%]
+tests/test_assignment_generator.py::TestAssignmentGenerator::test_calculate_avg_proficiency FAILED [ 23%]
+tests/test_assignment_generator.py::TestAssignmentGenerator::test_personalize_assignment FAILED [ 28%]
+tests/test_assignment_generator.py::TestAssignmentGenerator::test_estimate_difficulty FAILED [ 30%]
+FAILED tests/test_assignment_generator.py::TestAssignmentGenerator::test_generate_assignment
+FAILED tests/test_assignment_generator.py::TestAssignmentGenerator::test_calculate_avg_proficiency
+FAILED tests/test_assignment_generator.py::TestAssignmentGenerator::test_personalize_assignment
+FAILED tests/test_assignment_generator.py::TestAssignmentGenerator::test_estimate_difficulty

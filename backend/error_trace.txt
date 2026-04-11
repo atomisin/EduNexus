@@ -1,0 +1,5 @@
+Traceback (most recent call last):
+  File "/app/test_session.py", line 11, in test
+    subject = db.query(Subject).first()
+                       ^^^^^^^
+NameError: name 'Subject' is not defined

@@ -1,0 +1,15 @@
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    import app.main
+  File "C:\Users\Tommie-YV\edunexus\backend\app\main.py", line 13, in <module>
+    from app.api.v1.router import api_router
+  File "C:\Users\Tommie-YV\edunexus\backend\app\api\v1\router.py", line 2, in <module>
+    from app.api.v1.endpoints import (
+    ...<20 lines>...
+    )
+  File "C:\Users\Tommie-YV\edunexus\backend\app\api\v1\endpoints\auth.py", line 14, in <module>
+    from app.models.student import StudentProfile
+  File "C:\Users\Tommie-YV\edunexus\backend\app\models\student.py", line 44
+    )  # primary, secondary, professional
+    ^
+SyntaxError: unmatched ')'

@@ -1,0 +1,30 @@
+[build]
+builder = "dockerfile"
+
+[[services]]
+name = "api"
+source = "backend"
+
+  [services.build]
+  dockerfilePath = "Dockerfile"
+
+  [services.deploy]
+  startCommand = "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 2"
+  healthcheckPath = "/health"
+  healthcheckTimeout = 30
+  restartPolicyType = "on_failure"
+  restartPolicyMaxRetries = 3
+
+  [services.variables]
+  PORT = "8000"
+
+[[services]]
+name = "frontend"
+source = "frontend"
+
+  [services.build]
+  dockerfilePath = "Dockerfile"
+
+  [services.deploy]
+  healthcheckPath = "/"
+  healthcheckTimeout = 30

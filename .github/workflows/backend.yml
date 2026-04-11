@@ -1,0 +1,51 @@
+name: Backend CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: edunexus_test
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: edunexus_test
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    - name: Install dependencies
+      run: |
+        cd backend
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    - name: Apply database migrations
+      env:
+        DATABASE_URL: postgresql+asyncpg://edunexus_test:test_password@localhost:5433/edunexus_test
+        SECRET_KEY: test-secret-key-for-ci-only
+        ENVIRONMENT: test
+      run: |
+        cd backend
+        python -m alembic upgrade head
+    - name: Run tests
+      env:
+        DATABASE_URL: postgresql://edunexus_test:test_password@localhost:5433/edunexus_test
+      run: |
+        cd backend
+        python -m pytest tests/test_auth_integration.py tests/test_admin_integration.py -v

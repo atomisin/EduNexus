@@ -1,0 +1,160 @@
+services:
+  # Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - VITE_LIVEKIT_URL=${LIVEKIT_URL}
+        - VITE_API_URL=http://127.0.0.1:8000/api/v1
+    networks:
+      - edunexus
+    ports:
+      - "3000:80"
+    environment:
+      - VITE_API_URL=http://127.0.0.1:8000/api/v1
+      - VITE_LIVEKIT_URL=${LIVEKIT_URL}
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    depends_on:
+      - api
+
+  # Backend API
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    networks:
+      - edunexus
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      - REDIS_URL=redis://redis:6379
+      - STORAGE_ENDPOINT=seaweedfs:8333
+      - STORAGE_ACCESS_KEY=${STORAGE_ACCESS_KEY}
+      - STORAGE_SECRET_KEY=${STORAGE_SECRET_KEY}
+      - STORAGE_BUCKET=edunexus
+      - STORAGE_USE_SSL=false
+      - STORAGE_PUBLIC_URL=http://localhost:8333
+      # SMTP Configuration
+      - SMTP_HOST=smtp.resend.com
+      - SMTP_PORT=587
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
+      - SMTP_USE_TLS=true
+      - SMTP_FROM_EMAIL=noreply@edunexus.local
+      - SMTP_FROM_NAME=EduNexus
+      # Email Verification
+      - VERIFICATION_ENABLED=true
+      - VERIFICATION_BYPASS=true
+      - VERIFICATION_TOKEN_EXPIRE_HOURS=24
+      - APP_BASE_URL=http://127.0.0.1:3000
+      # LiveKit Configuration
+      - LIVEKIT_URL=${LIVEKIT_URL}
+      - LIVEKIT_API_KEY=${LIVEKIT_API_KEY}
+      - LIVEKIT_API_SECRET=${LIVEKIT_API_SECRET}
+      # Groq Configuration
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - GROQ_MODEL=llama-3.3-70b-versatile
+      - SECRET_KEY=${SECRET_KEY}
+      # YouTube API
+      - YOUTUBE_API_KEY=${YOUTUBE_API_KEY}
+      - ACCESS_TOKEN_EXPIRE_MINUTES=30
+      - VERIFICATION_ENABLED=true
+      - VERIFICATION_BYPASS=true
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      seaweedfs:
+        condition: service_started
+    volumes:
+      - ./backend:/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+
+
+  # Video Conferencing - Using cloud LiveKit (wss://edunexus-qe4ayueg.livekit.cloud)
+  # Local LiveKit server disabled - uncomment if you want to self-host
+  # livekit:
+  #   image: livekit/livekit-server:latest
+  #   networks:
+  #     - edunexus
+  #   ports:
+  #     - "7880:7880"
+  #     - "7881:7881"
+  #     - "7882:7882/udp"
+  #   command: --dev --config /etc/livekit.yaml
+  #   volumes:
+  #     - ./config/livekit.yaml:/etc/livekit.yaml
+
+
+
+  # Databases
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: postgres
+    networks:
+      - edunexus
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: edunexus
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init-multiple-databases.sh:/docker-entrypoint-initdb.d/init-multiple-databases.sh:ro
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres -d edunexus" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    networks:
+      - edunexus
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+
+  # Object Storage (SeaweedFS)
+  seaweedfs:
+    image: chrislusf/seaweedfs:latest
+    networks:
+      - edunexus
+    ports:
+      - "9333:9333" # Master
+      - "8082:8080" # Filer
+      - "8333:8333" # S3
+    command: 'server -s3 -s3.config=/etc/seaweedfs/s3.json -filer -master.volumeSizeLimitMB=1024'
+    volumes:
+      - seaweedfs_data:/data
+      - ./config/seaweedfs_s3.json:/etc/seaweedfs/s3.json
+
+volumes:
+  whisper_models:
+  postgres_data:
+  redis_data:
+  seaweedfs_data:
+
+
+networks:
+  edunexus:
+    name: edunexus
+    driver: bridge

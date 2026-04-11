@@ -1,0 +1,102 @@
+--- AccessToken Source ---
+class AccessToken:
+    ParticipantKind = Literal["standard", "egress", "ingress", "sip", "agent"]
+
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        api_secret: Optional[str] = None,
+    ) -> None:
+        api_key = api_key or os.getenv("LIVEKIT_API_KEY")
+        api_secret = api_secret or os.getenv("LIVEKIT_API_SECRET")
+
+        if not api_key or not api_secret:
+            raise ValueError("api_key and api_secret must be set")
+
+        self.api_key = api_key  # iss
+        self.api_secret = api_secret
+        self.claims = Claims()
+
+        # default jwt claims
+        self.identity = ""  # sub
+        self.ttl = DEFAULT_TTL  # exp
+
+    def with_ttl(self, ttl: datetime.timedelta) -> "AccessToken":
+        self.ttl = ttl
+        return self
+
+    def with_grants(self, grants: VideoGrants) -> "AccessToken":
+        self.claims.video = grants
+        return self
+
+    def with_sip_grants(self, grants: SIPGrants) -> "AccessToken":
+        self.claims.sip = grants
+        return self
+
+    def with_observability_grants(self, grants: ObservabilityGrants) -> "AccessToken":
+        self.claims.observability = grants
+        return self
+
+    def with_inference_grants(self, grants: InferenceGrants) -> "AccessToken":
+        self.claims.inference = grants
+        return self
+
+    def with_identity(self, identity: str) -> "AccessToken":
+        self.identity = identity
+        return self
+
+    def with_kind(self, kind: ParticipantKind) -> "AccessToken":
+        self.claims.kind = kind
+        return self
+
+    def with_name(self, name: str) -> "AccessToken":
+        self.claims.name = name
+        return self
+
+    def with_metadata(self, metadata: str) -> "AccessToken":
+        self.claims.metadata = metadata
+        return self
+
+    def with_attributes(self, attributes: dict[str, str]) -> "AccessToken":
+        self.claims.attributes = attributes
+        return self
+
+    def with_sha256(self, sha256: str) -> "AccessToken":
+        self.claims.sha256 = sha256
+        return self
+
+    def with_room_preset(self, preset: str) -> "AccessToken":
+        self.claims.room_preset = preset
+        return self
+
+    def with_room_config(self, config: RoomConfiguration) -> "AccessToken":
+        self.claims.room_config = config
+        return self
+
+    def to_jwt(self) -> str:
+        video = self.claims.video
+        if video and video.room_join and (not self.identity or not video.room):
+            raise ValueError("identity and room must be set when joining a room")
+
+        # we want to exclude None values from the token
+        jwt_claims = self.claims.asdict()
+        jwt_claims.update(
+            {
+                "sub": self.identity,
+                "iss": self.api_key,
+                "nbf": calendar.timegm(datetime.datetime.now(datetime.timezone.utc).utctimetuple()),
+                "exp": calendar.timegm(
+                    (datetime.datetime.now(datetime.timezone.utc) + self.ttl).utctimetuple()
+                ),
+            }
+        )
+        return jwt.encode(jwt_claims, self.api_secret, algorithm="HS256")
+
+
+--- api attributes ---
+AAC, AC_MP3, AGENT_ERROR, AUDIO, AcceptWhatsAppCallRequest, AcceptWhatsAppCallResponse, AccessToken, ActiveSpeakerUpdate, AgentDispatch, AgentDispatchState, AliOSSUpload, AudioCodec, AudioMixing, AudioTrackFeature, AutoParticipantEgress, AutoTrackEgress, AvailabilityRequest, AvailabilityResponse, AzureBlobUpload, BackupCodecPolicy, CAMERA, CLIENT_INITIATED, CONNECTION_TIMEOUT, ChatMessage, ClientConfigSetting, ClientConfiguration, ClientInfo, Codec, ConnectTwilioCallRequest, ConnectTwilioCallResponse, ConnectWhatsAppCallRequest, ConnectWhatsAppCallResponse, ConnectionQuality, CreateAgentDispatchRequest, CreateIngressRequest, CreateRoomRequest, CreateSIPDispatchRuleRequest, CreateSIPInboundTrunkRequest, CreateSIPOutboundTrunkRequest, CreateSIPParticipantRequest, CreateSIPTrunkRequest, DATA, DEFAULT_AC, DEFAULT_FILETYPE, DEFAULT_MIXING, DEFAULT_PROTOCOL, DEFAULT_SEGMENTED_FILE_PROTOCOL, DEFAULT_VC, DESCRIPTOR, DISABLED, DTEI_INVALID, DTEI_PARTICIPANT_SID, DUAL_CHANNEL_AGENT, DUAL_CHANNEL_ALTERNATE, DUPLICATE_IDENTITY, DataPacket, DataStream, DataTrackExtensionID, DataTrackExtensionParticipantSid, DataTrackInfo, DataTrackSubscriptionOptions, DeleteAgentDispatchRequest, DeleteIngressRequest, DeleteRoomRequest, DeleteRoomResponse, DeleteSIPDispatchRuleRequest, DeleteSIPTrunkRequest, Destination, DialWhatsAppCallRequest, DialWhatsAppCallResponse, DirectFileOutput, DisabledCodecs, DisconnectReason, DisconnectWhatsAppCallRequest, DisconnectWhatsAppCallResponse, EGRESS_ABORTED, EGRESS_ACTIVE, EGRESS_COMPLETE, EGRESS_ENDING, EGRESS_FAILED, EGRESS_LIMIT_REACHED, EGRESS_SOURCE_TYPE_SDK, EGRESS_SOURCE_TYPE_WEB, EGRESS_STARTING, ENABLED, EXCELLENT, EgressInfo, EgressSourceType, EgressStatus, EncodedFileOutput, EncodedFileType, EncodingOptions, EncodingOptionsPreset, EncryptedPacket, EncryptedPacketPayload, Encryption, FileInfo, FilterParams, ForwardParticipantRequest, ForwardParticipantResponse, GCPUpload, GOOD, GetSIPInboundTrunkRequest, GetSIPInboundTrunkResponse, GetSIPOutboundTrunkRequest, GetSIPOutboundTrunkResponse, H264_1080P_30, H264_1080P_30FPS_1_LAYER, H264_1080P_30FPS_1_LAYER_HIGH_MOTION, H264_1080P_30FPS_3_LAYERS, H264_1080P_30FPS_3_LAYERS_HIGH_MOTION, H264_1080P_60, H264_540P_25FPS_2_LAYERS, H264_540P_25FPS_2_LAYERS_HIGH_MOTION, H264_720P_30, H264_720P_30FPS_1_LAYER, H264_720P_30FPS_1_LAYER_HIGH_MOTION, H264_720P_30FPS_3_LAYERS, H264_720P_30FPS_3_LAYERS_HIGH_MOTION, H264_720P_60, H264_BASELINE, H264_HIGH, H264_MAIN, HIGH, HLS_PROTOCOL, IC_DEFAULT, IC_JPEG, IMAGE_SUFFIX_INDEX, IMAGE_SUFFIX_NONE_OVERWRITE, IMAGE_SUFFIX_TIMESTAMP, INDEX, ImageCodec, ImageFileSuffix, ImageOutput, ImagesInfo, InferenceGrants, IngressAudioEncodingOptions, IngressAudioEncodingPreset, IngressAudioOptions, IngressInfo, IngressInput, IngressState, IngressVideoEncodingOptions, IngressVideoEncodingPreset, IngressVideoOptions, InputAudioState, InputVideoState, JOIN_FAILURE, JS_FAILED, JS_PENDING, JS_RUNNING, JS_SUCCESS, JT_PARTICIPANT, JT_PUBLISHER, JT_ROOM, Job, JobAssignment, JobState, JobStatus, JobTermination, JobType, KRISP_ENABLED, LOST, LOW, ListAgentDispatchRequest, ListAgentDispatchResponse, ListEgressRequest, ListEgressResponse, ListIngressRequest, ListIngressResponse, ListParticipantsRequest, ListParticipantsResponse, ListRoomsRequest, ListRoomsResponse, ListSIPDispatchRuleRequest, ListSIPDispatchRuleResponse, ListSIPInboundTrunkRequest, ListSIPInboundTrunkResponse, ListSIPOutboundTrunkRequest, ListSIPOutboundTrunkResponse, ListSIPTrunkRequest, ListSIPTrunkResponse, ListUpdate, LiveKitAPI, MEDIA_FAILURE, MEDIUM, MICROPHONE, MIGRATION, MP3, MP4, MigrateJobRequest, MoveParticipantRequest, MoveParticipantResponse, MuteRoomTrackRequest, MuteRoomTrackResponse, NONE, OFF, OGG, OPUS, OPUS_MONO_64KBS, OPUS_STEREO_96KBPS, ObservabilityGrants, PARTICIPANT_REMOVED, POOR, PORTRAIT_H264_1080P_30, PORTRAIT_H264_1080P_60, PORTRAIT_H264_720P_30, PORTRAIT_H264_720P_60, PREFER_REGRESSION, PROVIDER_TYPE_EXTERNAL, PROVIDER_TYPE_INTERNAL, PROVIDER_TYPE_UNKNOWN, PTF_USER_TIMESTAMP, PacketTrailerFeature, Pagination, ParticipantEgressRequest, ParticipantInfo, ParticipantPermission, ParticipantTracks, PerformRpcRequest, PerformRpcResponse, PlayoutDelay, ProviderInfo, ProviderType, ProxyConfig, REGRESSION, ROOM_CLOSED, ROOM_DELETED, RR_PUBLISHER_FAILED, RR_SIGNAL_DISCONNECTED, RR_SUBSCRIBER_FAILED, RR_SWITCH_CANDIDATE, RR_UNKNOWN, RTCPSenderReportState, RTMP, RTMP_INPUT, RTPDrift, RTPForwarderState, RTPMungerState, RTPStats, ReconnectReason, RegisterWorkerRequest, RegisterWorkerResponse, RemoveParticipantResponse, Room, RoomAgent, RoomAgentDispatch, RoomCompositeEgressRequest, RoomConfiguration, RoomEgress, RoomParticipantIdentity, RpcAck, RpcError, RpcRequest, RpcResponse, S3Upload, SCD_INBOUND, SCD_OUTBOUND, SCD_UNKNOWN, SCREEN_SHARE, SCREEN_SHARE_AUDIO, SCS_ACTIVE, SCS_CALL_INCOMING, SCS_DISCONNECTED, SCS_ERROR, SCS_PARTICIPANT_JOINED, SERVER_SHUTDOWN, SE_CODEC_UNSUPPORTED, SE_TRACK_NOTFOUND, SE_UNKNOWN, SIGNAL_CLOSE, SIMULCAST, SIPCallDirection, SIPCallInfo, SIPCallStatus, SIPDispatchRule, SIPDispatchRuleCallee, SIPDispatchRuleDirect, SIPDispatchRuleIndividual, SIPDispatchRuleInfo, SIPDispatchRuleUpdate, SIPFeature, SIPGrants, SIPHeaderOptions, SIPInboundTrunkInfo, SIPInboundTrunkUpdate, SIPMediaEncryption, SIPOutboundConfig, SIPOutboundTrunkInfo, SIPOutboundTrunkUpdate, SIPParticipantInfo, SIPStatus, SIPStatusCode, SIPTransferInfo, SIPTransferStatus, SIPTransport, SIPTrunkInfo, SIPUri, SIP_ALL_HEADERS, SIP_MEDIA_ENCRYPT_ALLOW, SIP_MEDIA_ENCRYPT_DISABLE, SIP_MEDIA_ENCRYPT_REQUIRE, SIP_NO_HEADERS, SIP_STATUS_ACCEPTED, SIP_STATUS_ADDRESS_INCOMPLETE, SIP_STATUS_ALTERNATIVE_SERVICE, SIP_STATUS_AMBIGUOUS, SIP_STATUS_ANONYMITY_DISALLOWED, SIP_STATUS_BAD_ALERT_MESSAGE, SIP_STATUS_BAD_EVENT, SIP_STATUS_BAD_EXTENSION, SIP_STATUS_BAD_GATEWAY, SIP_STATUS_BAD_IDENTITY_INFO, SIP_STATUS_BAD_INFO_PACKAGE, SIP_STATUS_BAD_LOCATION_INFORMATION, SIP_STATUS_BAD_REQUEST, SIP_STATUS_BUSY_HERE, SIP_STATUS_CALL_IS_FORWARDED, SIP_STATUS_CALL_TRANSACTION_DOES_NOT_EXISTS, SIP_STATUS_CONDITIONAL_REQUEST_FAILED, SIP_STATUS_CONFLICT, SIP_STATUS_CONSENT_NEEDED, SIP_STATUS_EARLY_DIALOG_TERMINATED, SIP_STATUS_EXTENSION_REQUIRED, SIP_STATUS_FIRST_HOP_LACKS_OUTBOUND_SUPPORT, SIP_STATUS_FLOW_FAILED, SIP_STATUS_FORBIDDEN, SIP_STATUS_GATEWAY_TIMEOUT, SIP_STATUS_GLOBAL_BUSY_EVERYWHERE, SIP_STATUS_GLOBAL_DECLINE, SIP_STATUS_GLOBAL_DOES_NOT_EXIST_ANYWHERE, SIP_STATUS_GLOBAL_NOT_ACCEPTABLE, SIP_STATUS_GLOBAL_REJECTED, SIP_STATUS_GLOBAL_UNWANTED, SIP_STATUS_GONE, SIP_STATUS_INTERNAL_SERVER_ERROR, SIP_STATUS_INTERVAL_TOO_BRIEF, SIP_STATUS_INVALID_IDENTITY_HEADER, SIP_STATUS_LENGTH_REQUIRED, SIP_STATUS_LOOP_DETECTED, SIP_STATUS_MAX_BREADTH_EXCEEDED, SIP_STATUS_MESSAGE_TOO_LARGE, SIP_STATUS_METHOD_NOT_ALLOWED, SIP_STATUS_MOVED_PERMANENTLY, SIP_STATUS_MOVED_TEMPORARILY, SIP_STATUS_MULTIPLE_CHOICES, SIP_STATUS_NOTFOUND, SIP_STATUS_NOT_ACCEPTABLE, SIP_STATUS_NOT_ACCEPTABLE_HERE, SIP_STATUS_NOT_IMPLEMENTED, SIP_STATUS_NO_NOTIFICATION, SIP_STATUS_OK, SIP_STATUS_PAYMENT_REQUIRED, SIP_STATUS_PROVIDE_REFERRER_IDENTITY, SIP_STATUS_PROXY_AUTH_REQUIRED, SIP_STATUS_QUEUED, SIP_STATUS_REQUESTED_RANGE_NOT_SATISFIABLE, SIP_STATUS_REQUEST_ENTITY_TOO_LARGE, SIP_STATUS_REQUEST_PENDING, SIP_STATUS_REQUEST_TERMINATED, SIP_STATUS_REQUEST_TIMEOUT, SIP_STATUS_REQUEST_URI_TOO_LONG, SIP_STATUS_RINGING, SIP_STATUS_SECURITY_AGREEMENT_REQUIRED, SIP_STATUS_SERVICE_UNAVAILABLE, SIP_STATUS_SESSION_INTERVAL_TOO_SMALL, SIP_STATUS_SESSION_PROGRESS, SIP_STATUS_TEMPORARILY_UNAVAILABLE, SIP_STATUS_TOO_MANY_HOPS, SIP_STATUS_TRYING, SIP_STATUS_UNAUTHORIZED, SIP_STATUS_UNDECIPHERABLE, SIP_STATUS_UNKNOWN, SIP_STATUS_UNKNOWN_RESOURCE_PRIORITY, SIP_STATUS_UNSUPPORTED_CERTIFICATE, SIP_STATUS_UNSUPPORTED_MEDIA_TYPE, SIP_STATUS_USE_IDENTITY_HEADER, SIP_STATUS_USE_PROXY, SIP_STATUS_VERSION_NOT_SUPPORTED, SIP_TRANSPORT_AUTO, SIP_TRANSPORT_TCP, SIP_TRANSPORT_TLS, SIP_TRANSPORT_UDP, SIP_TRUNK_FAILURE, SIP_X_HEADERS, SRT, STATE_MISMATCH, STS_TRANSFER_FAILED, STS_TRANSFER_ONGOING, STS_TRANSFER_SUCCESSFUL, SegmentedFileOutput, SegmentedFileProtocol, SegmentedFileSuffix, SegmentsInfo, SendDataRequest, SendDataResponse, ServerInfo, ServerMessage, SimulateJobRequest, SimulcastCodecInfo, SipDTMF, SpeakerInfo, StopEgressRequest, StreamInfo, StreamInfoList, StreamOutput, StreamProtocol, SubscribedAudioCodec, SubscriptionError, TF_AUTO_GAIN_CONTROL, TF_ECHO_CANCELLATION, TF_ENHANCED_NOISE_CANCELLATION, TF_NOISE_SUPPRESSION, TF_NO_DTX, TF_PRECONNECT_BUFFER, TF_STEREO, TIMESTAMP, TimedVersion, TokenPagination, TokenVerifier, TrackCompositeEgressRequest, TrackEgressRequest, TrackInfo, TrackSource, TrackType, Transcription, TranscriptionSegment, TransferSIPParticipantRequest, TwirpError, TwirpErrorCode, UNKNOWN, UNKNOWN_REASON, UNSET, URL_INPUT, USER_REJECTED, USER_UNAVAILABLE, UpdateIngressRequest, UpdateJobStatus, UpdateLayoutRequest, UpdateParticipantRequest, UpdateRoomMetadataRequest, UpdateSIPDispatchRuleRequest, UpdateSIPInboundTrunkRequest, UpdateSIPOutboundTrunkRequest, UpdateStreamRequest, UpdateSubscriptionsRequest, UpdateSubscriptionsResponse, UpdateWorkerStatus, UserPacket, VIDEO, VP8, VP8MungerState, VideoCodec, VideoConfiguration, VideoGrants, VideoLayer, VideoQuality, WHATSAPP_CALL_DIRECTION_INBOUND, WHATSAPP_CALL_DIRECTION_OUTBOUND, WHIP_INPUT, WS_AVAILABLE, WS_FULL, WebEgressRequest, WebhookConfig, WebhookEvent, WebhookReceiver, WhatsAppCall, WhatsAppCallDirection, WorkerMessage, WorkerPing, WorkerPong, WorkerStatus, __all__, __builtins__, __cached__, __doc__, __file__, __loader__, __name__, __package__, __path__, __spec__, __version__, _service, access_token, agent_dispatch_service, connector_service, egress_service, google_dot_protobuf_dot_any__pb2, google_dot_protobuf_dot_duration__pb2, google_dot_protobuf_dot_empty__pb2, google_dot_protobuf_dot_timestamp__pb2, ingress_service, livekit_api, logger_dot_options__pb2, room_service, sip_service, twirp_client, version, webhook
+
+--- LiveKitAPI attributes ---
+__aenter__, __aexit__, __class__, __delattr__, __dict__, __dir__, __doc__, __eq__, __firstlineno__, __format__, __ge__, __getattribute__, __getstate__, __gt__, __hash__, __init__, __init_subclass__, __le__, __lt__, __module__, __ne__, __new__, __reduce__, __reduce_ex__, __repr__, __setattr__, __sizeof__, __static_attributes__, __str__, __subclasshook__, __weakref__, aclose, agent_dispatch, connector, egress, ingress, room, sip
+
+Egress found: False

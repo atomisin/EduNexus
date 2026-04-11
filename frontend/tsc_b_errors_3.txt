@@ -1,0 +1,4 @@
+﻿src/components/session/LiveSessionRoom.tsx(413,42): error TS2551: Property 'generateOutline' does not exist on type '{ processSpeech: (sessionId: string, audioBlob: Blob) => Promise<any>; generateExplanation: (sessionId: string, data: { concept: string; explanation_type: string; target_student_id?: string | undefined; }) => Promise<...>; ... 13 more ...; getChatHistory: (data: { ...; }) => Promise<...>; }'. Did you mean 'generateNotes'?
+src/features/admin/AdminPanel.tsx(14,34): error TS2307: Cannot find module './NotificationBell' or its corresponding type declarations.
+src/features/student/StudentDashboard.tsx(3,34): error TS2307: Cannot find module '../NotificationBell' or its corresponding type declarations.
+src/features/student/StudentDashboard.tsx(19,31): error TS2307: Cannot find module '../messaging/MessagingView' or its corresponding type declarations.

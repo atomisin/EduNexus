@@ -1,0 +1,39 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+pydantic
+pydantic-settings
+psycopg2-binary  # Required for Alembic migrations only
+asyncpg
+greenlet
+python-multipart
+httpx
+python-jose[cryptography]
+passlib[bcrypt]
+bcrypt==4.0.1
+boto3
+redis
+celery
+python-dotenv
+email-validator
+pgvector
+# AI & Viz Dependencies (Cached via BuildKit)
+# $env:DOCKER_BUILDKIT=1; $env:COMPOSE_DOCKER_CLI_BUILD=1; docker-compose up -d --build
+docling
+sentence-transformers
+pandas
+livekit
+livekit-api
+matplotlib
+seaborn
+numpy
+alembic
+slowapi
+langchain-text-splitters
+apscheduler
+litellm>=1.0.0
+pytest-asyncio>=0.23.0
+httpx>=0.27.0
+pytest-cov>=4.0.0
+factory-boy>=3.3.0
+aiosqlite  # Required by existing conftest.py unit tests that use SQLite

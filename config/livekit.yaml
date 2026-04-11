@@ -1,0 +1,10 @@
+port: 7880
+bind_addresses:
+  - ""
+rtc:
+  udp_port: 7882
+  tcp_port: 7881
+  use_external_ip: false
+  enable_loopback_candidate: true
+keys:
+  APIs8avkkrnRDWQ: L7a8XoWp1mYGLuce2tTcJqU5t6P8KYEkOFB0Tyejgce

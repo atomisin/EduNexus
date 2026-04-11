@@ -1,0 +1,47 @@
+# Environment files with secrets
+.env
+.env.local
+.env.test
+.env.production
+.env.development
+.env.*.local
+
+# Allow .env.example
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+*.egg
+
+# Node
+node_modules/
+frontend/node_modules/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+api_logs.txt
+gorse*.log
+
+# Docker volumes
+database/
+
+# Compiled output
+frontend/dist/

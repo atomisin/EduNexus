@@ -1,0 +1,610 @@
+﻿============================= test session starts =============================
+platform win32 -- Python 3.14.2, pytest-9.0.2, pluggy-1.6.0 -- C:\Python314\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\Tommie-YV\edunexus\backend
+configfile: pytest.ini
+plugins: anyio-4.12.1, Faker-40.11.0, langsmith-0.7.22, asyncio-1.3.0, cov-7.1.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 100 items
+
+tests/test_admin_integration.py::TestAdminEndpoints::test_get_users_requires_admin ERROR [  1%]
+tests/test_admin_integration.py::TestAdminEndpoints::test_admin_can_list_users ERROR [  2%]
+tests/test_admin_integration.py::TestAdminEndpoints::test_admin_usage_endpoint_protected ERROR [  3%]
+tests/test_ai_coordinator.py::TestWhisperService::test_transcribe PASSED [  4%]
+tests/test_ai_coordinator.py::TestWhisperService::test_transcribe_empty_audio PASSED [  5%]
+tests/test_ai_coordinator.py::TestGroqService::test_generate_simple_prompt SKIPPED [  6%]
+tests/test_ai_coordinator.py::TestGroqService::test_generate_with_system_prompt SKIPPED [  7%]
+tests/test_ai_coordinator.py::TestGroqService::test_generate_with_parameters SKIPPED [  8%]
+tests/test_ai_coordinator.py::TestYouTubeService::test_search_videos SKIPPED [  9%]
+tests/test_ai_coordinator.py::TestAICoordinator::test_process_teacher_speech_with_explanation SKIPPED [ 10%]
+tests/test_ai_coordinator.py::TestAICoordinator::test_process_teacher_speech_stt_disabled PASSED [ 11%]
+tests/test_ai_coordinator.py::TestAICoordinator::test_generate_explanation SKIPPED [ 12%]
+tests/test_ai_coordinator.py::TestAICoordinator::test_generate_explanation_with_personalization SKIPPED [ 13%]
+tests/test_ai_coordinator.py::TestAICoordinator::test_analyze_complexity SKIPPED [ 14%]
+tests/test_ai_coordinator.py::TestAICoordinator::test_suggest_videos SKIPPED [ 15%]
+tests/test_ai_coordinator.py::TestAICoordinator::test_build_explanation_prompt PASSED [ 16%]
+tests/test_ai_coordinator.py::TestAICoordinator::test_extract_local_examples PASSED [ 17%]
+tests/test_ai_coordinator.py::TestExplanationTypes::test_concept_breakdown_explanation SKIPPED [ 18%]
+tests/test_ai_coordinator.py::TestExplanationTypes::test_analogy_explanation SKIPPED [ 19%]
+tests/test_ai_coordinator.py::TestExplanationTypes::test_simplified_explanation SKIPPED [ 20%]
+tests/test_assignment_generator.py::TestAssignmentGenerator::test_generate_assignment SKIPPED [ 21%]
+tests/test_assignment_generator.py::TestAssignmentGenerator::test_extract_concepts PASSED [ 22%]
+tests/test_assignment_generator.py::TestAssignmentGenerator::test_calculate_avg_proficiency SKIPPED [ 23%]
+tests/test_assignment_generator.py::TestAssignmentGenerator::test_difficulty_distribution_beginner PASSED [ 24%]
+tests/test_assignment_generator.py::TestAssignmentGenerator::test_difficulty_distribution_intermediate PASSED [ 25%]
+tests/test_assignment_generator.py::TestAssignmentGenerator::test_difficulty_distribution_advanced PASSED [ 26%]
+tests/test_assignment_generator.py::TestAssignmentGenerator::test_bloom_distribution PASSED [ 27%]
+tests/test_assignment_generator.py::TestAssignmentGenerator::test_personalize_assignment SKIPPED [ 28%]
+tests/test_assignment_generator.py::TestAssignmentGenerator::test_create_fallback_questions PASSED [ 29%]
+tests/test_assignment_generator.py::TestAssignmentGenerator::test_estimate_difficulty SKIPPED [ 30%]
+tests/test_assignment_generator.py::TestAssignmentQuestion::test_question_creation PASSED [ 31%]
+tests/test_assignment_generator.py::TestAssignmentQuestion::test_question_to_dict PASSED [ 32%]
+tests/test_assignment_generator.py::TestQuestionTypes::test_multiple_choice_question ERROR [ 33%]
+tests/test_assignment_generator.py::TestQuestionTypes::test_problem_solving_question ERROR [ 34%]
+tests/test_assignment_generator.py::TestQuestionTypes::test_essay_question ERROR [ 35%]
+tests/test_assignment_generator.py::TestBloomTaxonomy::test_all_bloom_levels_exist PASSED [ 36%]
+tests/test_assignment_generator.py::TestBloomTaxonomy::test_bloom_distribution_in_assignment ERROR [ 37%]
+tests/test_auth_integration.py::TestRegistration::test_register_student ERROR [ 38%]
+tests/test_auth_integration.py::TestRegistration::test_register_with_admin_role_rejected ERROR [ 39%]
+tests/test_auth_integration.py::TestRegistration::test_duplicate_email_rejected ERROR [ 40%]
+tests/test_auth_integration.py::TestLogin::test_unverified_user_cannot_login ERROR [ 41%]
+tests/test_auth_integration.py::TestLogin::test_pending_user_cannot_login ERROR [ 42%]
+tests/test_auth_integration.py::TestLogin::test_wrong_password_rejected ERROR [ 43%]
+tests/test_engagement_tracker.py::TestEngagementMetrics::test_metrics_creation PASSED [ 44%]
+tests/test_engagement_tracker.py::TestEngagementMetrics::test_engagement_status_calculation PASSED [ 45%]
+tests/test_engagement_tracker.py::TestEngagementMetrics::test_add_alert PASSED [ 46%]
+tests/test_engagement_tracker.py::TestEngagementMetrics::test_add_alert_limit PASSED [ 47%]
+tests/test_engagement_tracker.py::TestEngagementMetrics::test_to_dict PASSED [ 48%]
+tests/test_engagement_tracker.py::TestFaceDetectionService::test_detect_faces PASSED [ 49%]
+tests/test_engagement_tracker.py::TestFaceDetectionService::test_detect_faces_empty_image PASSED [ 50%]
+tests/test_engagement_tracker.py::TestGazeTrackingService::test_track_gaze PASSED [ 51%]
+tests/test_engagement_tracker.py::TestEngagementTracker::test_start_and_stop_tracking PASSED [ 52%]
+tests/test_engagement_tracker.py::TestEngagementTracker::test_register_student PASSED [ 53%]
+tests/test_engagement_tracker.py::TestEngagementTracker::test_process_video_frame PASSED [ 54%]
+tests/test_engagement_tracker.py::TestEngagementTracker::test_process_video_frame_no_face PASSED [ 55%]
+tests/test_engagement_tracker.py::TestEngagementTracker::test_attention_score_calculation PASSED [ 56%]
+tests/test_engagement_tracker.py::TestEngagementTracker::test_record_tab_switch PASSED [ 57%]
+tests/test_engagement_tracker.py::TestEngagementTracker::test_record_participation PASSED [ 58%]
+tests/test_engagement_tracker.py::TestEngagementTracker::test_generate_engagement_report PASSED [ 59%]
+tests/test_engagement_tracker.py::TestEngagementTracker::test_engagement_distribution PASSED [ 60%]
+tests/test_engagement_tracker.py::TestEngagementTracker::test_interventions_needed PASSED [ 61%]
+tests/test_engagement_tracker.py::TestEngagementTracker::test_camera_mic_status_update PASSED [ 62%]
+tests/test_engagement_tracker.py::TestEngagementTracker::test_attention_history PASSED [ 63%]
+tests/test_engagement_tracker.py::TestAlertTypes::test_alerts_generated PASSED [ 64%]
+tests/test_integration.py::TestCompleteTeachingWorkflow::test_complete_session_lifecycle ERROR [ 65%]
+tests/test_integration.py::TestCompleteTeachingWorkflow::test_ai_explanation_workflow ERROR [ 66%]
+tests/test_integration.py::TestCompleteTeachingWorkflow::test_engagement_alerts ERROR [ 67%]
+tests/test_integration.py::TestCompleteTeachingWorkflow::test_assignment_personalization ERROR [ 68%]
+tests/test_integration.py::TestErrorHandling::test_invalid_session_operations ERROR [ 69%]
+tests/test_integration.py::TestErrorHandling::test_unauthorized_access ERROR [ 70%]
+tests/test_session_manager.py::TestSessionManager::test_create_session ERROR [ 71%]
+tests/test_session_manager.py::TestSessionManager::test_create_session_without_ai_config ERROR [ 72%]
+tests/test_session_manager.py::TestSessionManager::test_start_session ERROR [ 73%]
+tests/test_session_manager.py::TestSessionManager::test_cannot_start_non_scheduled_session ERROR [ 74%]
+tests/test_session_manager.py::TestSessionManager::test_pause_and_resume_session ERROR [ 75%]
+tests/test_session_manager.py::TestSessionManager::test_end_session ERROR [ 76%]
+tests/test_session_manager.py::TestSessionManager::test_student_join_and_leave ERROR [ 77%]
+tests/test_session_manager.py::TestSessionManager::test_get_teacher_sessions ERROR [ 78%]
+tests/test_session_manager.py::TestSessionManager::test_context_building ERROR [ 79%]
+tests/test_session_manager.py::TestSessionLifecycle::test_full_session_lifecycle ERROR [ 80%]
+tests/test_session_manager.py::TestSessionValidation::test_session_not_found ERROR [ 81%]
+tests/test_session_manager.py::TestSessionValidation::test_invalid_session_transition ERROR [ 82%]
+tests/test_simple.py::test_simple PASSED                                 [ 83%]
+tests/test_websocket_manager.py::TestWebSocketMessage::test_message_creation PASSED [ 84%]
+tests/test_websocket_manager.py::TestWebSocketMessage::test_message_to_dict PASSED [ 85%]
+tests/test_websocket_manager.py::TestWebSocketMessage::test_message_to_json PASSED [ 86%]
+tests/test_websocket_manager.py::TestSessionRoom::test_add_connection PASSED [ 87%]
+tests/test_websocket_manager.py::TestSessionRoom::test_add_multiple_connections PASSED [ 88%]
+tests/test_websocket_manager.py::TestSessionRoom::test_remove_connection PASSED [ 89%]
+tests/test_websocket_manager.py::TestSessionRoom::test_broadcast PASSED  [ 90%]
+tests/test_websocket_manager.py::TestSessionRoom::test_broadcast_to_students PASSED [ 91%]
+tests/test_websocket_manager.py::TestSessionRoom::test_send_to_teacher PASSED [ 92%]
+tests/test_websocket_manager.py::TestSessionRoom::test_get_active_users PASSED [ 93%]
+tests/test_websocket_manager.py::TestWebSocketManager::test_get_or_create_room PASSED [ 94%]
+tests/test_websocket_manager.py::TestWebSocketManager::test_connect_teacher PASSED [ 95%]
+tests/test_websocket_manager.py::TestWebSocketManager::test_disconnect PASSED [ 96%]
+tests/test_websocket_manager.py::TestWebSocketManager::test_handle_chat_message PASSED [ 97%]
+tests/test_websocket_manager.py::TestWebSocketManager::test_handle_raise_hand PASSED [ 98%]
+tests/test_websocket_manager.py::TestMessageTypes::test_all_message_types_exist PASSED [ 99%]
+tests/test_websocket_manager.py::TestMessageTypes::test_system_message_broadcast PASSED [100%]
+
+=================================== ERRORS ====================================
+_____ ERROR at setup of TestAdminEndpoints.test_get_users_requires_admin ______
+E   asyncpg.exceptions.UndefinedObjectError: type "vector" does not exist
+
+The above exception was the direct cause of the following exception:
+E   sqlalchemy.dialects.postgresql.asyncpg.AsyncAdapt_asyncpg_dbapi.ProgrammingError: <class 'asyncpg.exceptions.UndefinedObjectError'>: type "vector" does not exist
+
+The above exception was the direct cause of the following exception:
+E   sqlalchemy.exc.ProgrammingError: (sqlalchemy.dialects.postgresql.asyncpg.ProgrammingError) <class 'asyncpg.exceptions.UndefinedObjectError'>: type "vector" does not exist
+    [SQL: 
+    CREATE TABLE material_chunks (
+    	id UUID NOT NULL, 
+    	material_id UUID NOT NULL, 
+    	content TEXT NOT NULL, 
+    	page_number INTEGER, 
+    	chunk_index INTEGER NOT NULL, 
+    	chunk_metadata JSONB, 
+    	embedding VECTOR(384), 
+    	search_vector TSVECTOR, 
+    	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
+    	PRIMARY KEY (id), 
+    	FOREIGN KEY(material_id) REFERENCES materials (id) ON DELETE CASCADE
+    )
+    
+    ]
+    (Background on this error at: https://sqlalche.me/e/20/f405)
+_______ ERROR at setup of TestAdminEndpoints.test_admin_can_list_users ________
+E   asyncpg.exceptions.UndefinedObjectError: type "vector" does not exist
+
+The above exception was the direct cause of the following exception:
+E   sqlalchemy.dialects.postgresql.asyncpg.AsyncAdapt_asyncpg_dbapi.ProgrammingError: <class 'asyncpg.exceptions.UndefinedObjectError'>: type "vector" does not exist
+
+The above exception was the direct cause of the following exception:
+E   sqlalchemy.exc.ProgrammingError: (sqlalchemy.dialects.postgresql.asyncpg.ProgrammingError) <class 'asyncpg.exceptions.UndefinedObjectError'>: type "vector" does not exist
+    [SQL: 
+    CREATE TABLE material_chunks (
+    	id UUID NOT NULL, 
+    	material_id UUID NOT NULL, 
+    	content TEXT NOT NULL, 
+    	page_number INTEGER, 
+    	chunk_index INTEGER NOT NULL, 
+    	chunk_metadata JSONB, 
+    	embedding VECTOR(384), 
+    	search_vector TSVECTOR, 
+    	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
+    	PRIMARY KEY (id), 
+    	FOREIGN KEY(material_id) REFERENCES materials (id) ON DELETE CASCADE
+    )
+    
+    ]
+    (Background on this error at: https://sqlalche.me/e/20/f405)
+__ ERROR at setup of TestAdminEndpoints.test_admin_usage_endpoint_protected ___
+E   asyncpg.exceptions.UndefinedObjectError: type "vector" does not exist
+
+The above exception was the direct cause of the following exception:
+E   sqlalchemy.dialects.postgresql.asyncpg.AsyncAdapt_asyncpg_dbapi.ProgrammingError: <class 'asyncpg.exceptions.UndefinedObjectError'>: type "vector" does not exist
+
+The above exception was the direct cause of the following exception:
+E   sqlalchemy.exc.ProgrammingError: (sqlalchemy.dialects.postgresql.asyncpg.ProgrammingError) <class 'asyncpg.exceptions.UndefinedObjectError'>: type "vector" does not exist
+    [SQL: 
+    CREATE TABLE material_chunks (
+    	id UUID NOT NULL, 
+    	material_id UUID NOT NULL, 
+    	content TEXT NOT NULL, 
+    	page_number INTEGER, 
+    	chunk_index INTEGER NOT NULL, 
+    	chunk_metadata JSONB, 
+    	embedding VECTOR(384), 
+    	search_vector TSVECTOR, 
+    	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
+    	PRIMARY KEY (id), 
+    	FOREIGN KEY(material_id) REFERENCES materials (id) ON DELETE CASCADE
+    )
+    
+    ]
+    (Background on this error at: https://sqlalche.me/e/20/f405)
+______ ERROR at setup of TestQuestionTypes.test_multiple_choice_question ______
+file C:\Users\Tommie-YV\edunexus\backend\tests\test_assignment_generator.py, line 266
+      async def test_multiple_choice_question(self, mock_session):
+          """Test MCQ generation"""
+          # Arrange
+          generator = AssignmentGenerator()
+
+          # Act
+          question = await generator.regenerate_question(
+              concept="Quadratic Equations",
+              difficulty="medium",
+              bloom_level=BloomLevel.UNDERSTAND,
+              question_type=QuestionType.MULTIPLE_CHOICE
+          )
+
+          # Assert
+          assert question.question_type == QuestionType.MULTIPLE_CHOICE
+          assert len(question.options) > 0
+          assert question.correct_answer is not None
+E       fixture 'mock_session' not found
+>       available fixtures: _class_scoped_runner, _function_scoped_runner, _module_scoped_runner, _package_scoped_runner, _session_faker, _session_scoped_runner, anyio_backend, anyio_backend_name, anyio_backend_options, cache, capfd, capfdbinary, caplog, capsys, capsysbinary, capteesys, client, cov, db_engine, db_session, db_session_async, doctest_namespace, event_loop, event_loop_policy, faker, free_tcp_port, free_tcp_port_factory, free_udp_port, free_udp_port_factory, mock_audio_data, mock_student, mock_user, monkeypatch, no_cover, pytestconfig, record_property, record_testsuite_property, record_xml_attribute, recwarn, sample_session_data, sample_transcript, subtests, test_engine, tmp_path, tmp_path_factory, tmpdir, tmpdir_factory, unused_tcp_port, unused_tcp_port_factory, unused_udp_port, unused_udp_port_factory
+>       use 'pytest --fixtures [testpath]' for help on them.
+
+C:\Users\Tommie-YV\edunexus\backend\tests\test_assignment_generator.py:266
+______ ERROR at setup of TestQuestionTypes.test_problem_solving_question ______
+file C:\Users\Tommie-YV\edunexus\backend\tests\test_assignment_generator.py, line 284
+      async def test_problem_solving_question(self, mock_session):
+          """Test problem solving question"""
+          # Arrange
+          generator = AssignmentGenerator()
+
+          # Act
+          question = await generator.regenerate_question(
+              concept="Algebra",
+              difficulty="hard",
+              bloom_level=BloomLevel.APPLY,
+              question_type=QuestionType.PROBLEM_SOLVING
+          )
+
+          # Assert
+          assert question.question_type == QuestionType.PROBLEM_SOLVING
+          assert question.model_answer is not None
+          assert question.rubric is not None
+E       fixture 'mock_session' not found
+>       available fixtures: _class_scoped_runner, _function_scoped_runner, _module_scoped_runner, _package_scoped_runner, _session_faker, _session_scoped_runner, anyio_backend, anyio_backend_name, anyio_backend_options, cache, capfd, capfdbinary, caplog, capsys, capsysbinary, capteesys, client, cov, db_engine, db_session, db_session_async, doctest_namespace, event_loop, event_loop_policy, faker, free_tcp_port, free_tcp_port_factory, free_udp_port, free_udp_port_factory, mock_audio_data, mock_student, mock_user, monkeypatch, no_cover, pytestconfig, record_property, record_testsuite_property, record_xml_attribute, recwarn, sample_session_data, sample_transcript, subtests, test_engine, tmp_path, tmp_path_factory, tmpdir, tmpdir_factory, unused_tcp_port, unused_tcp_port_factory, unused_udp_port, unused_udp_port_factory
+>       use 'pytest --fixtures [testpath]' for help on them.
+
+C:\Users\Tommie-YV\edunexus\backend\tests\test_assignment_generator.py:284
+___________ ERROR at setup of TestQuestionTypes.test_essay_question ___________
+file C:\Users\Tommie-YV\edunexus\backend\tests\test_assignment_generator.py, line 302
+      async def test_essay_question(self, mock_session):
+          """Test essay question"""
+          # Arrange
+          generator = AssignmentGenerator()
+
+          # Act
+          question = await generator.regenerate_question(
+              concept="Climate Change",
+              difficulty="medium",
+              bloom_level=BloomLevel.EVALUATE,
+              question_type=QuestionType.ESSAY
+          )
+
+          # Assert
+          assert question.question_type == QuestionType.ESSAY
+          assert question.points >= 5  # Essays worth more points
+E       fixture 'mock_session' not found
+>       available fixtures: _class_scoped_runner, _function_scoped_runner, _module_scoped_runner, _package_scoped_runner, _session_faker, _session_scoped_runner, anyio_backend, anyio_backend_name, anyio_backend_options, cache, capfd, capfdbinary, caplog, capsys, capsysbinary, capteesys, client, cov, db_engine, db_session, db_session_async, doctest_namespace, event_loop, event_loop_policy, faker, free_tcp_port, free_tcp_port_factory, free_udp_port, free_udp_port_factory, mock_audio_data, mock_student, mock_user, monkeypatch, no_cover, pytestconfig, record_property, record_testsuite_property, record_xml_attribute, recwarn, sample_session_data, sample_transcript, subtests, test_engine, tmp_path, tmp_path_factory, tmpdir, tmpdir_factory, unused_tcp_port, unused_tcp_port_factory, unused_udp_port, unused_udp_port_factory
+>       use 'pytest --fixtures [testpath]' for help on them.
+
+C:\Users\Tommie-YV\edunexus\backend\tests\test_assignment_generator.py:302
+__ ERROR at setup of TestBloomTaxonomy.test_bloom_distribution_in_assignment __
+file C:\Users\Tommie-YV\edunexus\backend\tests\test_assignment_generator.py, line 331
+      async def test_bloom_distribution_in_assignment(self, mock_session):
+          """Test that assignment covers multiple Bloom levels"""
+          # Arrange
+          generator = AssignmentGenerator()
+
+          # Act
+          assignment = await generator.generate_assignment(mock_session, 20)
+
+          # Assert
+          bloom_counts = {}
+          for q in assignment.questions:
+              level = q.bloom_level.value
+              bloom_counts[level] = bloom_counts.get(level, 0) + 1
+
+          # Should have questions from multiple levels
+          assert len(bloom_counts) >= 3
+E       fixture 'mock_session' not found
+>       available fixtures: _class_scoped_runner, _function_scoped_runner, _module_scoped_runner, _package_scoped_runner, _session_faker, _session_scoped_runner, anyio_backend, anyio_backend_name, anyio_backend_options, cache, capfd, capfdbinary, caplog, capsys, capsysbinary, capteesys, client, cov, db_engine, db_session, db_session_async, doctest_namespace, event_loop, event_loop_policy, faker, free_tcp_port, free_tcp_port_factory, free_udp_port, free_udp_port_factory, mock_audio_data, mock_student, mock_user, monkeypatch, no_cover, pytestconfig, record_property, record_testsuite_property, record_xml_attribute, recwarn, sample_session_data, sample_transcript, subtests, test_engine, tmp_path, tmp_path_factory, tmpdir, tmpdir_factory, unused_tcp_port, unused_tcp_port_factory, unused_udp_port, unused_udp_port_factory
+>       use 'pytest --fixtures [testpath]' for help on them.
+
+C:\Users\Tommie-YV\edunexus\backend\tests\test_assignment_generator.py:331
+__________ ERROR at setup of TestRegistration.test_register_student ___________
+E   asyncpg.exceptions.UndefinedObjectError: type "vector" does not exist
+
+The above exception was the direct cause of the following exception:
+E   sqlalchemy.dialects.postgresql.asyncpg.AsyncAdapt_asyncpg_dbapi.ProgrammingError: <class 'asyncpg.exceptions.UndefinedObjectError'>: type "vector" does not exist
+
+The above exception was the direct cause of the following exception:
+E   sqlalchemy.exc.ProgrammingError: (sqlalchemy.dialects.postgresql.asyncpg.ProgrammingError) <class 'asyncpg.exceptions.UndefinedObjectError'>: type "vector" does not exist
+    [SQL: 
+    CREATE TABLE material_chunks (
+    	id UUID NOT NULL, 
+    	material_id UUID NOT NULL, 
+    	content TEXT NOT NULL, 
+    	page_number INTEGER, 
+    	chunk_index INTEGER NOT NULL, 
+    	chunk_metadata JSONB, 
+    	embedding VECTOR(384), 
+    	search_vector TSVECTOR, 
+    	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
+    	PRIMARY KEY (id), 
+    	FOREIGN KEY(material_id) REFERENCES materials (id) ON DELETE CASCADE
+    )
+    
+    ]
+    (Background on this error at: https://sqlalche.me/e/20/f405)
+__ ERROR at setup of TestRegistration.test_register_with_admin_role_rejected __
+E   asyncpg.exceptions.UndefinedObjectError: type "vector" does not exist
+
+The above exception was the direct cause of the following exception:
+E   sqlalchemy.dialects.postgresql.asyncpg.AsyncAdapt_asyncpg_dbapi.ProgrammingError: <class 'asyncpg.exceptions.UndefinedObjectError'>: type "vector" does not exist
+
+The above exception was the direct cause of the following exception:
+E   sqlalchemy.exc.ProgrammingError: (sqlalchemy.dialects.postgresql.asyncpg.ProgrammingError) <class 'asyncpg.exceptions.UndefinedObjectError'>: type "vector" does not exist
+    [SQL: 
+    CREATE TABLE material_chunks (
+    	id UUID NOT NULL, 
+    	material_id UUID NOT NULL, 
+    	content TEXT NOT NULL, 
+    	page_number INTEGER, 
+    	chunk_index INTEGER NOT NULL, 
+    	chunk_metadata JSONB, 
+    	embedding VECTOR(384), 
+    	search_vector TSVECTOR, 
+    	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
+    	PRIMARY KEY (id), 
+    	FOREIGN KEY(material_id) REFERENCES materials (id) ON DELETE CASCADE
+    )
+    
+    ]
+    (Background on this error at: https://sqlalche.me/e/20/f405)
+______ ERROR at setup of TestRegistration.test_duplicate_email_rejected _______
+E   asyncpg.exceptions.UndefinedObjectError: type "vector" does not exist
+
+The above exception was the direct cause of the following exception:
+E   sqlalchemy.dialects.postgresql.asyncpg.AsyncAdapt_asyncpg_dbapi.ProgrammingError: <class 'asyncpg.exceptions.UndefinedObjectError'>: type "vector" does not exist
+
+The above exception was the direct cause of the following exception:
+E   sqlalchemy.exc.ProgrammingError: (sqlalchemy.dialects.postgresql.asyncpg.ProgrammingError) <class 'asyncpg.exceptions.UndefinedObjectError'>: type "vector" does not exist
+    [SQL: 
+    CREATE TABLE material_chunks (
+    	id UUID NOT NULL, 
+    	material_id UUID NOT NULL, 
+    	content TEXT NOT NULL, 
+    	page_number INTEGER, 
+    	chunk_index INTEGER NOT NULL, 
+    	chunk_metadata JSONB, 
+    	embedding VECTOR(384), 
+    	search_vector TSVECTOR, 
+    	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
+    	PRIMARY KEY (id), 
+    	FOREIGN KEY(material_id) REFERENCES materials (id) ON DELETE CASCADE
+    )
+    
+    ]
+    (Background on this error at: https://sqlalche.me/e/20/f405)
+________ ERROR at setup of TestLogin.test_unverified_user_cannot_login ________
+E   asyncpg.exceptions.UndefinedObjectError: type "vector" does not exist
+
+The above exception was the direct cause of the following exception:
+E   sqlalchemy.dialects.postgresql.asyncpg.AsyncAdapt_asyncpg_dbapi.ProgrammingError: <class 'asyncpg.exceptions.UndefinedObjectError'>: type "vector" does not exist
+
+The above exception was the direct cause of the following exception:
+E   sqlalchemy.exc.ProgrammingError: (sqlalchemy.dialects.postgresql.asyncpg.ProgrammingError) <class 'asyncpg.exceptions.UndefinedObjectError'>: type "vector" does not exist
+    [SQL: 
+    CREATE TABLE material_chunks (
+    	id UUID NOT NULL, 
+    	material_id UUID NOT NULL, 
+    	content TEXT NOT NULL, 
+    	page_number INTEGER, 
+    	chunk_index INTEGER NOT NULL, 
+    	chunk_metadata JSONB, 
+    	embedding VECTOR(384), 
+    	search_vector TSVECTOR, 
+    	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
+    	PRIMARY KEY (id), 
+    	FOREIGN KEY(material_id) REFERENCES materials (id) ON DELETE CASCADE
+    )
+    
+    ]
+    (Background on this error at: https://sqlalche.me/e/20/f405)
+_________ ERROR at setup of TestLogin.test_pending_user_cannot_login __________
+E   asyncpg.exceptions.UndefinedObjectError: type "vector" does not exist
+
+The above exception was the direct cause of the following exception:
+E   sqlalchemy.dialects.postgresql.asyncpg.AsyncAdapt_asyncpg_dbapi.ProgrammingError: <class 'asyncpg.exceptions.UndefinedObjectError'>: type "vector" does not exist
+
+The above exception was the direct cause of the following exception:
+E   sqlalchemy.exc.ProgrammingError: (sqlalchemy.dialects.postgresql.asyncpg.ProgrammingError) <class 'asyncpg.exceptions.UndefinedObjectError'>: type "vector" does not exist
+    [SQL: 
+    CREATE TABLE material_chunks (
+    	id UUID NOT NULL, 
+    	material_id UUID NOT NULL, 
+    	content TEXT NOT NULL, 
+    	page_number INTEGER, 
+    	chunk_index INTEGER NOT NULL, 
+    	chunk_metadata JSONB, 
+    	embedding VECTOR(384), 
+    	search_vector TSVECTOR, 
+    	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
+    	PRIMARY KEY (id), 
+    	FOREIGN KEY(material_id) REFERENCES materials (id) ON DELETE CASCADE
+    )
+    
+    ]
+    (Background on this error at: https://sqlalche.me/e/20/f405)
+__________ ERROR at setup of TestLogin.test_wrong_password_rejected ___________
+E   asyncpg.exceptions.UndefinedObjectError: type "vector" does not exist
+
+The above exception was the direct cause of the following exception:
+E   sqlalchemy.dialects.postgresql.asyncpg.AsyncAdapt_asyncpg_dbapi.ProgrammingError: <class 'asyncpg.exceptions.UndefinedObjectError'>: type "vector" does not exist
+
+The above exception was the direct cause of the following exception:
+E   sqlalchemy.exc.ProgrammingError: (sqlalchemy.dialects.postgresql.asyncpg.ProgrammingError) <class 'asyncpg.exceptions.UndefinedObjectError'>: type "vector" does not exist
+    [SQL: 
+    CREATE TABLE material_chunks (
+    	id UUID NOT NULL, 
+    	material_id UUID NOT NULL, 
+    	content TEXT NOT NULL, 
+    	page_number INTEGER, 
+    	chunk_index INTEGER NOT NULL, 
+    	chunk_metadata JSONB, 
+    	embedding VECTOR(384), 
+    	search_vector TSVECTOR, 
+    	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
+    	PRIMARY KEY (id), 
+    	FOREIGN KEY(material_id) REFERENCES materials (id) ON DELETE CASCADE
+    )
+    
+    ]
+    (Background on this error at: https://sqlalche.me/e/20/f405)
+_ ERROR at setup of TestCompleteTeachingWorkflow.test_complete_session_lifecycle _
+E   sqlalchemy.exc.MissingGreenlet: greenlet_spawn has not been called; can't call await_only() here. Was IO attempted in an unexpected place? (Background on this error at: https://sqlalche.me/e/20/xd2s)
+_ ERROR at setup of TestCompleteTeachingWorkflow.test_ai_explanation_workflow _
+E   sqlalchemy.exc.MissingGreenlet: greenlet_spawn has not been called; can't call await_only() here. Was IO attempted in an unexpected place? (Background on this error at: https://sqlalche.me/e/20/xd2s)
+____ ERROR at setup of TestCompleteTeachingWorkflow.test_engagement_alerts ____
+E   sqlalchemy.exc.MissingGreenlet: greenlet_spawn has not been called; can't call await_only() here. Was IO attempted in an unexpected place? (Background on this error at: https://sqlalche.me/e/20/xd2s)
+_ ERROR at setup of TestCompleteTeachingWorkflow.test_assignment_personalization _
+E   sqlalchemy.exc.MissingGreenlet: greenlet_spawn has not been called; can't call await_only() here. Was IO attempted in an unexpected place? (Background on this error at: https://sqlalche.me/e/20/xd2s)
+_____ ERROR at setup of TestErrorHandling.test_invalid_session_operations _____
+E   sqlalchemy.exc.MissingGreenlet: greenlet_spawn has not been called; can't call await_only() here. Was IO attempted in an unexpected place? (Background on this error at: https://sqlalche.me/e/20/xd2s)
+________ ERROR at setup of TestErrorHandling.test_unauthorized_access _________
+E   sqlalchemy.exc.MissingGreenlet: greenlet_spawn has not been called; can't call await_only() here. Was IO attempted in an unexpected place? (Background on this error at: https://sqlalche.me/e/20/xd2s)
+__________ ERROR at setup of TestSessionManager.test_create_session ___________
+E   sqlalchemy.exc.MissingGreenlet: greenlet_spawn has not been called; can't call await_only() here. Was IO attempted in an unexpected place? (Background on this error at: https://sqlalche.me/e/20/xd2s)
+_ ERROR at setup of TestSessionManager.test_create_session_without_ai_config __
+E   sqlalchemy.exc.MissingGreenlet: greenlet_spawn has not been called; can't call await_only() here. Was IO attempted in an unexpected place? (Background on this error at: https://sqlalche.me/e/20/xd2s)
+___________ ERROR at setup of TestSessionManager.test_start_session ___________
+E   sqlalchemy.exc.MissingGreenlet: greenlet_spawn has not been called; can't call await_only() here. Was IO attempted in an unexpected place? (Background on this error at: https://sqlalche.me/e/20/xd2s)
+_ ERROR at setup of TestSessionManager.test_cannot_start_non_scheduled_session _
+E   sqlalchemy.exc.MissingGreenlet: greenlet_spawn has not been called; can't call await_only() here. Was IO attempted in an unexpected place? (Background on this error at: https://sqlalche.me/e/20/xd2s)
+_____ ERROR at setup of TestSessionManager.test_pause_and_resume_session ______
+E   sqlalchemy.exc.MissingGreenlet: greenlet_spawn has not been called; can't call await_only() here. Was IO attempted in an unexpected place? (Background on this error at: https://sqlalche.me/e/20/xd2s)
+____________ ERROR at setup of TestSessionManager.test_end_session ____________
+E   sqlalchemy.exc.MissingGreenlet: greenlet_spawn has not been called; can't call await_only() here. Was IO attempted in an unexpected place? (Background on this error at: https://sqlalche.me/e/20/xd2s)
+______ ERROR at setup of TestSessionManager.test_student_join_and_leave _______
+E   sqlalchemy.exc.MissingGreenlet: greenlet_spawn has not been called; can't call await_only() here. Was IO attempted in an unexpected place? (Background on this error at: https://sqlalche.me/e/20/xd2s)
+_______ ERROR at setup of TestSessionManager.test_get_teacher_sessions ________
+E   sqlalchemy.exc.MissingGreenlet: greenlet_spawn has not been called; can't call await_only() here. Was IO attempted in an unexpected place? (Background on this error at: https://sqlalche.me/e/20/xd2s)
+_________ ERROR at setup of TestSessionManager.test_context_building __________
+E   sqlalchemy.exc.MissingGreenlet: greenlet_spawn has not been called; can't call await_only() here. Was IO attempted in an unexpected place? (Background on this error at: https://sqlalche.me/e/20/xd2s)
+_____ ERROR at setup of TestSessionLifecycle.test_full_session_lifecycle ______
+E   sqlalchemy.exc.MissingGreenlet: greenlet_spawn has not been called; can't call await_only() here. Was IO attempted in an unexpected place? (Background on this error at: https://sqlalche.me/e/20/xd2s)
+_______ ERROR at setup of TestSessionValidation.test_session_not_found ________
+E   sqlalchemy.exc.MissingGreenlet: greenlet_spawn has not been called; can't call await_only() here. Was IO attempted in an unexpected place? (Background on this error at: https://sqlalche.me/e/20/xd2s)
+___ ERROR at setup of TestSessionValidation.test_invalid_session_transition ___
+E   sqlalchemy.exc.MissingGreenlet: greenlet_spawn has not been called; can't call await_only() here. Was IO attempted in an unexpected place? (Background on this error at: https://sqlalche.me/e/20/xd2s)
+============================== warnings summary ===============================
+app\core\config.py:6
+  C:\Users\Tommie-YV\edunexus\backend\app\core\config.py:6: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class Settings(BaseSettings):
+
+app\api\v1\endpoints\auth.py:101
+  C:\Users\Tommie-YV\edunexus\backend\app\api\v1\endpoints\auth.py:101: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class UserResponse(BaseModel):
+
+app\api\v1\endpoints\students.py:81
+  C:\Users\Tommie-YV\edunexus\backend\app\api\v1\endpoints\students.py:81: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class TopicRequestResponse(BaseModel):
+
+..\..\AppData\Roaming\Python\Python314\site-packages\slowapi\extension.py:717: 10 warnings
+  C:\Users\Tommie-YV\AppData\Roaming\Python\Python314\site-packages\slowapi\extension.py:717: DeprecationWarning: 'asyncio.iscoroutinefunction' is deprecated and slated for removal in Python 3.16; use inspect.iscoroutinefunction() instead
+    if asyncio.iscoroutinefunction(func):
+
+app\api\v1\endpoints\teachers.py:52
+  C:\Users\Tommie-YV\edunexus\backend\app\api\v1\endpoints\teachers.py:52: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class StudentResponse(BaseModel):
+
+app\api\v1\endpoints\materials.py:65
+  C:\Users\Tommie-YV\edunexus\backend\app\api\v1\endpoints\materials.py:65: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class MaterialResponse(BaseModel):
+
+app\api\v1\endpoints\admin.py:31
+  C:\Users\Tommie-YV\edunexus\backend\app\api\v1\endpoints\admin.py:31: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class UserListResponse(BaseModel):
+
+tests/test_ai_coordinator.py::TestAICoordinator::test_process_teacher_speech_stt_disabled
+tests/test_ai_coordinator.py::TestAICoordinator::test_build_explanation_prompt
+  C:\Users\Tommie-YV\edunexus\backend\tests\test_ai_coordinator.py:147: PydanticDeprecatedSince20: The `dict` method is deprecated; use `model_dump` instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    ).dict()
+
+tests/test_ai_coordinator.py::TestAICoordinator::test_process_teacher_speech_stt_disabled
+  C:\Users\Tommie-YV\edunexus\backend\tests\test_ai_coordinator.py:191: PydanticDeprecatedSince20: The `dict` method is deprecated; use `model_dump` instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    ).dict()
+
+tests/test_assignment_generator.py::TestAssignmentGenerator::test_difficulty_distribution_beginner
+  tests\test_assignment_generator.py:104: PytestWarning: The test <Function test_difficulty_distribution_beginner> is marked with '@pytest.mark.asyncio' but it is not an async function. Please remove the asyncio mark. If the test is not marked explicitly, check for global marks applied via 'pytestmark'.
+    def test_difficulty_distribution_beginner(self):
+
+tests/test_assignment_generator.py::TestAssignmentGenerator::test_difficulty_distribution_intermediate
+  tests\test_assignment_generator.py:117: PytestWarning: The test <Function test_difficulty_distribution_intermediate> is marked with '@pytest.mark.asyncio' but it is not an async function. Please remove the asyncio mark. If the test is not marked explicitly, check for global marks applied via 'pytestmark'.
+    def test_difficulty_distribution_intermediate(self):
+
+tests/test_assignment_generator.py::TestAssignmentGenerator::test_difficulty_distribution_advanced
+  tests\test_assignment_generator.py:130: PytestWarning: The test <Function test_difficulty_distribution_advanced> is marked with '@pytest.mark.asyncio' but it is not an async function. Please remove the asyncio mark. If the test is not marked explicitly, check for global marks applied via 'pytestmark'.
+    def test_difficulty_distribution_advanced(self):
+
+tests/test_assignment_generator.py::TestAssignmentGenerator::test_bloom_distribution
+  tests\test_assignment_generator.py:143: PytestWarning: The test <Function test_bloom_distribution> is marked with '@pytest.mark.asyncio' but it is not an async function. Please remove the asyncio mark. If the test is not marked explicitly, check for global marks applied via 'pytestmark'.
+    def test_bloom_distribution(self):
+
+tests/test_assignment_generator.py::TestAssignmentGenerator::test_create_fallback_questions
+  tests\test_assignment_generator.py:180: PytestWarning: The test <Function test_create_fallback_questions> is marked with '@pytest.mark.asyncio' but it is not an async function. Please remove the asyncio mark. If the test is not marked explicitly, check for global marks applied via 'pytestmark'.
+    def test_create_fallback_questions(self):
+
+tests/test_assignment_generator.py::TestAssignmentQuestion::test_question_creation
+  tests\test_assignment_generator.py:218: PytestWarning: The test <Function test_question_creation> is marked with '@pytest.mark.asyncio' but it is not an async function. Please remove the asyncio mark. If the test is not marked explicitly, check for global marks applied via 'pytestmark'.
+    def test_question_creation(self):
+
+tests/test_assignment_generator.py::TestAssignmentQuestion::test_question_to_dict
+  tests\test_assignment_generator.py:238: PytestWarning: The test <Function test_question_to_dict> is marked with '@pytest.mark.asyncio' but it is not an async function. Please remove the asyncio mark. If the test is not marked explicitly, check for global marks applied via 'pytestmark'.
+    def test_question_to_dict(self):
+
+tests/test_assignment_generator.py::TestBloomTaxonomy::test_all_bloom_levels_exist
+  tests\test_assignment_generator.py:324: PytestWarning: The test <Function test_all_bloom_levels_exist> is marked with '@pytest.mark.asyncio' but it is not an async function. Please remove the asyncio mark. If the test is not marked explicitly, check for global marks applied via 'pytestmark'.
+    def test_all_bloom_levels_exist(self):
+
+tests/test_engagement_tracker.py::TestEngagementMetrics::test_metrics_creation
+  tests\test_engagement_tracker.py:21: PytestWarning: The test <Function test_metrics_creation> is marked with '@pytest.mark.asyncio' but it is not an async function. Please remove the asyncio mark. If the test is not marked explicitly, check for global marks applied via 'pytestmark'.
+    def test_metrics_creation(self):
+
+tests/test_engagement_tracker.py::TestEngagementMetrics::test_engagement_status_calculation
+  tests\test_engagement_tracker.py:35: PytestWarning: The test <Function test_engagement_status_calculation> is marked with '@pytest.mark.asyncio' but it is not an async function. Please remove the asyncio mark. If the test is not marked explicitly, check for global marks applied via 'pytestmark'.
+    def test_engagement_status_calculation(self):
+
+tests/test_engagement_tracker.py::TestEngagementMetrics::test_add_alert
+  tests\test_engagement_tracker.py:47: PytestWarning: The test <Function test_add_alert> is marked with '@pytest.mark.asyncio' but it is not an async function. Please remove the asyncio mark. If the test is not marked explicitly, check for global marks applied via 'pytestmark'.
+    def test_add_alert(self):
+
+tests/test_engagement_tracker.py::TestEngagementMetrics::test_add_alert_limit
+  tests\test_engagement_tracker.py:61: PytestWarning: The test <Function test_add_alert_limit> is marked with '@pytest.mark.asyncio' but it is not an async function. Please remove the asyncio mark. If the test is not marked explicitly, check for global marks applied via 'pytestmark'.
+    def test_add_alert_limit(self):
+
+tests/test_engagement_tracker.py::TestEngagementMetrics::test_to_dict
+  tests\test_engagement_tracker.py:73: PytestWarning: The test <Function test_to_dict> is marked with '@pytest.mark.asyncio' but it is not an async function. Please remove the asyncio mark. If the test is not marked explicitly, check for global marks applied via 'pytestmark'.
+    def test_to_dict(self):
+
+tests/test_websocket_manager.py::TestWebSocketMessage::test_message_creation
+  tests\test_websocket_manager.py:20: PytestWarning: The test <Function test_message_creation> is marked with '@pytest.mark.asyncio' but it is not an async function. Please remove the asyncio mark. If the test is not marked explicitly, check for global marks applied via 'pytestmark'.
+    def test_message_creation(self):
+
+tests/test_websocket_manager.py::TestWebSocketMessage::test_message_to_dict
+  tests\test_websocket_manager.py:36: PytestWarning: The test <Function test_message_to_dict> is marked with '@pytest.mark.asyncio' but it is not an async function. Please remove the asyncio mark. If the test is not marked explicitly, check for global marks applied via 'pytestmark'.
+    def test_message_to_dict(self):
+
+tests/test_websocket_manager.py::TestWebSocketMessage::test_message_to_json
+  tests\test_websocket_manager.py:53: PytestWarning: The test <Function test_message_to_json> is marked with '@pytest.mark.asyncio' but it is not an async function. Please remove the asyncio mark. If the test is not marked explicitly, check for global marks applied via 'pytestmark'.
+    def test_message_to_json(self):
+
+tests/test_websocket_manager.py::TestSessionRoom::test_get_active_users
+  tests\test_websocket_manager.py:224: PytestWarning: The test <Function test_get_active_users> is marked with '@pytest.mark.asyncio' but it is not an async function. Please remove the asyncio mark. If the test is not marked explicitly, check for global marks applied via 'pytestmark'.
+    def test_get_active_users(self, room, mock_websocket):
+
+tests/test_websocket_manager.py::TestMessageTypes::test_all_message_types_exist
+  tests\test_websocket_manager.py:375: PytestWarning: The test <Function test_all_message_types_exist> is marked with '@pytest.mark.asyncio' but it is not an async function. Please remove the asyncio mark. If the test is not marked explicitly, check for global marks applied via 'pytestmark'.
+    def test_all_message_types_exist(self):
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+ERROR tests/test_admin_integration.py::TestAdminEndpoints::test_get_users_requires_admin
+ERROR tests/test_admin_integration.py::TestAdminEndpoints::test_admin_can_list_users
+ERROR tests/test_admin_integration.py::TestAdminEndpoints::test_admin_usage_endpoint_protected
+ERROR tests/test_assignment_generator.py::TestQuestionTypes::test_multiple_choice_question
+ERROR tests/test_assignment_generator.py::TestQuestionTypes::test_problem_solving_question
+ERROR tests/test_assignment_generator.py::TestQuestionTypes::test_essay_question
+ERROR tests/test_assignment_generator.py::TestBloomTaxonomy::test_bloom_distribution_in_assignment
+ERROR tests/test_auth_integration.py::TestRegistration::test_register_student
+ERROR tests/test_auth_integration.py::TestRegistration::test_register_with_admin_role_rejected
+ERROR tests/test_auth_integration.py::TestRegistration::test_duplicate_email_rejected
+ERROR tests/test_auth_integration.py::TestLogin::test_unverified_user_cannot_login
+ERROR tests/test_auth_integration.py::TestLogin::test_pending_user_cannot_login
+ERROR tests/test_auth_integration.py::TestLogin::test_wrong_password_rejected
+ERROR tests/test_integration.py::TestCompleteTeachingWorkflow::test_complete_session_lifecycle
+ERROR tests/test_integration.py::TestCompleteTeachingWorkflow::test_ai_explanation_workflow
+ERROR tests/test_integration.py::TestCompleteTeachingWorkflow::test_engagement_alerts
+ERROR tests/test_integration.py::TestCompleteTeachingWorkflow::test_assignment_personalization
+ERROR tests/test_integration.py::TestErrorHandling::test_invalid_session_operations
+ERROR tests/test_integration.py::TestErrorHandling::test_unauthorized_access
+ERROR tests/test_session_manager.py::TestSessionManager::test_create_session
+ERROR tests/test_session_manager.py::TestSessionManager::test_create_session_without_ai_config
+ERROR tests/test_session_manager.py::TestSessionManager::test_start_session
+ERROR tests/test_session_manager.py::TestSessionManager::test_cannot_start_non_scheduled_session
+ERROR tests/test_session_manager.py::TestSessionManager::test_pause_and_resume_session
+ERROR tests/test_session_manager.py::TestSessionManager::test_end_session - s...
+ERROR tests/test_session_manager.py::TestSessionManager::test_student_join_and_leave
+ERROR tests/test_session_manager.py::TestSessionManager::test_get_teacher_sessions
+ERROR tests/test_session_manager.py::TestSessionManager::test_context_building
+ERROR tests/test_session_manager.py::TestSessionLifecycle::test_full_session_lifecycle
+ERROR tests/test_session_manager.py::TestSessionValidation::test_session_not_found
+ERROR tests/test_session_manager.py::TestSessionValidation::test_invalid_session_transition
+=========== 53 passed, 16 skipped, 37 warnings, 31 errors in 12.63s ===========

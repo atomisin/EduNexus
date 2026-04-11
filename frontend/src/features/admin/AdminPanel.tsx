@@ -10,6 +10,7 @@ import { User, CheckCircle, XCircle, Clock, Search, Users, GraduationCap, Briefc
 import { toast } from 'sonner';
 import { adminAPI } from '@/services/api';
 import { NotificationBell } from '@/components/NotificationBell';
+import ThemeToggle from '@/components/ThemeToggle';
 import { UserCard } from './UserCard';
 import { TeacherLicensesPanel } from './TeacherLicensesPanel';
 import { CurriculumMaterialsTab } from './CurriculumMaterialsTab';
@@ -185,6 +186,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             <h1 className="text-xl font-bold font-display">Admin Panel</h1>
           </div>
           <div className="flex items-center gap-3">
+            <ThemeToggle />
             <NotificationBell />
             <Button variant="outline" onClick={onBack}>Back to Main</Button>
             <Button variant="ghost" onClick={() => setIsLoggedIn(false)}>Logout</Button>

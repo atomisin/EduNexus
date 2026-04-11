@@ -3,6 +3,7 @@ import { Menu, Zap, Sun, Moon, User as UserIcon, MessageSquare, LogOut } from 'l
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { NotificationBell } from '@/components/NotificationBell';
+import ThemeToggle from '@/components/ThemeToggle';
 import type { ViewType } from '../types';
 
 interface StudentHeaderProps {
@@ -29,17 +30,7 @@ export const StudentHeader: React.FC<StudentHeaderProps> = ({
   avatarUrl,
 }) => {
   const [showUserMenu, setShowUserMenu] = useState(false);
-  const [theme, setTheme] = useState<'light' | 'dark'>(localStorage.getItem('theme') === 'dark' ? 'dark' : 'light');
-  const toggleTheme = () => {
-    const newTheme = theme === 'dark' ? 'light' : 'dark';
-    setTheme(newTheme);
-    if (newTheme === 'dark') {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-    localStorage.setItem('theme', newTheme);
-  };
+
 
   return (
     <header className="bg-background border-b border-border px-6 py-0.5 h-12 flex items-center justify-between shrink-0">
@@ -62,9 +53,7 @@ export const StudentHeader: React.FC<StudentHeaderProps> = ({
           <span className="font-semibold text-amber-700">{profile?.current_streak || 0} day streak!</span>
         </div>
         <NotificationBell />
-        <Button variant="ghost" size="icon" onClick={toggleTheme} aria-label="Toggle theme">
-          {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-        </Button>
+        <ThemeToggle />
         <div className="relative">
           <button
             onClick={() => setShowUserMenu(!showUserMenu)}

@@ -11,6 +11,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
 
 import { NotificationBell } from '@/components/NotificationBell';
+import ThemeToggle from '@/components/ThemeToggle';
 import Profile from '@/components/Profile';
 import { MessagingView } from '@/components/messaging/MessagingView';
 import { AITogglePanel } from './sessions/AITogglePanel';
@@ -234,6 +235,7 @@ export const TeacherDashboard = ({ user, onLogout, onUserUpdate, onStartSession,
             </div>
           </div>
           <div className="flex items-center gap-4">
+            <ThemeToggle />
             <NotificationBell />
             <div className="relative">
               <button

@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { LoginForm } from '@/components/auth/LoginForm';
 import { RegistrationPage } from '../auth/RegistrationPage';
+import ThemeToggle from '@/components/ThemeToggle';
 import {
   Dialog,
   DialogContent,
@@ -60,6 +61,8 @@ export const LandingPage = ({
               <a href="#features" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Platform</a>
               <a href="#about" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Organization</a>
               <a href="#contact" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Contact</a>
+              <div className="h-6 w-px bg-border mx-2"></div>
+              <ThemeToggle />
               <div className="h-6 w-px bg-border mx-2"></div>
               {user && onGoDashboard ? (
                 <Button onClick={onGoDashboard} className="bg-primary text-primary-foreground rounded-lg font-semibold px-6 hover:bg-primary/90 transition-all shadow-md">

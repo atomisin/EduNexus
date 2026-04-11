@@ -22,10 +22,14 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Upgrade schema."""
-    # 1. Add brain_power to student_profiles (R-09)
-    # Check if column already exists to avoid errors
-    # op.add_column('student_profiles', sa.Column('brain_power', sa.Integer(), nullable=False, server_default='100'))
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
     
+    # 1. Add brain_power to student_profiles (R-09) safely
+    columns = [c['name'] for c in inspector.get_columns('student_profiles')]
+    if 'brain_power' not in columns:
+        op.add_column('student_profiles', sa.Column('brain_power', sa.Integer(), nullable=False, server_default='100'))
+
     # 2. Migrate all DateTime columns to TIMESTAMP WITH TIME ZONE (TD-06)
     tables_columns = {
         'users': ['date_of_birth', 'verification_code_expires', 'email_verified_at', 'authorized_at', 'created_at', 'updated_at', 'last_login'],
@@ -54,16 +58,19 @@ def upgrade() -> None:
         'teacher_student_links': ['added_at']
     }
 
-    # Add brain_power first
-    op.add_column('student_profiles', sa.Column('brain_power', sa.Integer(), nullable=False, server_default='100'))
+    schema_tables = inspector.get_table_names()
 
     for table, columns in tables_columns.items():
-        for col in columns:
-            op.execute(
-                f"ALTER TABLE {table} ALTER COLUMN {col} "
-                f"TYPE TIMESTAMP WITH TIME ZONE "
-                f"USING {col} AT TIME ZONE 'UTC'"
-            )
+        # Only attempt if table exists in current database context
+        if table in schema_tables:
+            existing_cols = [c['name'] for c in inspector.get_columns(table)]
+            for col in columns:
+                if col in existing_cols:
+                    op.execute(
+                        f"ALTER TABLE {table} ALTER COLUMN {col} "
+                        f"TYPE TIMESTAMP WITH TIME ZONE "
+                        f"USING {col} AT TIME ZONE 'UTC'"
+                    )
 
 
 def downgrade() -> None:

@@ -20,11 +20,16 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Upgrade schema."""
-    op.add_column('users', 
-        sa.Column('force_password_change', 
-                  sa.Boolean(), 
-                  nullable=False,
-                  server_default='false'))
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    columns = [c['name'] for c in inspector.get_columns('users')]
+    
+    if 'force_password_change' not in columns:
+        op.add_column('users', 
+            sa.Column('force_password_change', 
+                      sa.Boolean(), 
+                      nullable=False,
+                      server_default='false'))
 
 
 def downgrade() -> None:

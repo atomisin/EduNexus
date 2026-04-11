@@ -19,24 +19,33 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # 1. Add missing columns to 'teacher_students'
-    # 'added_at' and 'notes' already exist
-    op.add_column('teacher_students', sa.Column('status', sa.String(length=20), server_default='active', nullable=True))
-    op.add_column('teacher_students', sa.Column('added_by', sa.String(length=50), server_default='teacher', nullable=True))
-    op.add_column('teacher_students', sa.Column('private_notes', sa.Text(), nullable=True))
-
-    # 2. Migrate data from 'teacher_student_links' to 'teacher_students'
-    # We use COALESCE and conflict resolution logic. Since they represent redundant links, we only insert if not already present.
-    # Note: Using RAW SQL here because Alembic context is limited for cross-table data migrations.
-    op.execute("""
-        INSERT INTO teacher_students (id, teacher_id, student_id, status, added_at, added_by, private_notes)
-        SELECT id, teacher_id, student_id, status, added_at, added_by, private_notes
-        FROM teacher_student_links
-        ON CONFLICT (teacher_id, student_id) DO NOTHING;
-    """)
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
     
-    # 3. Drop legacy table
-    op.drop_table('teacher_student_links')
+    # 1. Add missing columns to 'teacher_students' safely
+    if 'teacher_students' in inspector.get_table_names():
+        existing_cols = [c['name'] for c in inspector.get_columns('teacher_students')]
+        if 'status' not in existing_cols:
+            op.add_column('teacher_students', sa.Column('status', sa.String(length=20), server_default='active', nullable=True))
+        if 'added_by' not in existing_cols:
+            op.add_column('teacher_students', sa.Column('added_by', sa.String(length=50), server_default='teacher', nullable=True))
+        if 'private_notes' not in existing_cols:
+            op.add_column('teacher_students', sa.Column('private_notes', sa.Text(), nullable=True))
+
+    # 2. Migrate data from 'teacher_student_links' to 'teacher_students' (Safe & Secure)
+    # Check if both tables exist before attempting data move
+    existing_tables = inspector.get_table_names()
+    if 'teacher_student_links' in existing_tables and 'teacher_students' in existing_tables:
+        # Note: Using RAW SQL here because Alembic context is limited for cross-table data migrations.
+        op.execute("""
+            INSERT INTO teacher_students (id, teacher_id, student_id, status, added_at, added_by, private_notes)
+            SELECT id, teacher_id, student_id, status, added_at, added_by, private_notes
+            FROM teacher_student_links
+            ON CONFLICT (teacher_id, student_id) DO NOTHING;
+        """)
+        
+        # 3. Drop legacy table safely
+        op.drop_table('teacher_student_links')
 
 
 def downgrade() -> None:

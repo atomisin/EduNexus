@@ -167,7 +167,35 @@ def upgrade() -> None:
         )
     """)
 
-    # 7. Create materials table safely
+    # 7. Create teacher_students table safely (Target state)
+    op.execute("""
+        CREATE TABLE IF NOT EXISTS teacher_students (
+            id UUID PRIMARY KEY,
+            teacher_id UUID NOT NULL REFERENCES users(id),
+            student_id UUID NOT NULL REFERENCES users(id),
+            status VARCHAR(20) DEFAULT 'active',
+            added_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+            added_by VARCHAR(50) DEFAULT 'teacher',
+            private_notes TEXT,
+            UNIQUE (teacher_id, student_id)
+        )
+    """)
+
+    # 8. Create legacy teacher_student_links table safely (For migration data preservation)
+    op.execute("""
+        CREATE TABLE IF NOT EXISTS teacher_student_links (
+            id UUID PRIMARY KEY,
+            teacher_id UUID NOT NULL REFERENCES users(id),
+            student_id UUID NOT NULL REFERENCES users(id),
+            status VARCHAR(20) DEFAULT 'active',
+            added_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+            added_by VARCHAR(50) DEFAULT 'teacher',
+            private_notes TEXT,
+            UNIQUE (teacher_id, student_id)
+        )
+    """)
+
+    # 9. Create materials table safely
     op.execute("""
         CREATE TABLE IF NOT EXISTS materials (
             id UUID PRIMARY KEY,
@@ -192,7 +220,7 @@ def upgrade() -> None:
         )
     """)
 
-    # 8. Create material_chunks table safely (base columns only)
+    # 10. Create material_chunks table safely (base columns only)
     op.execute("""
         CREATE TABLE IF NOT EXISTS material_chunks (
             id UUID PRIMARY KEY,

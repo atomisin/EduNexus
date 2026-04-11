@@ -139,6 +139,7 @@ See HANDOFF.md for full details on remaining bugs.
 - ✅ FIXED 2026-04-11: Resolved critical Production OOM crashes by purging heavy dependencies (torch, pandas, matplotlib) and refactoring the backend into a "Lean Data" service.
 - ✅ FIXED 2026-04-11: Launched high-fidelity interactive student analytics using Recharts, replacing static backend images with animated responsive components.
 - ✅ FIXED 2026-04-11: Resolved 'Unable to connect' error on Vercel deployment by hardening backend CORS defaults and enhancing frontend API diagnostic logging.
+- ✅ FIXED 2026-04-12: Hardened backend Docker build against ReadTimeoutErrors by increasing pip default timeout and ensuring pip is upgraded during construction.
 
 ## No open issues remain at this time.
 

@@ -17,7 +17,9 @@ engine = create_async_engine(
     max_overflow=40,
     pool_pre_ping=True,
     pool_recycle=3600,
-    echo=False
+    echo=False,
+    # CRITICAL: Disable prepared statements for PgBouncer compatibility
+    connect_args={"statement_cache_size": 0}
 )
 
 AsyncSessionLocal = async_sessionmaker(

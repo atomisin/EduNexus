@@ -51,7 +51,7 @@ async def seed_data():
     elif not db_url.startswith("postgresql+asyncpg://"):
         db_url = "postgresql+asyncpg://" + db_url.split("://", 1)[-1]
 
-    engine = create_async_engine(db_url, echo=False)
+    engine = create_async_engine(db_url, echo=False, connect_args={"statement_cache_size": 0})
     async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
     json_path = os.path.join(BASE_DIR, "data", "curriculum_data.json")

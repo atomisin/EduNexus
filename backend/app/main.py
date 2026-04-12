@@ -178,6 +178,19 @@ def _add_cors_headers(request: Request, response: JSONResponse) -> JSONResponse:
     return response
 
 
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    request_id = getattr(request.state, 'request_id', 'unknown')
+    resp = JSONResponse(
+        status_code=422,
+        content={
+            "detail": exc.errors(),
+            "request_id": request_id
+        }
+    )
+    return _add_cors_headers(request, resp)
+
+
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
     request_id = getattr(request.state, 'request_id', 'unknown')
@@ -217,6 +230,7 @@ async def global_exception_handler(request: Request, exc: Exception):
         }
     )
     return _add_cors_headers(request, resp)
+
 
 app.add_exception_handler(RateLimitExceeded, custom_rate_limit_handler)
 

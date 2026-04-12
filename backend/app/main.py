@@ -18,6 +18,14 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from app.db.database import AsyncSessionLocal
 
+# CRITICAL: Import all models to ensure SQLAlchemy registry is populated (C-03)
+from app.models import (
+    user, student, session, subject, assessment,
+    rag_models, student_progress, notification,
+    message, report, token_usage,
+    junction_tables, mock_exam, subject_outline
+)
+
 # Configure logging
 class JSONLogFormatter(logging.Formatter):
     def format(self, record):

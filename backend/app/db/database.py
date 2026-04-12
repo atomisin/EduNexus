@@ -5,6 +5,9 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.orm import DeclarativeBase
 from app.core.config import settings
 
+class Base(DeclarativeBase):
+    pass
+
 ASYNC_DATABASE_URL = settings.DATABASE_URL\
     .replace("postgresql://", 
              "postgresql+asyncpg://")\
@@ -30,8 +33,23 @@ AsyncSessionLocal = async_sessionmaker(
     autoflush=False
 )
 
-class Base(DeclarativeBase):
-    pass
+# CRITICAL: Warm up the registry by importing all models (C-03)
+# This prevents "name 'X' is not defined" during mapping
+def _warmup_registry():
+    from app.models import (
+        user, student, session, subject, assessment,
+        rag_models, student_progress, notification,
+        message, report, token_usage,
+        junction_tables, mock_exam, subject_outline
+    )
+    # Force SQLAlchemy to resolve all string relationship names
+    try:
+        Base.registry.configure()
+    except Exception:
+        # Avoid crashing if registry is partially initialized in some scripts
+        pass
+
+_warmup_registry()
 
 async def get_db():
     async with AsyncSessionLocal() as session:

@@ -108,7 +108,7 @@ class TeachingSession(Base):
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Relationships
-    teacher = relationship("User", foreign_keys=[teacher_id], lazy="joined")
+    teacher = relationship("User", foreign_keys=[teacher_id], lazy="joined", overlaps="sessions")
     subject = relationship("Subject", lazy="joined")
     topic = relationship("Topic", lazy="joined")
     previous_session = relationship(

@@ -1,5 +1,8 @@
-// API Configuration
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
+const raw_api_url = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
+// Automatically append /api/v1 if missing to prevent 404 errors
+const API_BASE_URL = raw_api_url.includes('/api/v1') 
+  ? raw_api_url 
+  : `${raw_api_url.replace(/\/$/, '')}/api/v1`;
 
 // Generic fetch wrapper with credentials (HttpOnly Cookies)
 export async function fetchWithAuth(endpoint: string, options: RequestInit & { silentAuth?: boolean } = {}) {

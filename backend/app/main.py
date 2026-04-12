@@ -169,7 +169,9 @@ def _add_cors_headers(request: Request, response: JSONResponse) -> JSONResponse:
     if not origin:
         return response
     allowed = settings.allowed_origins_list
-    if origin in allowed or "*" in allowed:
+    # Allow explicit origins or anything matching our Vercel pattern
+    is_vercel_preview = ".vercel.app" in origin and "edu-nexus" in origin
+    if origin in allowed or "*" in allowed or is_vercel_preview:
         response.headers["Access-Control-Allow-Origin"] = origin
         response.headers["Access-Control-Allow-Credentials"] = "true"
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, PATCH, OPTIONS"
@@ -238,6 +240,7 @@ app.add_exception_handler(RateLimitExceeded, custom_rate_limit_handler)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins_list,
+    allow_origin_regex=r"https://edu-nexus-.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allow_headers=["*"],

@@ -114,6 +114,7 @@ class SessionManager:
         session = TeachingSession(
             id=uuid.uuid4(),
             teacher_id=uuid.UUID(teacher_id),
+            title=request.title,
             subject_id=uuid.UUID(request.subject_id) if request.subject_id else None,
             topic_id=uuid.UUID(request.topic_id) if request.topic_id else None,
             session_type=SessionType.LIVE_TEACHING.value,

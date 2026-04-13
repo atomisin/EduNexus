@@ -118,6 +118,7 @@ export const CreateSessionDialog: React.FC<CreateSessionDialogProps> = ({
       }
 
       await sessionAPI.create({
+        title: sessionFormData.title,
         subject_id: sessionFormData.subjectId,
         topic_id: sessionFormData.topicId || undefined,
         duration_minutes: sessionFormData.duration,

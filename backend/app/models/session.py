@@ -44,6 +44,7 @@ class TeachingSession(Base):
     teacher_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     subject_id = Column(UUID(as_uuid=True), ForeignKey("subjects.id"), nullable=True)
     topic_id = Column(UUID(as_uuid=True), ForeignKey("topics.id"), nullable=True)
+    title = Column(String(255), nullable=True)
 
     # Session Info
     session_type = Column(String(50), default="live_teaching")
@@ -125,6 +126,7 @@ class TeachingSession(Base):
             "teacher_id": str(self.teacher_id),
             "subject_id": str(self.subject_id) if self.subject_id else None,
             "topic_id": str(self.topic_id) if self.topic_id else None,
+            "title": self.title,
             "session_type": self.session_type,
             "status": self.status,
             "ai_config": self.ai_config,
@@ -223,6 +225,7 @@ class AIConfigModel(BaseModel):
 class CreateSessionRequest(BaseModel):
     """Request model for creating a session"""
 
+    title: str
     subject_id: str
     topic_id: Optional[str] = None
     student_ids: List[str] = []

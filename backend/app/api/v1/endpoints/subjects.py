@@ -313,7 +313,8 @@ async def get_subjects(
         # Match specific grade OR general subjects (empty grade list)
         query = query.filter(or_(
             Subject.grade_levels.contains([mapped_grade]),
-            Subject.grade_levels == []
+            Subject.grade_levels == [],
+            Subject.grade_levels == None
         ))
     else:
         # If no grade requested/detected, we don't filter BY grade (show all for that ed_level)
@@ -324,7 +325,8 @@ async def get_subjects(
         # Match specific department OR general subjects (empty department list)
         query = query.filter(or_(
             Subject.departments.contains([department]),
-            Subject.departments == []
+            Subject.departments == [],
+            Subject.departments == None
         ))
     else:
         # If no department requested/detected, we don't filter BY department (show all)

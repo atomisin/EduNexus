@@ -74,6 +74,8 @@ interface StudentViewRouterProps {
   startAssessment: () => void;
   progress: any;
   radarData: any[];
+  searchQuery: string;
+  setSearchQuery: (val: string) => void;
 }
 
 export const StudentViewRouter: React.FC<StudentViewRouterProps> = ({
@@ -89,7 +91,7 @@ export const StudentViewRouter: React.FC<StudentViewRouterProps> = ({
   startQuiz, dismissQuizConfirm, getFullName, materials, handleEnroll, handleDeleteMaterial, customCourseName,
   setCustomCourseName, isGeneratingCourse, handleGenerateCustomCourse,
   isEditingProfile, setIsEditingProfile, profileFormData, setProfileFormData,
-  setAvatarUrl, startAssessment, progress, radarData
+  setAvatarUrl, startAssessment, progress, radarData, searchQuery, setSearchQuery
 }) => {
   const renderContent = () => {
     switch (activeView) {
@@ -187,8 +189,8 @@ export const StudentViewRouter: React.FC<StudentViewRouterProps> = ({
       case 'subjects': return <SubjectsView
         subjects={subjects}
         enrolledSubjects={enrolledSubjects}
-        searchQuery=""
-        setSearchQuery={() => { }}
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
         loading={isLoading}
         handleEnroll={handleEnroll}
         materials={materials}

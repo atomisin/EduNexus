@@ -1,5 +1,5 @@
 # EduNexus 2.0 — Agent Context
-Last updated: 2026-04-11 (OOM Hardening & Interactive Analytics)
+Last updated: 2026-04-12 (Production DB Introspection & Alignment)
 
 ## Project
 Nigerian EdTech platform. Creche through SS3 + professional.
@@ -57,6 +57,8 @@ Session Modals: frontend/src/components/session/FloatingContentModal.tsx
 
 ## Known stable files — do not modify unless instructed
 - backend/app/api/v1/endpoints/auth.py (login is stable)
+- backend/scripts/force_sync_db.py (Schema builder is stable)
+- backend/scripts/master_seed.py (Account seeding is stable)
 - backend/app/services/tutor_persona.py (17 personas correct)
 - frontend/src/index.css (design tokens correct)
 - config/seaweedfs_s3.json (credentials = minioadmin)
@@ -140,6 +142,8 @@ See HANDOFF.md for full details on remaining bugs.
 - ✅ FIXED 2026-04-11: Launched high-fidelity interactive student analytics using Recharts, replacing static backend images with animated responsive components.
 - ✅ FIXED 2026-04-11: Resolved 'Unable to connect' error on Vercel deployment by hardening backend CORS defaults and enhancing frontend API diagnostic logging.
 - ✅ FIXED 2026-04-12: Hardened backend Docker build against ReadTimeoutErrors by increasing pip default timeout and ensuring pip is upgraded during construction.
+- ✅ FIXED 2026-04-12: Resolved persistent UndefinedColumnError (500) during login by writing custom schema patch SQL scripts for missing `attention_span` and `teacher_students.notes` columns that were skipped by `Base.metadata.create_all()`.
+- ✅ FIXED 2026-04-12: Hardened SQLAlchemy model relationships by importing all database models in `app/db/database.py` and invoking `Base.registry.configure()`, preventing "Zombie" name-resolution crashes.
 
 ## No open issues remain at this time.
 

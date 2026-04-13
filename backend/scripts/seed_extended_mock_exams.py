@@ -267,62 +267,71 @@ def generate_question(subject_name, q_index):
     }
 
 
-async def seed_exams():
-    db_url = settings.DATABASE_URL
-    if db_url.startswith("postgresql://"):
-        db_url = db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
-        
-    engine = create_async_engine(db_url)
+def seed_exams():
+    db_url = settings.DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://")
+    from sqlalchemy import create_engine
+    engine = create_engine(db_url)
     
-    async with engine.begin() as conn:
-        # Find the target SS3 subjects
-        result = await conn.execute(text(
-            "SELECT id, name FROM subjects WHERE education_level IN ('junior_secondary','senior_secondary') AND code LIKE 'ss3%'"
-        ))
-        subjects = result.fetchall()
-        
-        valid_subjects = subjects
-
-        print(f"Found {len(valid_subjects)} SS3 core subjects for mock exams.")
-        
-        for exam_type in ['JAMB', 'NECO']:
+    with engine.connect() as conn:
+        with conn.begin():
+            # Find the target SS3 subjects
+            result = conn.execute(text(
+                "SELECT id, name FROM subjects WHERE education_level IN ('senior_secondary') AND (code LIKE 'ss3%' OR code LIKE 'WAEC%' OR code LIKE 'NECO%' OR code LIKE 'JAMB%')"
+            ))
+            subjects = result.fetchall()
+            
+            valid_subjects = subjects
+            print(f"Found {len(valid_subjects)} SS3 core subjects for mock exams.")
+            
+        for exam_type in ['JAMB', 'WAEC', 'NECO']:
             for subj in valid_subjects:
+                if exam_type not in subj.name and "ss3" not in subj.name.lower():
+                    # We only match exam mock to its own curriculum, or generic ss3
+                    if not (exam_type in subj.name or "JAMB" not in subj.name and "WAEC" not in subj.name and "NECO" not in subj.name):
+                        continue
+
                 series_id = uuid.uuid4()
-                title = f"{exam_type} {subj.name}"
-                time_limit = 120 if exam_type == 'JAMB' else 60
+                title = f"{exam_type} {subj.name} MOCK"
+                time_limit = 120 if exam_type == 'JAMB' else (90 if exam_type == 'WAEC' else 60)
                 
                 print(f"Creating Series: {title}")
                 
-                await conn.execute(text("""
-                    INSERT INTO mock_exam_series (id, title, exam_type, subject_id, time_limit_minutes, is_active, created_at)
-                    VALUES (:id, :title, :type, :sid, :limit, true, NOW())
-                """), {
-                    "id": series_id,
-                    "title": title,
-                    "type": exam_type,
-                    "sid": subj.id,
-                    "limit": time_limit
-                })
-                
-                # Seed 50 questions
-                for i in range(50):
-                    q = generate_question(subj.name, i)
-                    await conn.execute(text("""
-                        INSERT INTO mock_questions (id, series_id, question_text, option_a, option_b, option_c, option_d, correct_option, topic_tag, created_at)
-                        VALUES (:id, :sid, :qtext, :oa, :ob, :oc, :od, :correct, :topic, NOW())
+                with conn.begin():
+                    # Check if already exists
+                    existing = conn.execute(text("SELECT id FROM mock_exam_series WHERE title=:title"), {"title": title}).fetchone()
+                    if existing:
+                        continue
+                        
+                    conn.execute(text("""
+                        INSERT INTO mock_exam_series (id, title, exam_type, subject_id, time_limit_minutes, is_active, created_at)
+                        VALUES (:id, :title, :type, :sid, :limit, true, NOW())
                     """), {
-                        "id": uuid.uuid4(),
-                        "sid": series_id,
-                        "qtext": f"{i+1}. {q['text']}",
-                        "oa": q['a'],
-                        "ob": q['b'],
-                        "oc": q['c'],
-                        "od": q['d'],
-                        "correct": q['correct'],
-                        "topic": q['topic']
+                        "id": series_id,
+                        "title": title,
+                        "type": exam_type,
+                        "sid": subj.id,
+                        "limit": time_limit
                     })
                     
-        print("\nSuccessfully seeded 50 unique questions for each JAMB and NECO series.")
+                    # Seed 50 questions
+                    for i in range(50):
+                        q = generate_question(subj.name, i)
+                        conn.execute(text("""
+                            INSERT INTO mock_questions (id, series_id, question_text, option_a, option_b, option_c, option_d, correct_option, topic_tag, created_at)
+                            VALUES (:id, :sid, :qtext, :oa, :ob, :oc, :od, :correct, :topic, NOW())
+                        """), {
+                            "id": uuid.uuid4(),
+                            "sid": series_id,
+                            "qtext": f"{i+1}. {q['text']}",
+                            "oa": q['a'],
+                            "ob": q['b'],
+                            "oc": q['c'],
+                            "od": q['d'],
+                            "correct": q['correct'],
+                            "topic": q['topic']
+                        })
+                        
+    print("\\nSuccessfully seeded 50 unique questions for each JAMB, WAEC, and NECO series.")
 
 if __name__ == "__main__":
-    asyncio.run(seed_exams())
+    seed_exams()

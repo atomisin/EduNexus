@@ -51,6 +51,7 @@ export const StudentDashboard = ({
   const activeView = activeViewState;
 
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
   const [customCourseName, setCustomCourseName] = useState('');
   const [isGeneratingCourse, setIsGeneratingCourse] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
@@ -226,7 +227,7 @@ export const StudentDashboard = ({
                    handleGenerateCustomCourse={handleGenerateCustomCourse} isEditingProfile={isEditingProfile}
                    setIsEditingProfile={setIsEditingProfile} profileFormData={profileFormData}
                    setProfileFormData={setProfileFormData} setAvatarUrl={setAvatarUrl} startAssessment={startAssessment}
-                   progress={analytics || progress} radarData={radarData}
+                   progress={analytics || progress} radarData={radarData} searchQuery={searchQuery} setSearchQuery={setSearchQuery}
                 />
               </div>
             ) : (
@@ -254,7 +255,7 @@ export const StudentDashboard = ({
                      handleGenerateCustomCourse={handleGenerateCustomCourse} isEditingProfile={isEditingProfile}
                      setIsEditingProfile={setIsEditingProfile} profileFormData={profileFormData}
                      setProfileFormData={setProfileFormData} setAvatarUrl={setAvatarUrl} startAssessment={startAssessment}
-                     progress={analytics || progress} radarData={radarData}
+                     progress={analytics || progress} radarData={radarData} searchQuery={searchQuery} setSearchQuery={setSearchQuery}
                   />
                 </div>
               </ScrollArea>

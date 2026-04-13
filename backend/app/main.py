@@ -94,6 +94,16 @@ async def lifespan(app: FastAPI):
     
     init_db()
     
+    # HOT PATCH: Ensure 'title' column exists in teaching_sessions (discovered 2026-04-13)
+    async with AsyncSessionLocal() as db:
+        try:
+            await db.execute(text("ALTER TABLE teaching_sessions ADD COLUMN IF NOT EXISTS title VARCHAR(255)"))
+            await db.commit()
+            logger.info("✅ Database Hotpatch: 'title' column verified/added.")
+        except Exception as e:
+            logger.error(f"❌ Database Hotpatch failed: {e}")
+            await db.rollback()
+    
     # Initialize and start scheduler
     try:
         from zoneinfo import ZoneInfo

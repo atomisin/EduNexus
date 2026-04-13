@@ -162,7 +162,7 @@ export const CreateSessionDialog: React.FC<CreateSessionDialogProps> = ({
           <DialogTitle className="text-2xl">Create New Session</DialogTitle>
           <DialogDescription>Schedule a new live teaching session with AI configuration</DialogDescription>
         </div>
-        <ScrollArea className="flex-1 p-6 pt-0">
+        <div className="flex-1 overflow-y-auto p-6 pt-0">
           <div className="space-y-6 pb-2">
           <div className="space-y-2">
             <Label>Session Title</Label>
@@ -177,7 +177,6 @@ export const CreateSessionDialog: React.FC<CreateSessionDialogProps> = ({
             <div className="space-y-2">
               <Label>Education Level</Label>
               <Select
-                modal={false}
                 value={sessionFormData.level}
                 onValueChange={(val) => setSessionFormData({ ...sessionFormData, level: val as EducationLevel })}
               >
@@ -203,7 +202,7 @@ export const CreateSessionDialog: React.FC<CreateSessionDialogProps> = ({
                     onChange={(e) => setNewSubjectName(e.target.value)}
                     className="input-premium"
                   />
-                  <Select modal={false} value={newSubjectLevel} onValueChange={setNewSubjectLevel}>
+                  <Select value={newSubjectLevel} onValueChange={setNewSubjectLevel}>
                     <SelectTrigger className="rounded-xl">
                       <SelectValue placeholder="Education level" />
                     </SelectTrigger>
@@ -223,7 +222,6 @@ export const CreateSessionDialog: React.FC<CreateSessionDialogProps> = ({
               ) : (
                 <div className="space-y-2">
                   <Select
-                    modal={false}
                     value={sessionFormData.subjectId}
                     onValueChange={(val) => {
                       setSessionFormData({ ...sessionFormData, subjectId: val, topicId: '' });
@@ -251,7 +249,6 @@ export const CreateSessionDialog: React.FC<CreateSessionDialogProps> = ({
             <div className="space-y-2">
               <Label>Topic (Optional)</Label>
               <Select
-                modal={false}
                 value={sessionFormData.topicId}
                 onValueChange={(val) => setSessionFormData({ ...sessionFormData, topicId: val === 'none' ? '' : val })}
               >
@@ -360,7 +357,7 @@ export const CreateSessionDialog: React.FC<CreateSessionDialogProps> = ({
             <AITogglePanel config={aiConfig} onChange={onAiConfigChange} />
           </div>
         </div>
-        </ScrollArea>
+        </div>
         <div className="flex justify-end gap-3 p-6 pt-2 shrink-0 border-t border-border mt-2 bg-background">
           <Button variant="outline" onClick={() => onOpenChange(false)} className="rounded-xl">Cancel</Button>
           <Button onClick={handleCreateSession} className="btn-primary rounded-xl">

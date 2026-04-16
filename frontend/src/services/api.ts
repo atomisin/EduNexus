@@ -364,7 +364,15 @@ export const adminAPI = {
   },
 
   deleteMaterial: (materialId: string) =>
-    fetchWithAuth(`/admin/materials/${materialId}`, { method: 'DELETE' }),
+    fetchWithAuth(`/materials/${materialId}`, { method: 'DELETE' }),
+
+  // Get AI usage analytics
+  getAIUsage: (params: { days?: number; model_name?: string } = {}) => {
+    const query = new URLSearchParams();
+    if (params.days) query.append('days', String(params.days));
+    if (params.model_name) query.append('model_name', params.model_name);
+    return fetchWithAuth(`/admin/usage?${query.toString()}`);
+  },
 };
 
 // RAG (Retrieval Augmented Generation) API

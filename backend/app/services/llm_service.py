@@ -1,5 +1,6 @@
 import json
 import logging
+import uuid
 from datetime import datetime, timedelta, timezone
 from fastapi import HTTPException
 from typing import Optional, Dict, Any, List
@@ -57,11 +58,11 @@ class LLMService:
         completion_cost = completion_tokens * 0.05
         return int(prompt_cost + completion_cost)
 
-    def _log_usage(self, model: str, prompt_tokens: int, completion_tokens: int, total_tokens: int, cost_microdollars: int):
+    def _log_usage(self, model: str, prompt_tokens: int, completion_tokens: int, total_tokens: int, cost_microdollars: int, user_id: Optional[uuid.UUID] = None):
         import asyncio
-        asyncio.create_task(self._async_log_usage(model, prompt_tokens, completion_tokens, total_tokens, cost_microdollars))
+        asyncio.create_task(self._async_log_usage(model, prompt_tokens, completion_tokens, total_tokens, cost_microdollars, user_id))
 
-    async def _async_log_usage(self, model: str, prompt_tokens: int, completion_tokens: int, total_tokens: int, cost_microdollars: int):
+    async def _async_log_usage(self, model: str, prompt_tokens: int, completion_tokens: int, total_tokens: int, cost_microdollars: int, user_id: Optional[uuid.UUID] = None):
         from app.db.database import AsyncSessionLocal
         from app.models.token_usage import TokenUsageLog
         try:
@@ -71,7 +72,8 @@ class LLMService:
                     prompt_tokens=prompt_tokens,
                     completion_tokens=completion_tokens,
                     total_tokens=total_tokens,
-                    cost_microdollars=cost_microdollars
+                    cost_microdollars=cost_microdollars,
+                    user_id=user_id
                 )
                 db.add(log_entry)
                 await db.commit()
@@ -146,6 +148,7 @@ class LLMService:
         max_tokens: int = 1024,
         system_prompt: Optional[str] = None,
         format: Optional[str] = None,
+        user_id: Optional[uuid.UUID] = None,
     ) -> str:
         """Generate text using LiteLLM"""
         # Check circuit breaker
@@ -193,7 +196,8 @@ class LLMService:
                         prompt_tokens=getattr(usage, 'prompt_tokens', 0),
                         completion_tokens=getattr(usage, 'completion_tokens', 0),
                         total_tokens=getattr(usage, 'total_tokens', 0),
-                        cost_microdollars=cost_micros
+                        cost_microdollars=cost_micros,
+                        user_id=user_id
                     )
                 
                 return response.choices[0].message.content or ""
@@ -273,6 +277,7 @@ For detailed content on **{concept}**, I recommend:
         temperature: float = 0.7,
         system_prompt: Optional[str] = None,
         max_tokens: int = 300,
+        user_id: Optional[uuid.UUID] = None,
     ) -> str:
         """Chat completion using LiteLLM"""
         if self._is_circuit_open():
@@ -319,7 +324,8 @@ For detailed content on **{concept}**, I recommend:
                         prompt_tokens=getattr(usage, 'prompt_tokens', 0),
                         completion_tokens=getattr(usage, 'completion_tokens', 0),
                         total_tokens=getattr(usage, 'total_tokens', 0),
-                        cost_microdollars=cost_micros
+                        cost_microdollars=cost_micros,
+                        user_id=user_id
                     )
                 
                 return response.choices[0].message.content or ""
@@ -361,6 +367,7 @@ For detailed content on **{concept}**, I recommend:
         subject: str,
         education_level: str,
         learning_style: Optional[str] = None,
+        user_id: Optional[uuid.UUID] = None,
     ) -> Dict[str, Any]:
         """Generate educational content for a lesson"""
 
@@ -400,7 +407,7 @@ Format your response as JSON with the following structure:
 
 Make the content appropriate for Nigerian students and include local context where relevant."""
 
-        response = await self.generate(prompt, temperature=0.8)
+        response = await self.generate(prompt, temperature=0.8, user_id=user_id)
 
         try:
             return json.loads(response)
@@ -415,7 +422,7 @@ Make the content appropriate for Nigerian students and include local context whe
 
 
     async def adapt_content_difficulty(
-        self, content: str, proficiency: float, learning_style: Optional[str] = None
+        self, content: str, proficiency: float, learning_style: Optional[str] = None, user_id: Optional[uuid.UUID] = None
     ) -> str:
         """Adapt content difficulty based on proficiency"""
 
@@ -435,7 +442,7 @@ Original content:
 
 Provide the adapted version:"""
 
-        return await self.generate(prompt, temperature=0.7)
+        return await self.generate(prompt, temperature=0.7, user_id=user_id)
 
     async def explain_concept(
         self,
@@ -443,6 +450,7 @@ Provide the adapted version:"""
         context: Optional[str] = None,
         question: Optional[str] = None,
         student_context: Optional[Dict[str, Any]] = None,
+        user_id: Optional[uuid.UUID] = None,
     ) -> str:
         """Explain a concept using a Socratic tutoring approach"""
         
@@ -469,13 +477,14 @@ Do NOT use casual filler, disclaimers, or emojis unless for small celebratory ma
 
         prompt += "\n\nFirst explain in plain language, then introduce the technical term. End by asking the student to use the term or explain a part back to you."
 
-        return await self.generate(prompt, temperature=0.7, system_prompt=system_prompt)
+        return await self.generate(prompt, temperature=0.7, system_prompt=system_prompt, user_id=user_id)
 
     async def evaluate_understanding(
         self,
         concept: str,
         student_explanation: str,
         student_context: Optional[Dict[str, Any]] = None,
+        user_id: Optional[uuid.UUID] = None,
     ) -> Dict[str, Any]:
         """Evaluate a student's self-explanation and provide feedback"""
         
@@ -500,7 +509,7 @@ Do NOT use casual filler, disclaimers, or emojis unless for small celebratory ma
         }}
         """
 
-        response = await self.generate(prompt, temperature=0.5, format="json_object")
+        response = await self.generate(prompt, temperature=0.5, format="json_object", user_id=user_id)
         try:
             return json.loads(response)
         except:
@@ -519,6 +528,7 @@ Do NOT use casual filler, disclaimers, or emojis unless for small celebratory ma
         education_level: str,
         student_context: Optional[Dict[str, Any]] = None,
         chat_history: Optional[List[Dict[str, str]]] = None,
+        user_id: Optional[uuid.UUID] = None,
     ) -> List[Dict[str, Any]]:
         """Generate a 10-question adaptive mastery test"""
         
@@ -576,7 +586,7 @@ Do NOT use casual filler, disclaimers, or emojis unless for small celebratory ma
         ]
         """
 
-        response = await self.generate(prompt, model=self.primary_model, temperature=0.5, format="json_object")
+        response = await self.generate(prompt, model=self.primary_model, temperature=0.5, format="json_object", user_id=user_id)
         try:
             questions = json.loads(response)
             if isinstance(questions, list):
@@ -594,6 +604,7 @@ Do NOT use casual filler, disclaimers, or emojis unless for small celebratory ma
         subject: str,
         education_level: str = "secondary",
         grade_level: str = "",
+        user_id: Optional[uuid.UUID] = None,
     ) -> List[str]:
         """Generate 4-6 granular subtopics for a given topic and education level"""
         
@@ -616,7 +627,7 @@ Do NOT use casual filler, disclaimers, or emojis unless for small celebratory ma
         {{"corrected_topic": "Corrected Topic Name", "subtopics": ["Foundation Subtopic", "Building Block Subtopic", "Deeper Subtopic", "Mastery Subtopic"]}}
         """
         
-        response = await self.generate(prompt, temperature=0.5, format="json_object")
+        response = await self.generate(prompt, temperature=0.5, format="json_object", user_id=user_id)
         try:
             data = json.loads(response)
             corrected_topic = data.get("corrected_topic", topic)
@@ -634,6 +645,7 @@ Do NOT use casual filler, disclaimers, or emojis unless for small celebratory ma
         topic: str,
         results: List[Dict[str, Any]],
         student_context: Optional[Dict[str, Any]] = None,
+        user_id: Optional[uuid.UUID] = None,
     ) -> Dict[str, Any]:
         """Evaluate full test results and provide a summary with personalized feedback"""
         
@@ -679,7 +691,7 @@ Do NOT use casual filler, disclaimers, or emojis unless for small celebratory ma
         10. ANALOGY RULE: If using examples to explain a concept, be creative and concrete. Avoid overusing fruits or simple counting; use themes of engineering, societal systems, or craftsmanship.
         """
 
-        feedback = await self.generate(prompt, temperature=0.7)
+        feedback = await self.generate(prompt, temperature=0.7, user_id=user_id)
         
         return {
             "score": correct_count,

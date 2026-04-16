@@ -142,7 +142,7 @@ RULES:
 - This is for the TEACHER, not the student
 - Be specific to {topic}, not generic"""
 
-        outline = await llm_service.generate(prompt=prompt, max_tokens=256)
+        outline = await llm_service.generate(prompt=prompt, max_tokens=256, user_id=current_user.id)
 
         # Store in session
         session.session_outline = {"content": outline, "generated_at": datetime.now(timezone.utc).isoformat()}
@@ -575,7 +575,7 @@ Create structured class notes with:
 
 Keep it concise and student-friendly. These notes are for the teacher to review before sharing with students."""
 
-        notes = await llm_service.generate(prompt=prompt, max_tokens=600)
+        notes = await llm_service.generate(prompt=prompt, max_tokens=600, user_id=current_user.id)
 
         session.context = session.context or {}
         session.context["generated_notes"] = notes

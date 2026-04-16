@@ -739,19 +739,20 @@ async def get_token_usage(
     model_name: Optional[str] = Query(None, description="Filter by model name")
 ):
     """
-    Get token usage statistics across the platform
+    Get token usage statistics across the platform with daily trends and top consumers
     """
     from datetime import datetime, timedelta, timezone
-    from sqlalchemy import func
+    from sqlalchemy import func, desc
     
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)
     
+    # 1. Usage by Model
     stmt = select(
         TokenUsageLog.model,
         func.sum(TokenUsageLog.prompt_tokens).label("total_prompt_tokens"),
         func.sum(TokenUsageLog.completion_tokens).label("total_completion_tokens"),
         func.sum(TokenUsageLog.total_tokens).label("total_tokens"),
-        func.sum(TokenUsageLog.cost).label("total_cost"),
+        func.sum(TokenUsageLog.cost_microdollars).label("total_cost_micros"),
         func.count(TokenUsageLog.id).label("total_requests")
     ).filter(TokenUsageLog.created_at >= cutoff)
     
@@ -764,22 +765,75 @@ async def get_token_usage(
     rows = result.all()
     
     stats = []
-    total_cost = 0.0
+    total_cost_micros = 0
     for row in rows:
         stats.append({
             "model": row.model,
             "prompt_tokens": row.total_prompt_tokens or 0,
             "completion_tokens": row.total_completion_tokens or 0,
             "total_tokens": row.total_tokens or 0,
-            "estimated_cost": round(row.total_cost or 0.0, 4),
+            "estimated_cost": round((row.total_cost_micros or 0) / 1000000.0, 4),
             "requests": row.total_requests or 0
         })
-        total_cost += (row.total_cost or 0.0)
+        total_cost_micros += (row.total_cost_micros or 0)
+
+    # 2. Daily Trends
+    trend_stmt = select(
+        func.date(TokenUsageLog.created_at).label("date"),
+        func.sum(TokenUsageLog.total_tokens).label("tokens"),
+        func.sum(TokenUsageLog.cost_microdollars).label("cost_micros")
+    ).filter(TokenUsageLog.created_at >= cutoff)
+    
+    if model_name:
+        trend_stmt = trend_stmt.filter(TokenUsageLog.model == model_name)
+    
+    trend_stmt = trend_stmt.group_by(func.date(TokenUsageLog.created_at)).order_by(func.date(TokenUsageLog.created_at))
+    
+    trend_result = await db.execute(trend_stmt)
+    trend_rows = trend_result.all()
+    
+    daily_trends = [
+        {
+            "date": str(row.date),
+            "tokens": int(row.tokens or 0),
+            "cost": round((row.cost_micros or 0) / 1000000.0, 4)
+        } for row in trend_rows
+    ]
+
+    # 3. Top Users
+    top_users_stmt = select(
+        User.id,
+        User.email,
+        User.username,
+        func.sum(TokenUsageLog.total_tokens).label("tokens"),
+        func.sum(TokenUsageLog.cost_microdollars).label("cost_micros"),
+        func.count(TokenUsageLog.id).label("requests")
+    ).join(TokenUsageLog, User.id == TokenUsageLog.user_id)\
+     .filter(TokenUsageLog.created_at >= cutoff)\
+     .group_by(User.id, User.email, User.username)\
+     .order_by(desc("cost_micros"))\
+     .limit(5)
+
+    top_users_result = await db.execute(top_users_stmt)
+    top_users_rows = top_users_result.all()
+    
+    top_consumers = [
+        {
+            "id": str(row.id),
+            "email": row.email,
+            "username": row.username,
+            "tokens": int(row.tokens or 0),
+            "cost": round((row.cost_micros or 0) / 1000000.0, 4),
+            "requests": int(row.requests or 0)
+        } for row in top_users_rows
+    ]
         
     return {
         "period_days": days,
-        "total_estimated_cost": round(total_cost, 4),
-        "usage_by_model": stats
+        "total_estimated_cost": round(total_cost_micros / 1000000.0, 4),
+        "usage_by_model": stats,
+        "daily_trends": daily_trends,
+        "top_consumers": top_consumers
     }
 
 

@@ -14,6 +14,7 @@ import ThemeToggle from '@/components/ThemeToggle';
 import { UserCard } from './UserCard';
 import { TeacherLicensesPanel } from './TeacherLicensesPanel';
 import { CurriculumMaterialsTab } from './CurriculumMaterialsTab';
+import { UsageAnalytics } from './UsageAnalytics';
 
 interface UserType {
   id: string;
@@ -271,6 +272,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               <TabsTrigger value="suspended" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Suspended ({suspendedUsers.length})</TabsTrigger>
               <TabsTrigger value="licenses" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Teacher Licenses ({teachers.length})</TabsTrigger>
               <TabsTrigger value="materials" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Curriculum Materials</TabsTrigger>
+              <TabsTrigger value="usage" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">AI Usage & Cost</TabsTrigger>
             </TabsList>
 
             <TabsContent value="pending" className="space-y-4">
@@ -318,6 +320,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
             <TabsContent value="materials" className="space-y-6">
               <CurriculumMaterialsTab isLoggedIn={isLoggedIn} />
+            </TabsContent>
+
+            <TabsContent value="usage" className="space-y-6">
+              <UsageAnalytics />
             </TabsContent>
           </Tabs>
         )}

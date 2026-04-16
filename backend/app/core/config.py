@@ -97,6 +97,11 @@ class Settings(BaseSettings):
         "http://127.0.0.1:5173",
         "http://127.0.0.1:5174",
         "https://edu-nexus-beta.vercel.app",
+        # Allow local network IPs for mobile testing
+        "http://192.168.0.122:5173",
+        "http://192.168.0.122:5174",
+        "http://192.168.1.122:5173",
+        "http://192.168.1.122:5174",
     ]
 
     @field_validator("ALLOWED_ORIGINS", mode="before")

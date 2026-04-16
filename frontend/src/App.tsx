@@ -10,15 +10,16 @@ import './App.css';
 
 import VerifyEmail from '@/components/auth/VerifyEmail';
 import { SmartHelper } from '@/components/ai/SmartHelper';
-import { LandingPage } from './features/landing/LandingPage';
-import { StudentJoinPage } from './features/auth/StudentJoinPage';
-import { ChangePasswordView } from './features/auth/ChangePasswordView';
-import { SessionPortal } from './features/session/SessionPortal';
-import { ProtectedRoute } from './components/shared/ProtectedRoute';
 
-import { StudentRoutes } from './routes/StudentRoutes';
-import { TeacherRoutes } from './routes/TeacherRoutes';
-import { AdminRoutes } from './routes/AdminRoutes';
+// Lazy load feature components to reduce initial bundle size
+const LandingPage = React.lazy(() => import('./features/landing/LandingPage').then(m => ({ default: m.LandingPage })));
+const StudentJoinPage = React.lazy(() => import('./features/auth/StudentJoinPage').then(m => ({ default: m.StudentJoinPage })));
+const ChangePasswordView = React.lazy(() => import('./features/auth/ChangePasswordView').then(m => ({ default: m.ChangePasswordView })));
+const SessionPortal = React.lazy(() => import('./features/session/SessionPortal').then(m => ({ default: m.SessionPortal })));
+
+const StudentRoutes = React.lazy(() => import('./routes/StudentRoutes').then(m => ({ default: m.StudentRoutes })));
+const TeacherRoutes = React.lazy(() => import('./routes/TeacherRoutes').then(m => ({ default: m.TeacherRoutes })));
+const AdminRoutes = React.lazy(() => import('./routes/AdminRoutes').then(m => ({ default: m.AdminRoutes })));
 
 import type { User as UserType } from '@/types';
 

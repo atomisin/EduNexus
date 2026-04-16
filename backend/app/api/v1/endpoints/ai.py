@@ -216,6 +216,7 @@ async def generate_text(
             prompt=sanitized_prompt,
             model=generate_req.model,
             temperature=generate_req.temperature,
+            user_id=current_user.id
         )
         return {"response": response}
     except Exception:
@@ -308,6 +309,7 @@ async def explain_concept(
             context=sanitize_user_input(explain_req.context or ""),
             question=sanitize_user_input(explain_req.question or ""),
             student_context=student_context,
+            user_id=current_user.id,
         )
         return {"explanation": explanation, "student_context": student_context}
     except Exception:
@@ -343,6 +345,7 @@ async def evaluate_understanding(
                 eval_req.explanation, max_length=1000
             ),
             student_context=student_context,
+            user_id=current_user.id,
         )
     except Exception:
         await refund_brain_power(current_user.id, 1, db)
@@ -384,6 +387,7 @@ async def generate_lesson_content(
         subject=sanitize_user_input(lesson_req.subject),
         education_level=sanitize_user_input(lesson_req.education_level),
         learning_style=sanitize_user_input(lesson_req.learning_style or ""),
+        user_id=current_user.id,
     )
     return content
 
@@ -467,7 +471,8 @@ async def generate_mastery_test(
             if student_profile
             else "secondary",
             student_context=student_context,
-            chat_history=test_req.chat_history,  # Logic inside llm_service handles history sanitization usually, but let's be safe
+            chat_history=test_req.chat_history,
+            user_id=current_user.id,
         )
         return {"questions": questions}
     except Exception:
@@ -599,6 +604,7 @@ async def get_topic_breakdown(
                 subject="Subject",
                 education_level=education_level,
                 grade_level=grade_level,
+                user_id=current_user.id,
             )
         except Exception:
             await refund_brain_power(current_user.id, 1, db)

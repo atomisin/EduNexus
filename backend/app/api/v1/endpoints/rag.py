@@ -312,7 +312,7 @@ Provide a comprehensive and educational response."""
     logger.debug(f"RAG PROMPT:\n{prompt}\nEND PROMPT")
     try:
         generated_content = await llm_service.generate(
-            prompt=prompt, temperature=0.7, max_tokens=2000
+            prompt=prompt, temperature=0.7, max_tokens=2000, user_id=current_user.id
         )
     except Exception as e:
         raise HTTPException(

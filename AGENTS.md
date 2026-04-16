@@ -1,5 +1,5 @@
 # EduNexus 2.0 — Agent Context
-Last updated: 2026-04-12 (Production DB Introspection & Alignment)
+Last updated: 2026-04-16 (Mobile UX & Performance Hardening)
 
 ## Project
 Nigerian EdTech platform. Creche through SS3 + professional.
@@ -63,15 +63,16 @@ Session Modals: frontend/src/components/session/FloatingContentModal.tsx
 - frontend/src/index.css (design tokens correct)
 - config/seaweedfs_s3.json (credentials = minioadmin)
 - frontend/src/components/MathText.tsx (KaTeX math renderer)
-- frontend/src/App.tsx (Modular routing architecture)
+- frontend/src/App.tsx (Modular routing architecture with code-splitting)
 - frontend/src/features/student/StudentDashboard.tsx (De-mega-fied layout)
 - backend/app/models/user.py (Consolidated TeacherStudent model)
 - backend/app/api/v1/endpoints/students.py (Self-healing logic stable)
-- frontend/src/features/landing/LandingPage.tsx (Floating auth integrated)
+- frontend/src/features/landing/LandingPage.tsx (Mobile-responsive & lazy loaded)
 - frontend/src/components/auth/RegistrationForm.tsx (Hardened subject selection)
 - backend/app/services/chart_generator.py (Now returns JSON)
 - backend/app/api/v1/endpoints/student_progress.py (Refactored to JSON)
 - frontend/src/features/student/dashboard/ProgressView.tsx (Refactored for Recharts)
+- backend/app/core/config.py (Enhanced CORS for mobile LAN)
 
 ## Current open issues
 See HANDOFF.md for full details on remaining bugs.
@@ -144,6 +145,12 @@ See HANDOFF.md for full details on remaining bugs.
 - ✅ FIXED 2026-04-12: Hardened backend Docker build against ReadTimeoutErrors by increasing pip default timeout and ensuring pip is upgraded during construction.
 - ✅ FIXED 2026-04-12: Resolved persistent UndefinedColumnError (500) during login by writing custom schema patch SQL scripts for missing `attention_span` and `teacher_students.notes` columns that were skipped by `Base.metadata.create_all()`.
 - ✅ FIXED 2026-04-12: Hardened SQLAlchemy model relationships by importing all database models in `app/db/database.py` and invoking `Base.registry.configure()`, preventing "Zombie" name-resolution crashes.
+- ✅ FIXED 2026-04-16: Implemented granular LLM Token Attribution by propagating `user_id` across `LLMService`, `AICoordinator`, and all AI API endpoints.
+- ✅ FIXED 2026-04-16: Enhanced Admin Usage endpoint to provide daily cost/token trends and top user consumption metrics.
+- ✅ FIXED 2026-04-16: Launched "AI Usage & Cost" dashboard in the Admin Panel using Recharts for high-fidelity interactive resource monitoring.
+✅ FIXED 2026-04-16: Resolved mobile navigation visibility by implementing a responsive "Hamburger" menu on the landing page.
+✅ FIXED 2026-04-16: Hardened platform performance by implementing aggressive code-splitting (React.lazy) for auth modules and top-level routes.
+✅ FIXED 2026-04-16: Enhanced backend CORS configuration to support local network (LAN) IP addresses for mobile device testing.
 
 ## No open issues remain at this time.
 

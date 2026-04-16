@@ -420,7 +420,11 @@ class AICoordinator:
         # Generate explanation
         start_time = datetime.now(timezone.utc)
         content = await self.llm.generate(
-            prompt=prompt, model=ai_config.llm_model, temperature=0.7, max_tokens=1024
+            prompt=prompt, 
+            model=ai_config.llm_model, 
+            temperature=0.7, 
+            max_tokens=1024,
+            user_id=session.teacher_id
         )
         # Append markers if they are not already present
         if not any(marker in content for marker in ["---NEXT---", "---QUESTION---", "---CTA---"]):
@@ -491,7 +495,7 @@ class AICoordinator:
         Return only a number between 0.0 and 1.0.
         """
 
-        result = await self.llm.generate(prompt, max_tokens=10)
+        result = await self.llm.generate(prompt, max_tokens=10, user_id=context.get("teacher_id"))
         try:
             score = float(result.strip())
             return max(0.0, min(1.0, score))  # Clamp to 0-1
@@ -730,6 +734,7 @@ Format your response using markdown:
         student_name: Optional[str] = None,
         subject_name: Optional[str] = None,
         topic_name: Optional[str] = None,
+        user_id: Optional[Any] = None,
     ) -> Dict[str, Any]:
         """
         Adaptive chat response with persona and engagement detection.
@@ -829,6 +834,7 @@ If you have fully taught ALL the required concepts for the current topic, and th
             temperature=temperature,
             system_prompt=system_prompt,
             max_tokens=max_tokens,
+            user_id=user_id or (student_profile.user_id if student_profile else None),
         )
         response = strip_thinking_tags(response)
 
@@ -862,7 +868,8 @@ If you have fully taught ALL the required concepts for the current topic, and th
         topic: str,
         proficiency: float = 0.5,
         generate_assignments: bool = True,
-        suggest_videos: bool = True
+        suggest_videos: bool = True,
+        user_id: Optional[Any] = None
     ) -> Dict[str, Any]:
         """
         Generates lesson materials (Outline, Pop Quiz, Assignment)
@@ -891,7 +898,7 @@ If you have fully taught ALL the required concepts for the current topic, and th
         Make the content appropriate for the grade level and culturally relevant to Nigeria.
         Return ONLY a JSON object.
         """
-        response = await self.llm.generate(prompt, temperature=0.7, format="json_object")
+        response = await self.llm.generate(prompt, temperature=0.7, format="json_object", user_id=user_id)
         try:
             data = json.loads(response)
             # Ensure it has the expected keys

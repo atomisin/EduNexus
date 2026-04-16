@@ -282,6 +282,7 @@ async def update_student_profile(
                 topic=profile.course_name,
                 subject="Professional Career Track",
                 education_level="professional",
+                user_id=current_user.id
             )
 
             subtopics = response_data.get("subtopics", [])
@@ -524,6 +525,7 @@ async def enroll_custom_professional(
             topic=course_name,
             subject="Professional Career Track",
             education_level="professional",
+            user_id=current_user.id
         )
         subtopics = response_data.get("subtopics", [])
         corrected_course_name = response_data.get("corrected_topic", course_name)

@@ -66,7 +66,8 @@ async def correct_course_name(
 and return it in Title Case. Return ONLY the corrected name, 
 nothing else. Course name: "{name}" """,
         max_tokens=30,
-        temperature=0.0
+        temperature=0.0,
+        user_id=current_user.id
     )
     # Strip quotes and whitespace from response
     corrected = corrected.strip().strip('"').strip("'")
@@ -102,7 +103,8 @@ async def generate_curriculum_for_subject(
     subject_id: str,
     subject_name: str,
     education_level: str,
-    db_factory
+    db_factory,
+    user_id: Optional[uuid.UUID] = None
 ):
     try:
         from app.models.subject import Topic
@@ -129,7 +131,8 @@ Requirements:
         response = await llm_service.generate(
             prompt=prompt,
             max_tokens=1000,
-            temperature=0.3
+            temperature=0.3,
+            user_id=user_id
         )
 
         # Parse JSON from response
@@ -505,7 +508,8 @@ async def create_subject(
             str(subject.id),
             subject.name,
             subject.education_level or 'professional',
-            AsyncSessionLocal
+            AsyncSessionLocal,
+            current_user.id
         )
 
     return {

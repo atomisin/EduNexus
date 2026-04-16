@@ -1,19 +1,27 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import {
   Brain, ToggleLeft, Target, Network, ChevronRight, CheckCircle,
-  Video, Settings, BookOpen, Trophy
+  Video, Settings, BookOpen, Trophy, Menu, X
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { LoginForm } from '@/components/auth/LoginForm';
-import { RegistrationPage } from '../auth/RegistrationPage';
 import ThemeToggle from '@/components/ThemeToggle';
 import {
   Dialog,
   DialogContent,
 } from '@/components/ui/dialog';
+import {
+  Sheet,
+  SheetContent,
+  SheetTrigger,
+  SheetTitle,
+} from '@/components/ui/sheet';
 import { toast } from 'sonner';
+
+// Lazy load heavy auth components
+const LoginForm = React.lazy(() => import('@/components/auth/LoginForm').then(m => ({ default: m.LoginForm })));
+const RegistrationPage = React.lazy(() => import('../auth/RegistrationPage').then(m => ({ default: m.RegistrationPage })));
 
 interface LandingPageProps {
   user?: any;
@@ -70,14 +78,49 @@ export const LandingPage = ({
                 </Button>
               ) : (
                 <>
-                  <Button onClick={() => setAuthMode('login')} variant="outline" className="font-semibold px-6 rounded-lg">
+                  <Button onClick={() => setAuthMode('login')} variant="outline" className="font-semibold px-6 rounded-lg font-display">
                     Sign In
                   </Button>
-                  <Button onClick={() => setAuthMode('register')} className="bg-primary text-primary-foreground rounded-lg font-semibold px-6 border hover:bg-primary/90 transition-all shadow-md">
+                  <Button onClick={() => setAuthMode('register')} className="bg-primary text-primary-foreground rounded-lg font-semibold px-6 border hover:bg-primary/90 transition-all shadow-md font-display">
                     Get Started
                   </Button>
                 </>
               )}
+            </div>
+
+            {/* Mobile Navigation */}
+            <div className="flex md:hidden items-center gap-4">
+              <ThemeToggle />
+              <Sheet>
+                <SheetTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-10 w-10">
+                    <Menu className="h-6 w-6" />
+                  </Button>
+                </SheetTrigger>
+                <SheetContent side="right" className="w-[300px] sm:w-[400px]">
+                  <SheetTitle className="text-left font-display text-2xl mb-8">Menu</SheetTitle>
+                  <div className="flex flex-col gap-6 mt-8">
+                    <a href="#features" className="text-lg font-medium hover:text-primary transition-colors">Platform</a>
+                    <a href="#about" className="text-lg font-medium hover:text-primary transition-colors">Organization</a>
+                    <a href="#contact" className="text-lg font-medium hover:text-primary transition-colors">Contact</a>
+                    <Separator className="my-2" />
+                    {user && onGoDashboard ? (
+                      <Button onClick={onGoDashboard} className="w-full h-12 bg-primary text-primary-foreground font-semibold rounded-xl">
+                        Go to Dashboard
+                      </Button>
+                    ) : (
+                      <>
+                        <Button onClick={() => setAuthMode('login')} variant="outline" className="w-full h-12 font-semibold rounded-xl">
+                          Sign In
+                        </Button>
+                        <Button onClick={() => setAuthMode('register')} className="w-full h-12 bg-primary text-primary-foreground font-semibold rounded-xl">
+                          Get Started
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                </SheetContent>
+              </Sheet>
             </div>
           </div>
         </div>
@@ -285,26 +328,33 @@ export const LandingPage = ({
       <Dialog open={authMode !== null} onOpenChange={(open) => !open && setAuthMode(null)}>
         <DialogContent className="max-w-md p-0 overflow-hidden border-none bg-transparent shadow-none [&>button]:hidden">
           <div className="relative animate-in zoom-in-95 duration-200">
-            {authMode === 'login' ? (
-              <LoginForm 
-                onSuccess={() => {
-                  setAuthMode(null);
-                  onGoDashboard?.();
-                }}
-                onRegisterClick={() => setAuthMode('register')}
-              />
-            ) : (
-              <div className="max-h-[85vh] overflow-y-auto rounded-xl bg-background shadow-2xl">
-                <RegistrationPage 
-                  onSuccess={() => {
-                    setAuthMode('login');
-                    toast.success('Registration successful! Please login.');
-                  }}
-                  onBack={() => setAuthMode('login')}
-                  isModal={true}
-                />
+            <Suspense fallback={
+              <div className="p-12 flex flex-col items-center justify-center bg-background rounded-xl">
+                <div className="h-10 w-10 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4" />
+                <p className="text-muted-foreground font-medium animate-pulse">Initializing Portal...</p>
               </div>
-            )}
+            }>
+              {authMode === 'login' ? (
+                <LoginForm 
+                  onSuccess={() => {
+                    setAuthMode(null);
+                    onGoDashboard?.();
+                  }}
+                  onRegisterClick={() => setAuthMode('register')}
+                />
+              ) : (
+                <div className="max-h-[85vh] overflow-y-auto rounded-xl bg-background shadow-2xl">
+                  <RegistrationPage 
+                    onSuccess={() => {
+                      setAuthMode('login');
+                      toast.success('Registration successful! Please login.');
+                    }}
+                    onBack={() => setAuthMode('login')}
+                    isModal={true}
+                  />
+                </div>
+              )}
+            </Suspense>
           </div>
         </DialogContent>
       </Dialog>

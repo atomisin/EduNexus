@@ -77,9 +77,19 @@ function App() {
     };
     window.addEventListener('auth:unauthorized', handleUnauthorized);
     
+    const handleFetchFailed = (e: any) => {
+      const url = e.detail?.url || 'Unknown';
+      toast.error('Connection Failed', {
+        description: `Could not reach ${url}. Please check your internet or if the backend is online.`,
+        duration: 10000,
+      });
+    };
+    window.addEventListener('api:fetch_failed', handleFetchFailed);
+    
     return () => {
       window.removeEventListener('navigate', handleNavigate as EventListener);
       window.removeEventListener('auth:unauthorized', handleUnauthorized);
+      window.removeEventListener('api:fetch_failed', handleFetchFailed);
     };
   }, [navigate, logout]);
 

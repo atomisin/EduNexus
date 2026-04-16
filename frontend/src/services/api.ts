@@ -1,4 +1,8 @@
-const raw_api_url = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
+const raw_api_url = import.meta.env.VITE_API_URL || 
+  (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    ? 'http://localhost:8000/api/v1' 
+    : 'https://edunexus-krb1.onrender.com/api/v1');
+
 // Automatically append /api/v1 if missing to prevent 404 errors
 const API_BASE_URL = raw_api_url.includes('/api/v1') 
   ? raw_api_url 
@@ -38,7 +42,12 @@ export async function fetchWithAuth(endpoint: string, options: RequestInit & { s
   } catch (err: any) {
     // Distinguish between API errors and Network/CORS errors
     if (err.name === 'TypeError' || err.message?.includes('Failed to fetch')) {
-      console.error(`🚨 EduNexus Network Error: Failed to reach ${targetUrl}. Check VITE_API_URL and CORS settings.`, err);
+      const errorMsg = `🚨 Network Error: Failed to reach ${targetUrl}.`;
+      console.error(errorMsg, err);
+      // Dispatch custom event so App.tsx can show a visible diagnostic toast
+      window.dispatchEvent(new CustomEvent('api:fetch_failed', { 
+        detail: { url: targetUrl, error: err.message } 
+      }));
     }
     throw err;
   }

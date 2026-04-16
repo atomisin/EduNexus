@@ -17,6 +17,8 @@ const StudentJoinPage = React.lazy(() => import('./features/auth/StudentJoinPage
 const ChangePasswordView = React.lazy(() => import('./features/auth/ChangePasswordView').then(m => ({ default: m.ChangePasswordView })));
 const SessionPortal = React.lazy(() => import('./features/session/SessionPortal').then(m => ({ default: m.SessionPortal })));
 
+import { ProtectedRoute } from './components/shared/ProtectedRoute';
+
 const StudentRoutes = React.lazy(() => import('./routes/StudentRoutes').then(m => ({ default: m.StudentRoutes })));
 const TeacherRoutes = React.lazy(() => import('./routes/TeacherRoutes').then(m => ({ default: m.TeacherRoutes })));
 const AdminRoutes = React.lazy(() => import('./routes/AdminRoutes').then(m => ({ default: m.AdminRoutes })));

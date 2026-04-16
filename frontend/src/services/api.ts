@@ -484,6 +484,7 @@ export const subjectsAPI = {
 export const sessionAPI = {
   // Create new session
   create: (data: {
+    title: string;
     subject_id: string;
     topic_id?: string;
     student_ids: string[];

@@ -11,13 +11,44 @@ const API_BASE_URL = raw_api_url.includes('/api/v1')
 // Timeout-aware fetch wrapper to prevent mobile browsers from hanging forever
 // on Render free-tier cold starts (30-60s wake-up time).
 const FETCH_TIMEOUT_MS = 25000; // 25 seconds
-const LOGIN_TIMEOUT_MS = 30000; // 30 seconds — login needs more margin
+const LOGIN_TIMEOUT_MS = 45000; // 45 seconds — Render cold starts can take 30-60s
 
 function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number = FETCH_TIMEOUT_MS): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   return fetch(url, { ...options, signal: controller.signal })
     .finally(() => clearTimeout(timer));
+}
+
+// --- Server Pre-Warming ---
+// Render free-tier backends sleep after 15 min of inactivity.
+// This function pings /health to wake it up BEFORE the user tries to log in.
+let _serverWarm = false;
+let _warmUpPromise: Promise<boolean> | null = null;
+
+export function warmUpServer(): Promise<boolean> {
+  if (_serverWarm) return Promise.resolve(true);
+  if (_warmUpPromise) return _warmUpPromise;
+
+  const baseUrl = API_BASE_URL.replace('/api/v1', '');
+  _warmUpPromise = fetch(`${baseUrl}/health`, { mode: 'cors' })
+    .then(r => {
+      _serverWarm = r.ok;
+      console.log('✅ Server is awake');
+      return r.ok;
+    })
+    .catch(() => {
+      console.log('⏳ Server health check failed (may still be waking)');
+      return false;
+    })
+    .finally(() => { _warmUpPromise = null; });
+
+  return _warmUpPromise;
+}
+
+// Auto-trigger warmup on module load (fires when any page imports api.ts)
+if (typeof window !== 'undefined' && !window.location.hostname.includes('localhost')) {
+  warmUpServer();
 }
 
 // Generic fetch wrapper with credentials (HttpOnly Cookies)
@@ -143,7 +174,13 @@ export const authAPI = {
     formData.append('password', password);
 
     const targetUrl = `${API_BASE_URL}/auth/login`;
-    const MAX_RETRIES = 2;
+    const MAX_RETRIES = 3;
+
+    // Pre-warm: ensure the server is awake before the first login attempt
+    window.dispatchEvent(new CustomEvent('api:server_waking', {
+      detail: { attempt: 0, maxRetries: MAX_RETRIES, phase: 'warmup' }
+    }));
+    await warmUpServer();
 
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       try {

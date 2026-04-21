@@ -5,7 +5,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { ChevronLeft, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { ChevronLeft, Eye, EyeOff, Loader2, Wifi } from 'lucide-react';
+import { warmUpServer } from '@/services/api';
 
 interface LoginFormProps {
   onSuccess?: () => void;
@@ -13,15 +14,22 @@ interface LoginFormProps {
 }
 
 export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, onRegisterClick }) => {
-  /*
-   - **Login Fix**: The login form now correctly displays descriptive error messages instead of `[object Object]`.
-   - **Specialized Alerts**: Added a dedicated, styled alert box for users with `APPROVAL_PENDING` status to provide clear instructions on next steps.
-  */
   const { login, error, isLoading } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [serverWaking, setServerWaking] = useState(false);
+  const [serverReady, setServerReady] = useState(false);
+
+  // Pre-warm the backend the moment this form mounts
+  // The server starts waking up while the user types credentials
+  useEffect(() => {
+    let cancelled = false;
+    warmUpServer().then(ok => {
+      if (!cancelled) setServerReady(ok);
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   // Listen for server wake-up retry events
   useEffect(() => {
@@ -42,6 +50,13 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, onRegisterClick
     if (success) {
       onSuccess?.();
     }
+  };
+
+  // Determine the button label
+  const getButtonLabel = () => {
+    if (!isLoading) return 'Sign In';
+    if (serverWaking) return 'Connecting to server...';
+    return 'Signing in...';
   };
 
   return (
@@ -77,7 +92,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, onRegisterClick
           {serverWaking && !error && (
             <div className="p-4 rounded-xl bg-amber-50 text-amber-700 text-sm border border-amber-200 animate-in fade-in slide-in-from-top-1 flex items-center gap-2">
               <Loader2 className="h-4 w-4 animate-spin flex-shrink-0" />
-              <span>Our server is waking up — this can take up to 30 seconds on the first request. Hang tight!</span>
+              <span>Connecting to server — free hosting can take up to 60 seconds on cold start. Please wait...</span>
             </div>
           )}
           <div className="space-y-4 pt-2">
@@ -125,7 +140,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, onRegisterClick
             {isLoading ? (
               <>
                 <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                {serverWaking ? 'Waking server...' : 'Signing in...'}
+                {getButtonLabel()}
               </>
             ) : (
               'Sign In'

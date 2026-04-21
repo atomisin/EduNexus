@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,6 +21,19 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, onRegisterClick
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [serverWaking, setServerWaking] = useState(false);
+
+  // Listen for server wake-up retry events
+  useEffect(() => {
+    const handleWaking = () => setServerWaking(true);
+    window.addEventListener('api:server_waking', handleWaking);
+    return () => window.removeEventListener('api:server_waking', handleWaking);
+  }, []);
+
+  // Reset waking state when loading finishes
+  useEffect(() => {
+    if (!isLoading) setServerWaking(false);
+  }, [isLoading]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,6 +72,12 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, onRegisterClick
               {typeof error === 'string' 
                 ? error 
                 : (error as any).detail || (error as any).message || 'An error occurred. Please try again.'}
+            </div>
+          )}
+          {serverWaking && !error && (
+            <div className="p-4 rounded-xl bg-amber-50 text-amber-700 text-sm border border-amber-200 animate-in fade-in slide-in-from-top-1 flex items-center gap-2">
+              <Loader2 className="h-4 w-4 animate-spin flex-shrink-0" />
+              <span>Our server is waking up — this can take up to 30 seconds on the first request. Hang tight!</span>
             </div>
           )}
           <div className="space-y-4 pt-2">
@@ -106,7 +125,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, onRegisterClick
             {isLoading ? (
               <>
                 <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                Signing in...
+                {serverWaking ? 'Waking server...' : 'Signing in...'}
               </>
             ) : (
               'Sign In'

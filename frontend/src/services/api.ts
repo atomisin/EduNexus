@@ -8,6 +8,18 @@ const API_BASE_URL = raw_api_url.includes('/api/v1')
   ? raw_api_url 
   : `${raw_api_url.replace(/\/$/, '')}/api/v1`;
 
+// Timeout-aware fetch wrapper to prevent mobile browsers from hanging forever
+// on Render free-tier cold starts (30-60s wake-up time).
+const FETCH_TIMEOUT_MS = 25000; // 25 seconds
+const LOGIN_TIMEOUT_MS = 30000; // 30 seconds — login needs more margin
+
+function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number = FETCH_TIMEOUT_MS): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  return fetch(url, { ...options, signal: controller.signal })
+    .finally(() => clearTimeout(timer));
+}
+
 // Generic fetch wrapper with credentials (HttpOnly Cookies)
 export async function fetchWithAuth(endpoint: string, options: RequestInit & { silentAuth?: boolean } = {}) {
   const { silentAuth, ...fetchOptions } = options;
@@ -24,7 +36,7 @@ export async function fetchWithAuth(endpoint: string, options: RequestInit & { s
 
   const targetUrl = `${API_BASE_URL}${endpoint}`;
   try {
-    const response = await fetch(targetUrl, {
+    const response = await fetchWithTimeout(targetUrl, {
       ...fetchOptions,
       headers,
       credentials: 'include', // CRITICAL: Send cookies with request
@@ -40,14 +52,24 @@ export async function fetchWithAuth(endpoint: string, options: RequestInit & { s
 
     return response.json();
   } catch (err: any) {
+    // Timeout aborts surface as AbortError
+    if (err.name === 'AbortError') {
+      const timeoutMsg = 'The server is taking too long to respond. It may be waking up — please try again in a moment.';
+      console.error(`⏱️ Timeout: ${targetUrl}`, err);
+      window.dispatchEvent(new CustomEvent('api:fetch_failed', {
+        detail: { url: targetUrl, error: timeoutMsg }
+      }));
+      throw new Error(timeoutMsg);
+    }
     // Distinguish between API errors and Network/CORS errors
     if (err.name === 'TypeError' || err.message?.includes('Failed to fetch')) {
-      const errorMsg = `🚨 Network Error: Failed to reach ${targetUrl}.`;
-      console.error(errorMsg, err);
+      const errorMsg = `Unable to connect to the server. Please check your internet connection and try again.`;
+      console.error(`🚨 Network Error: ${targetUrl}`, err);
       // Dispatch custom event so App.tsx can show a visible diagnostic toast
       window.dispatchEvent(new CustomEvent('api:fetch_failed', { 
-        detail: { url: targetUrl, error: err.message } 
+        detail: { url: targetUrl, error: errorMsg } 
       }));
+      throw new Error(errorMsg);
     }
     throw err;
   }
@@ -121,39 +143,61 @@ export const authAPI = {
     formData.append('password', password);
 
     const targetUrl = `${API_BASE_URL}/auth/login`;
-    try {
-      const response = await fetch(targetUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: formData,
-        credentials: 'include', // CRITICAL: Receive cookies
-      });
+    const MAX_RETRIES = 2;
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ detail: 'Login failed' }));
-        // If detail is an object, stringify it so the Error message preserves it
-        const message = typeof errorData.detail === 'object' 
-          ? JSON.stringify(errorData.detail) 
-          : (errorData.detail || 'Login failed');
-        throw new Error(message);
-      }
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        const response = await fetchWithTimeout(targetUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: formData,
+          credentials: 'include', // CRITICAL: Receive cookies
+        }, LOGIN_TIMEOUT_MS);
 
-      const data = await response.json();
-      
-      // Store access_token for Authorization header fallback (C-05)
-      if (data && data.access_token) {
-        localStorage.setItem('edunexus_token', data.access_token);
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ detail: 'Login failed' }));
+          // If detail is an object, stringify it so the Error message preserves it
+          const message = typeof errorData.detail === 'object' 
+            ? JSON.stringify(errorData.detail) 
+            : (errorData.detail || 'Login failed');
+          throw new Error(message);
+        }
+
+        const data = await response.json();
+        
+        // Store access_token for Authorization header fallback (C-05)
+        if (data && data.access_token) {
+          localStorage.setItem('edunexus_token', data.access_token);
+        }
+        
+        return data;
+      } catch (err: any) {
+        const isRetryable = err.name === 'AbortError' || err.name === 'TypeError' || err.message?.includes('Failed to fetch');
+        
+        if (isRetryable && attempt < MAX_RETRIES) {
+          console.warn(`⏳ Login attempt ${attempt} failed (server may be waking up). Retrying...`);
+          // Dispatch event so UI can show a "server waking up" message
+          window.dispatchEvent(new CustomEvent('api:server_waking', {
+            detail: { attempt, maxRetries: MAX_RETRIES }
+          }));
+          // Brief pause before retry
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          continue;
+        }
+        
+        if (err.name === 'AbortError') {
+          throw new Error('The server is starting up. Please wait a moment and try again.');
+        }
+        if (err.name === 'TypeError' || err.message?.includes('Failed to fetch')) {
+          console.error(`🚨 Login Network Error: Failed to reach ${targetUrl}.`, err);
+          throw new Error('Unable to connect to the server. Please check your connection and try again.');
+        }
+        throw err;
       }
-      
-      return data;
-    } catch (err: any) {
-      if (err.name === 'TypeError' || err.message?.includes('Failed to fetch')) {
-        console.error(`🚨 Login Network Error: Failed to reach ${targetUrl}.`, err);
-      }
-      throw err;
     }
+    throw new Error('Unable to connect after multiple attempts. Please try again later.');
   },
 
   // Logout (Clears HttpOnly cookies via backend)

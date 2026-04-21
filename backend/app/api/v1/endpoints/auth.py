@@ -580,12 +580,16 @@ async def login(
     )
 
     # Set Cookies
+    # CRITICAL: Use SameSite=None in production because the Vercel frontend
+    # (edu-nexus-beta.vercel.app) and Render backend (edunexus-krb1.onrender.com)
+    # are on different domains. SameSite=Strict/Lax blocks cookies entirely on
+    # cross-site requests — this was causing "Failed to fetch" on mobile.
     response.set_cookie(
         key="access_token",
         value=access_token,
         httponly=True,
         secure=is_prod,
-        samesite="strict" if is_prod else "lax",
+        samesite="none" if is_prod else "lax",
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         path="/",
     )
@@ -594,7 +598,7 @@ async def login(
         value=refresh_token,
         httponly=True,
         secure=is_prod,
-        samesite="lax",
+        samesite="none" if is_prod else "lax",
         max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 3600,
         path=f"{settings.API_V1_STR}/auth/refresh",
     )
@@ -665,7 +669,7 @@ async def refresh_token_endpoint(
         value=new_access_token,
         httponly=True,
         secure=is_prod,
-        samesite="strict" if is_prod else "lax",
+        samesite="none" if is_prod else "lax",
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         path="/",
     )

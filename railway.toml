@@ -9,7 +9,7 @@ source = "backend"
   dockerfilePath = "Dockerfile"
 
   [services.deploy]
-  startCommand = "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 2"
+  startCommand = "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers $WEB_CONCURRENCY"
   healthcheckPath = "/health"
   healthcheckTimeout = 30
   restartPolicyType = "on_failure"
@@ -17,6 +17,7 @@ source = "backend"
 
   [services.variables]
   PORT = "8000"
+  WEB_CONCURRENCY = "1"
 
 [[services]]
 name = "frontend"

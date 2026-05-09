@@ -3,7 +3,9 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker
 )
 from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.pool import NullPool
 from app.core.config import settings
+import os
 
 class Base(DeclarativeBase):
     pass
@@ -16,8 +18,8 @@ ASYNC_DATABASE_URL = settings.DATABASE_URL\
 
 engine = create_async_engine(
     ASYNC_DATABASE_URL,
-    pool_size=20,
-    max_overflow=40,
+    pool_size=int(os.getenv("DB_POOL_SIZE", "5")),
+    max_overflow=int(os.getenv("DB_MAX_OVERFLOW", "0")),
     pool_pre_ping=True,
     pool_recycle=3600,
     echo=False,
@@ -71,5 +73,6 @@ def init_db():
 from sqlalchemy import create_engine as _sync_engine
 sync_engine = _sync_engine(
     settings.DATABASE_URL.replace("+asyncpg", "")\
-                         .replace("postgres://", "postgresql://")
+                         .replace("postgres://", "postgresql://"),
+    poolclass=NullPool,
 )

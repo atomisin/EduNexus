@@ -11,7 +11,7 @@ const getSpeechRecognitionConstructor = () => {
 };
 
 export const useSpeechRecognition = ({
-  lang = 'en-NG',
+  lang = 'en-GB',
   onTranscript,
 }: UseSpeechRecognitionOptions = {}) => {
   const recognitionRef = useRef<SpeechRecognition | null>(null);

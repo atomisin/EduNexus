@@ -57,8 +57,17 @@ export const StudentDashboard = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [customCourseName, setCustomCourseName] = useState('');
   const [isGeneratingCourse, setIsGeneratingCourse] = useState(false);
+  const [tutorGender, setTutorGenderState] = useState<'male' | 'female'>(() => {
+    if (typeof window === 'undefined') return 'female';
+    return localStorage.getItem('edunexus_tutor_gender') === 'male' ? 'male' : 'female';
+  });
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
+
+  const setTutorGender = useCallback((nextGender: 'male' | 'female') => {
+    setTutorGenderState(nextGender);
+    localStorage.setItem('edunexus_tutor_gender', nextGender);
+  }, []);
 
   const getFullName = useCallback(() => {
     return user?.full_name || user?.name || 'Student';
@@ -239,7 +248,8 @@ export const StudentDashboard = ({
                    submitPlacementCheck={submitPlacementCheck} acceptPlacementRecommendation={acceptPlacementRecommendation}
                    cancelPlacementCheck={cancelPlacementCheck} lockedLessonNotice={lockedLessonNotice}
                    openCurrentUnlockedLesson={openCurrentUnlockedLesson}
-                   getFullName={getFullName} materials={materials} handleEnroll={handleEnroll} handleDeleteMaterial={handleDeleteMaterial}
+                   getFullName={getFullName} tutorGender={tutorGender} setTutorGender={setTutorGender}
+                   materials={materials} handleEnroll={handleEnroll} handleDeleteMaterial={handleDeleteMaterial}
                    customCourseName={customCourseName} setCustomCourseName={setCustomCourseName} isGeneratingCourse={isGeneratingCourse}
                    handleGenerateCustomCourse={handleGenerateCustomCourse} isEditingProfile={isEditingProfile}
                    setIsEditingProfile={setIsEditingProfile} profileFormData={profileFormData}
@@ -271,7 +281,8 @@ export const StudentDashboard = ({
                      submitPlacementCheck={submitPlacementCheck} acceptPlacementRecommendation={acceptPlacementRecommendation}
                      cancelPlacementCheck={cancelPlacementCheck} lockedLessonNotice={lockedLessonNotice}
                      openCurrentUnlockedLesson={openCurrentUnlockedLesson}
-                     getFullName={getFullName} materials={materials} handleEnroll={handleEnroll} handleDeleteMaterial={handleDeleteMaterial}
+                     getFullName={getFullName} tutorGender={tutorGender} setTutorGender={setTutorGender}
+                     materials={materials} handleEnroll={handleEnroll} handleDeleteMaterial={handleDeleteMaterial}
                      customCourseName={customCourseName} setCustomCourseName={setCustomCourseName} isGeneratingCourse={isGeneratingCourse}
                      handleGenerateCustomCourse={handleGenerateCustomCourse} isEditingProfile={isEditingProfile}
                      setIsEditingProfile={setIsEditingProfile} profileFormData={profileFormData}

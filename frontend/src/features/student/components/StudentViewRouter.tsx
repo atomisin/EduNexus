@@ -64,6 +64,8 @@ interface StudentViewRouterProps {
   cancelPlacementCheck?: () => void;
   openCurrentUnlockedLesson?: () => Promise<void>;
   getFullName: () => string;
+  tutorGender: 'male' | 'female';
+  setTutorGender: (val: 'male' | 'female') => void;
   // Subjects props
   materials: any[];
   handleEnroll: (id: string, enrolled: boolean) => Promise<void>;
@@ -97,7 +99,7 @@ export const StudentViewRouter: React.FC<StudentViewRouterProps> = ({
   roadmapLoading, structuredTopics, isStructuredLoading, scrollAreaRef, onMasteryTestComplete,
   startQuiz, dismissQuizConfirm, placementState, startPlacementCheck, submitPlacementCheck,
   acceptPlacementRecommendation, cancelPlacementCheck, lockedLessonNotice, openCurrentUnlockedLesson,
-  getFullName, materials, handleEnroll, handleDeleteMaterial, customCourseName,
+  getFullName, tutorGender, setTutorGender, materials, handleEnroll, handleDeleteMaterial, customCourseName,
   setCustomCourseName, isGeneratingCourse, handleGenerateCustomCourse,
   isEditingProfile, setIsEditingProfile, profileFormData, setProfileFormData,
   setAvatarUrl, startAssessment, progress, radarData, searchQuery, setSearchQuery
@@ -122,8 +124,8 @@ export const StudentViewRouter: React.FC<StudentViewRouterProps> = ({
         />
       );
       case 'learn': return <AIChatSection
-        tutorGender="female"
-        setTutorGender={() => { }}
+        tutorGender={tutorGender}
+        setTutorGender={setTutorGender}
         showAIPanel={showAIPanel}
         setShowAIPanel={setShowAIPanel}
         selectedTopic={selectedTopic}

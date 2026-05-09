@@ -333,10 +333,13 @@ export const useAITutor = (profile?: any, getFullName?: () => string) => {
       if (cleanContent.toLowerCase().includes('video') || cleanContent.toLowerCase().includes('watch')) {
         fetchVideoSuggestions(currentTopic?.name || content, currentSubject);
       }
-    } catch (err) {
+    } catch (err: any) {
+      console.error('[AI Tutor] chat request failed:', err);
       setMessagesAndRef(prev => [...prev, {
         role: 'ai',
-        content: "I lost the connection for a moment. Try your last question again, or ask me to summarize where we stopped."
+        content: err?.message?.includes('taking too long')
+          ? "The AI tutor is taking longer than usual to respond. Please try again in a moment."
+          : "I couldn't complete that response. Please try your last question again."
       }]);
       setAiState({ status: 'idle' });
       isChattingRef.current = false;

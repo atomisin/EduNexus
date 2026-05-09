@@ -139,7 +139,7 @@ export const AIChatSection = ({
   openCurrentUnlockedLesson = async () => {}
 }: AIChatSectionProps) => {
   const { getTopicProgress } = useTopicProgress();
-  const { speak, stop, isYoungLearner, isSpeechSupported, isSpeaking } = useTTS(profile?.education_level);
+  const { speak, stop, isYoungLearner, isSpeechSupported, isSpeaking } = useTTS(profile?.education_level, tutorGender);
   const [activeVideo, setActiveVideo] = useState<string | null>(null);
   const [placementAnswers, setPlacementAnswers] = useState<Record<string, string>>({});
   const [chatInput, setChatInput] = useState('');

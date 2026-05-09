@@ -11,6 +11,7 @@ const API_BASE_URL = raw_api_url.includes('/api/v1')
 // Timeout-aware fetch wrapper to prevent mobile browsers from hanging forever
 // on Render free-tier cold starts (30-60s wake-up time).
 const FETCH_TIMEOUT_MS = 25000; // 25 seconds
+const AI_CHAT_TIMEOUT_MS = 60000; // AI tutoring can take longer on cold starts or larger prompts
 const LOGIN_TIMEOUT_MS = 45000; // 45 seconds — Render cold starts can take 30-60s
 
 function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number = FETCH_TIMEOUT_MS): Promise<Response> {
@@ -52,8 +53,8 @@ if (typeof window !== 'undefined' && !window.location.hostname.includes('localho
 }
 
 // Generic fetch wrapper with credentials (HttpOnly Cookies)
-export async function fetchWithAuth(endpoint: string, options: RequestInit & { silentAuth?: boolean } = {}) {
-  const { silentAuth, ...fetchOptions } = options;
+export async function fetchWithAuth(endpoint: string, options: RequestInit & { silentAuth?: boolean; timeoutMs?: number } = {}) {
+  const { silentAuth, timeoutMs, ...fetchOptions } = options;
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(fetchOptions.headers as Record<string, string>),
@@ -65,7 +66,7 @@ export async function fetchWithAuth(endpoint: string, options: RequestInit & { s
       ...fetchOptions,
       headers,
       credentials: 'include', // CRITICAL: Send cookies with request
-    });
+    }, timeoutMs);
 
     if (!response.ok) {
       if (response.status === 401 && !silentAuth) {
@@ -755,6 +756,7 @@ export const aiAPI = {
   chat: (messages: { role: string; content: string }[], mode?: string, model?: string, temperature?: number, subject_name?: string, topic_name?: string, context?: Record<string, any>) =>
     fetchWithAuth('/ai/chat', {
       method: 'POST',
+      timeoutMs: AI_CHAT_TIMEOUT_MS,
       body: JSON.stringify({ messages, mode, model, temperature, subject_name, topic_name, context }),
     }),
 

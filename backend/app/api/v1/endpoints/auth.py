@@ -30,6 +30,20 @@ router = APIRouter()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/login")
 
 
+def _auth_cookie_options(request: Optional[Request] = None) -> dict:
+    """Choose cookie attributes for same-site local dev or cross-site hosting."""
+    origin = (request.headers.get("origin") if request else "") or ""
+    forwarded_proto = (request.headers.get("x-forwarded-proto") if request else "") or ""
+    host = (request.headers.get("host") if request else "") or ""
+    is_cross_site_browser = origin.startswith("https://") and "localhost" not in origin and "127.0.0.1" not in origin
+    is_https_request = forwarded_proto == "https" or origin.startswith("https://") or host.endswith(".onrender.com")
+    secure_cookie = settings.ENVIRONMENT == "production" or is_cross_site_browser or is_https_request
+    return {
+        "secure": secure_cookie,
+        "samesite": "none" if secure_cookie else "lax",
+    }
+
+
 def generate_student_id() -> str:
     """Generate unique student ID like EDU-2026-ABC123"""
     year = datetime.now(timezone.utc).year
@@ -494,6 +508,7 @@ async def register_student(
 
 @router.post("/login", response_model=dict)
 async def login(
+    request: Request,
     response: Response,
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: AsyncSession = Depends(get_async_db),
@@ -552,7 +567,7 @@ async def login(
     # JWT Generation
     from jose import jwt
 
-    is_prod = settings.ENVIRONMENT == "production"
+    cookie_options = _auth_cookie_options(request)
 
     # Access Token
     access_expire = datetime.now(timezone.utc) + timedelta(
@@ -588,8 +603,8 @@ async def login(
         key="access_token",
         value=access_token,
         httponly=True,
-        secure=is_prod,
-        samesite="none" if is_prod else "lax",
+        secure=cookie_options["secure"],
+        samesite=cookie_options["samesite"],
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         path="/",
     )
@@ -597,8 +612,8 @@ async def login(
         key="refresh_token",
         value=refresh_token,
         httponly=True,
-        secure=is_prod,
-        samesite="none" if is_prod else "lax",
+        secure=cookie_options["secure"],
+        samesite=cookie_options["samesite"],
         max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 3600,
         path=f"{settings.API_V1_STR}/auth/refresh",
     )
@@ -618,6 +633,7 @@ async def login(
 
 @router.post("/refresh")
 async def refresh_token_endpoint(
+    request: Request,
     response: Response,
     refresh_token: Optional[str] = Cookie(None),
     db: AsyncSession = Depends(get_async_db),
@@ -647,7 +663,7 @@ async def refresh_token_endpoint(
             status_code=401, detail="User not found or account not active"
         )
 
-    is_prod = settings.ENVIRONMENT == "production"
+    cookie_options = _auth_cookie_options(request)
     access_expire = datetime.now(timezone.utc) + timedelta(
         minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
     )
@@ -666,8 +682,8 @@ async def refresh_token_endpoint(
         key="access_token",
         value=new_access_token,
         httponly=True,
-        secure=is_prod,
-        samesite="none" if is_prod else "lax",
+        secure=cookie_options["secure"],
+        samesite=cookie_options["samesite"],
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         path="/",
     )
@@ -675,11 +691,20 @@ async def refresh_token_endpoint(
 
 
 @router.post("/logout")
-async def logout(response: Response):
+async def logout(request: Request, response: Response):
     """Clear all auth cookies (C-05)"""
-    response.delete_cookie(key="access_token", path="/")
+    cookie_options = _auth_cookie_options(request)
     response.delete_cookie(
-        key="refresh_token", path=f"{settings.API_V1_STR}/auth/refresh"
+        key="access_token",
+        path="/",
+        secure=cookie_options["secure"],
+        samesite=cookie_options["samesite"],
+    )
+    response.delete_cookie(
+        key="refresh_token",
+        path=f"{settings.API_V1_STR}/auth/refresh",
+        secure=cookie_options["secure"],
+        samesite=cookie_options["samesite"],
     )
     return {"success": True, "detail": "Successfully logged out"}
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import {
-  Brain, CheckCircle, Video, BookOpen, Trophy, Menu
+  Brain, CheckCircle, Video, BookOpen, Trophy, Menu, X
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -98,13 +98,23 @@ export const LandingPage = ({
                     <Menu className="h-6 w-6" />
                   </Button>
                 </SheetTrigger>
-                <SheetContent side="right" className="w-[300px] sm:w-[400px]">
-                  <SheetTitle className="text-left font-display text-2xl mb-8">Menu</SheetTitle>
-                  <div className="flex flex-col gap-6 mt-8">
-                    <a href="#features" className="text-lg font-medium hover:text-primary transition-colors">Platform</a>
-                    <a href="#about" className="text-lg font-medium hover:text-primary transition-colors">Organization</a>
-                    <a href="#contact" className="text-lg font-medium hover:text-primary transition-colors">Contact</a>
-                    <Separator className="my-2" />
+                <SheetContent
+                  side="right"
+                  className="w-[min(22rem,calc(100vw-1rem))] px-5 py-5 sm:px-6 [&>button]:hidden"
+                >
+                  <div className="flex items-center justify-between gap-4">
+                    <SheetTitle className="font-display text-2xl leading-none">Menu</SheetTitle>
+                    <SheetTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" aria-label="Close menu">
+                        <X className="h-5 w-5" />
+                      </Button>
+                    </SheetTrigger>
+                  </div>
+                  <div className="mt-10 flex min-w-0 flex-col gap-2">
+                    <a href="#features" className="rounded-lg px-1 py-3 text-base font-semibold hover:text-primary transition-colors">Platform</a>
+                    <a href="#about" className="rounded-lg px-1 py-3 text-base font-semibold hover:text-primary transition-colors">Organization</a>
+                    <a href="#contact" className="rounded-lg px-1 py-3 text-base font-semibold hover:text-primary transition-colors">Contact</a>
+                    <Separator className="my-5" />
                     {user && onGoDashboard ? (
                       <Button onClick={onGoDashboard} className="w-full h-12 bg-primary text-primary-foreground font-semibold rounded-lg">
                         Go to Dashboard
@@ -339,7 +349,6 @@ export const LandingPage = ({
                 <LoginForm 
                   onSuccess={() => {
                     setAuthMode(null);
-                    onGoDashboard?.();
                   }}
                   onRegisterClick={() => setAuthMode('register')}
                 />

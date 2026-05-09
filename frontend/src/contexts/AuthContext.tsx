@@ -77,6 +77,12 @@ export interface RegisterData {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const dashboardPathForRole = (role?: string | null) => {
+  if (role === 'admin') return '/admin';
+  if (role === 'teacher') return '/teacher';
+  return '/student';
+};
+
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(() => {
     const saved = localStorage.getItem('edunexus_user');
@@ -133,6 +139,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         email: user.email,
         name: user.name,
         first_name: user.first_name,
+        role: user.role,
         avatar_url: user.avatar_url
       };
       localStorage.setItem('edunexus_user', JSON.stringify(prunedUser));
@@ -184,6 +191,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }));
 
         toast.success(`Welcome back, ${loggedInUser.first_name || loggedInUser.name}!`);
+        if (!response.force_password_change) {
+          navigate(dashboardPathForRole(loggedInUser.role), { replace: true });
+        }
         return true;
       }
 
@@ -328,10 +338,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // C-05: Coordinate with backend to clear cookie
     authAPI.logout().catch(err => console.error('Logout sync failed:', err));
     localStorage.removeItem('edunexus_token');
+    localStorage.removeItem('edunexus_user');
     setUser(null);
     setIsAuthenticated(false);
     setMustChangePassword(false);
     setError(null);
+    navigate('/', { replace: true });
   };
 
   // Send verification email
@@ -426,5 +438,4 @@ export const useAuth = () => {
   }
   return context;
 };
-
 

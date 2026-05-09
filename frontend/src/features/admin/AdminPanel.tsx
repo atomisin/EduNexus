@@ -39,7 +39,7 @@ interface AdminPanelProps {
 export const AdminPanel: React.FC<AdminPanelProps> = ({
   onBack
 }) => {
-  const { user: authUser } = useAuth();
+  const { user: authUser, login, logout } = useAuth();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -70,10 +70,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     setLoading(true);
 
     try {
-      await adminAPI.login(email, password);
+      const success = await login(email, password);
+      if (!success) return;
       setIsLoggedIn(true);
       toast.success('Welcome, Admin!');
-      fetchUsers();
+      fetchData();
     } catch (error: any) {
       toast.error(error.message || 'Invalid admin credentials');
     } finally {
@@ -195,7 +196,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             <ThemeToggle />
             <NotificationBell />
             <Button variant="outline" className="hidden sm:inline-flex rounded-lg" onClick={onBack}>Back to Main</Button>
-            <Button variant="ghost" className="rounded-lg" onClick={() => setIsLoggedIn(false)}>Logout</Button>
+            <Button variant="ghost" className="rounded-lg" onClick={logout}>Logout</Button>
           </div>
         </div>
       </header>

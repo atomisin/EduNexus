@@ -52,7 +52,7 @@ function App() {
 
   const handleLogout = () => {
     logout();
-    navigate('/login');
+    navigate('/');
     toast.success('Logged out successfully');
   };
 
@@ -82,7 +82,7 @@ function App() {
       
       console.log('[Auth] Session expired or unauthorized at:', currentPath);
       logout();
-      navigate('/login');
+      navigate('/?auth=login');
       toast.error('Session expired. Please log in again.');
     };
     window.addEventListener('auth:unauthorized', handleUnauthorized);

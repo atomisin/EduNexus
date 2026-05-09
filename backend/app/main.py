@@ -94,14 +94,30 @@ async def lifespan(app: FastAPI):
     
     init_db()
     
-    # HOT PATCH: Ensure 'title' column exists in teaching_sessions (discovered 2026-04-13)
+    # HOT PATCH: Keep production tables aligned with ORM columns that were added after initial deploys.
     async with AsyncSessionLocal() as db:
         try:
             await db.execute(text("ALTER TABLE teaching_sessions ADD COLUMN IF NOT EXISTS title VARCHAR(255)"))
+            await db.execute(text("ALTER TABLE student_topic_progress ADD COLUMN IF NOT EXISTS progress_pct INTEGER DEFAULT 0"))
+            await db.execute(text("ALTER TABLE student_topic_progress ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'locked'"))
+            await db.execute(text("ALTER TABLE student_topic_progress ADD COLUMN IF NOT EXISTS last_accessed TIMESTAMP WITH TIME ZONE"))
+            await db.execute(text("ALTER TABLE student_topic_progress ADD COLUMN IF NOT EXISTS unlocked_at TIMESTAMP WITH TIME ZONE"))
+            await db.execute(text("ALTER TABLE student_topic_progress ADD COLUMN IF NOT EXISTS completed_at TIMESTAMP WITH TIME ZONE"))
+            await db.execute(text("ALTER TABLE student_topic_progress ADD COLUMN IF NOT EXISTS subject_id UUID"))
+            await db.execute(text("ALTER TABLE student_topic_progress ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP"))
+            await db.execute(text("""
+                UPDATE student_topic_progress
+                SET status = CASE
+                    WHEN COALESCE(progress_pct, 0) >= 100 THEN 'completed'
+                    WHEN COALESCE(progress_pct, 0) > 0 THEN 'unlocked'
+                    ELSE 'locked'
+                END
+                WHERE status IS NULL
+            """))
             await db.commit()
-            logger.info("✅ Database Hotpatch: 'title' column verified/added.")
+            logger.info("Database Hotpatch: production schema columns verified.")
         except Exception as e:
-            logger.error(f"❌ Database Hotpatch failed: {e}")
+            logger.error(f"Database Hotpatch failed: {e}")
             await db.rollback()
     
     # Initialize and start scheduler

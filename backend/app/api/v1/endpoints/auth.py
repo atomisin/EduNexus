@@ -608,8 +608,6 @@ async def login(
 
     return {
         "status": "success",
-        "access_token": access_token,
-        "refresh_token": refresh_token,
         "user_id": str(user.id),
         "role": user.role,
         "first_name": user.first_name,

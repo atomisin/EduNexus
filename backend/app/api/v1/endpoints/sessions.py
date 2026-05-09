@@ -723,7 +723,12 @@ async def record_participation(
 ):
     """Record student participation event"""
     try:
+        if current_user.role != UserRole.STUDENT:
+            raise HTTPException(status_code=403, detail="Only students can record participation")
         manager = SessionManager(db)
+        is_enrolled, _ = await manager.is_student_enrolled(session_id, str(current_user.id))
+        if not is_enrolled:
+            raise HTTPException(status_code=403, detail="Not enrolled in this session")
         session = await manager.record_participation(
             session_id=session_id,
             student_id=str(current_user.id),
@@ -732,6 +737,8 @@ async def record_participation(
         return SessionResponse(
             success=True, detail=f"Recorded {event_type}", session=session.to_dict()
         )
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
@@ -750,13 +757,20 @@ async def record_tab_switch(
 ):
     """Record student tab switch event"""
     try:
+        if current_user.role != UserRole.STUDENT:
+            raise HTTPException(status_code=403, detail="Only students can record engagement")
         manager = SessionManager(db)
+        is_enrolled, _ = await manager.is_student_enrolled(session_id, str(current_user.id))
+        if not is_enrolled:
+            raise HTTPException(status_code=403, detail="Not enrolled in this session")
         session = await manager.record_tab_switch(
             session_id=session_id, student_id=str(current_user.id)
         )
         return SessionResponse(
             success=True, detail="Recorded tab switch", session=session.to_dict()
         )
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
@@ -814,20 +828,25 @@ async def submit_video_frame(
 ):
     """Submit a video frame for engagement analysis"""
     try:
+        if current_user.role != UserRole.STUDENT:
+            raise HTTPException(status_code=403, detail="Only students can submit engagement frames")
         manager = SessionManager(db)
-        # Verify student is in session
         session = await manager._get_session(session_id)
         if not session:
             raise HTTPException(status_code=404, detail="Session not found")
+        is_enrolled, _ = await manager.is_student_enrolled(session_id, str(current_user.id))
+        if not is_enrolled:
+            raise HTTPException(status_code=403, detail="Not enrolled in this session")
 
-        # Process frame (this would ideally be async/backgrounded)
         metrics = await manager.process_video_frame(
             session_id=session_id,
-            student_id=submission.student_id,
+            student_id=str(current_user.id),
             frame_data=submission.frame_data,
         )
 
         return {"success": True, "metrics": metrics.to_dict() if metrics else None}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error processing video frame: {str(e)}")
         # Don't fail the request, just log

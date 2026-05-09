@@ -181,6 +181,15 @@ async def submit_video_frame(
     Called periodically by student client (every 2-5 seconds)
     """
     try:
+        if current_user.role != "student":
+            raise HTTPException(status_code=403, detail="Only students can submit engagement frames")
+        if student_id != str(current_user.id):
+            raise HTTPException(status_code=403, detail="Cannot submit engagement data for another student")
+        manager = SessionManager(db)
+        is_enrolled, _ = await manager.is_student_enrolled(session_id, str(current_user.id))
+        if not is_enrolled:
+            raise HTTPException(status_code=403, detail="Not enrolled in this session")
+
         # Decode base64 image
         import base64
         image_bytes = base64.b64decode(frame_data.split(',')[1] if ',' in frame_data else frame_data)
@@ -209,7 +218,8 @@ async def submit_video_frame(
             "attention_score": metrics.attention_score if metrics else 0,
             "status": metrics.get_engagement_status().value if metrics else "unknown"
         }
-        
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error processing video frame: {e}")
         raise HTTPException(

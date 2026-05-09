@@ -27,17 +27,13 @@ interface AIChatSectionProps {
   setViewingSubtopic: (val: string | null) => void;
   handleSubtopicClick: (st: any) => Promise<void>;
   showMasteryTest: boolean;
-  setShowMasteryTest?: (val: boolean) => void;
   activeSubtopic: string | undefined;
   aiChatMessages: any[];
   avatarUrl: string | null;
   profile: any;
   user: any;
-  showMasteryConfirm: boolean;
-  setShowMasteryConfirm?: (val: boolean) => void;
-  masteryTestTriggered?: boolean;
-  resetMasteryTrigger?: () => void;
   aiLoading: boolean;
+  lessonController?: any;
   handleAIContinue: (msg: string) => Promise<void>;
   isCheckingUnderstanding?: boolean;
   subjects: any[];
@@ -60,6 +56,11 @@ interface AIChatSectionProps {
   isStructuredLoading?: boolean;
   dismissQuizConfirm?: () => void;
   aiState?: any;
+  placementState?: any;
+  startPlacementCheck?: (targetTopic: any) => Promise<void>;
+  submitPlacementCheck?: (answersByQuestionId: Record<string, string>) => Promise<void>;
+  acceptPlacementRecommendation?: () => Promise<void>;
+  cancelPlacementCheck?: () => void;
 }
 
 export const AIChatSection = ({
@@ -74,17 +75,13 @@ export const AIChatSection = ({
   setViewingSubtopic,
   handleSubtopicClick,
   showMasteryTest,
-  setShowMasteryTest = () => {},
   activeSubtopic,
   aiChatMessages,
   avatarUrl,
   profile,
   user,
-  showMasteryConfirm,
-  setShowMasteryConfirm = () => {},
-  masteryTestTriggered = false,
-  resetMasteryTrigger = () => {},
   aiLoading,
+  lessonController,
   handleAIContinue,
   isCheckingUnderstanding = false,
   subjects,
@@ -106,17 +103,33 @@ export const AIChatSection = ({
   structuredTopics = [],
   isStructuredLoading = false,
   dismissQuizConfirm = () => {},
-  aiState = { status: 'idle' }
+  aiState = { status: 'idle' },
+  placementState = { status: 'idle' },
+  startPlacementCheck = async () => {},
+  submitPlacementCheck = async () => {},
+  acceptPlacementRecommendation = async () => {},
+  cancelPlacementCheck = () => {}
 }: AIChatSectionProps) => {
   const { getTopicProgress } = useTopicProgress();
   const { speak, stop, isYoungLearner } = useTTS(profile?.education_level);
   const [activeVideo, setActiveVideo] = useState<string | null>(null);
+  const [placementAnswers, setPlacementAnswers] = useState<Record<string, string>>({});
 
   const topicsForCurrentSubject = structuredTopics.filter(
     (t: any) => !selectedSubject || !t.subject_id || t.subject_id === selectedSubject.id
   );
 
   const isCurrentTopicCompleted = topicsForCurrentSubject.find((st: any) => st.id === selectedTopic?.id)?.status === 'completed';
+  const focusTopicLabel = (typeof viewingSubtopic === 'object' ? (viewingSubtopic as any)?.name : viewingSubtopic) || activeSubtopic || selectedTopic?.name || 'this topic';
+  const conversationTurns = aiChatMessages.filter((m: any) => m.role === 'user').length;
+  const lessonStageLabel = (lessonController?.stage || 'intro').replace(/_/g, ' ');
+  const learnerActions = [
+    { label: 'Step by step', icon: Layers, prompt: `Teach ${focusTopicLabel} step by step. Start from the basics, then give me one small thing to try.` },
+    { label: 'Example', icon: Star, prompt: `Give me a real-world Nigerian example for ${focusTopicLabel}, then ask me one quick check question.` },
+    { label: "I'm stuck", icon: Zap, prompt: `I'm stuck on ${focusTopicLabel}. Explain it a different way using smaller steps and one analogy.` },
+    { label: 'Quiz me', icon: Target, prompt: `Quiz me on ${focusTopicLabel}. Ask exactly one question first and wait for my answer before explaining.` },
+    { label: 'Summarize', icon: FileText, prompt: `Summarize what I need to remember about ${focusTopicLabel} in a short study note with three key points.` },
+  ];
 
   const displaySubjects = enrolledSubjects.length > 0
     ? subjects.filter(s => enrolledSubjects.some((e: any) => (e.id || e) === s.id))
@@ -131,6 +144,12 @@ export const AIChatSection = ({
       speak(lastMessage.content);
     }
   }, [aiChatMessages, speak]);
+
+  useEffect(() => {
+    if (placementState?.status === 'active') {
+      setPlacementAnswers({});
+    }
+  }, [placementState?.status, placementState?.target_topic?.id]);
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden">
@@ -262,13 +281,12 @@ export const AIChatSection = ({
                         return (
                           <button
                             key={st.id}
-                            disabled={isLocked}
-                            onClick={() => handleTopicSelect(st)}
+                            onClick={() => isLocked ? startPlacementCheck(st) : handleTopicSelect(st)}
                             className={`w-full text-left p-3 rounded-xl transition-all border group relative ${
                               isActive 
                                 ? 'bg-teal-50 dark:bg-teal-900/20 border-teal-200 dark:border-teal-800 shadow-sm' 
                                 : isLocked
-                                  ? 'opacity-40 grayscale pointer-events-none'
+                                  ? 'bg-slate-50 dark:bg-slate-900 border-dashed border-slate-200 dark:border-slate-700 hover:bg-amber-50 dark:hover:bg-amber-950/20 hover:border-amber-300 dark:hover:border-amber-800'
                                   : 'hover:bg-white dark:hover:bg-slate-800 hover:border-slate-200 dark:hover:border-slate-700 bg-transparent border-transparent'
                             }`}
                           >
@@ -278,16 +296,18 @@ export const AIChatSection = ({
                                   ? 'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600' 
                                   : isActive 
                                     ? 'bg-teal-600 text-white shadow-md' 
-                                    : 'bg-slate-100 dark:bg-slate-800 text-slate-400 group-hover:bg-slate-200 dark:group-hover:bg-slate-700'
+                                    : isLocked
+                                      ? 'bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 group-hover:bg-amber-200 dark:group-hover:bg-amber-900/50'
+                                      : 'bg-slate-100 dark:bg-slate-800 text-slate-400 group-hover:bg-slate-200 dark:group-hover:bg-slate-700'
                               }`}>
                                 {isCompleted ? <CheckCircle2 className="w-3.5 h-3.5" /> : isLocked ? <Lock className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
                               </div>
                               <div className="flex-1 min-w-0">
-                                <p className={`text-sm font-bold leading-tight mb-1 ${isActive ? 'text-teal-900 dark:text-teal-100' : 'text-slate-700 dark:text-slate-300'}`}>
+                                <p className={`text-sm font-bold leading-tight mb-1 ${isActive ? 'text-teal-900 dark:text-teal-100' : isLocked ? 'text-slate-600 dark:text-slate-300' : 'text-slate-700 dark:text-slate-300'}`}>
                                   {st.name}
                                 </p>
                                 <p className="text-[10px] text-slate-500 dark:text-slate-400">
-                                  {st.status === 'completed' ? 'Mastered!' : isLocked ? 'Locked' : 'Active Learning'}
+                                  {st.status === 'completed' ? 'Mastered!' : isLocked ? 'Placement check required' : 'Active Learning'}
                                 </p>
                               </div>
                             </div>
@@ -346,6 +366,134 @@ export const AIChatSection = ({
                 </div>
               ) : null}
 
+              {placementState?.status !== 'idle' ? (
+                <div className="fixed inset-0 z-[110] bg-slate-950/60 backdrop-blur-md overflow-y-auto p-4 md:p-8 flex justify-center items-start animate-in fade-in duration-300">
+                  <div className="w-full max-w-3xl my-auto rounded-2xl bg-white dark:bg-slate-950 shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+                    <div className="flex items-start justify-between gap-4 p-5 border-b border-slate-100 dark:border-slate-800">
+                      <div>
+                        <p className="text-xs font-black uppercase tracking-widest text-teal-700 dark:text-teal-300">Placement Check</p>
+                        <h3 className="text-xl font-black text-slate-900 dark:text-slate-100">
+                          Unlock {placementState?.target_topic?.name || placementState?.targetTopic?.name || 'this lesson'}
+                        </h3>
+                        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                          EduNexus will recommend the best lesson to start from before opening the path.
+                        </p>
+                      </div>
+                      <Button variant="ghost" size="sm" onClick={cancelPlacementCheck} className="rounded-full">
+                        <X className="w-4 h-4" />
+                      </Button>
+                    </div>
+
+                    {placementState.status === 'loading' ? (
+                      <div className="p-8 flex items-center gap-3 text-slate-600 dark:text-slate-300">
+                        <Loader2 className="w-5 h-5 animate-spin text-teal-600" />
+                        Preparing prerequisite questions...
+                      </div>
+                    ) : null}
+
+                    {placementState.status === 'error' ? (
+                      <div className="p-8">
+                        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-100">
+                          {placementState.message || 'The placement check could not be loaded.'}
+                        </div>
+                        <div className="mt-5 flex justify-end">
+                          <Button onClick={cancelPlacementCheck} className="bg-teal-600 hover:bg-teal-700">Close</Button>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {placementState.status === 'active' ? (
+                      <div className="p-5 space-y-4">
+                        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 p-4">
+                          <p className="text-sm font-bold text-slate-700 dark:text-slate-200">
+                            {placementState.questions.length} prerequisite lesson{placementState.questions.length === 1 ? '' : 's'} will be checked.
+                          </p>
+                        </div>
+
+                        <div className="space-y-4 max-h-[55vh] overflow-y-auto pr-1">
+                          {placementState.questions.map((question: any, index: number) => (
+                            <div key={question.id} className="rounded-xl border border-slate-200 dark:border-slate-800 p-4">
+                              <p className="text-xs font-black uppercase tracking-widest text-slate-500 mb-2">
+                                {index + 1}. {question.topic_name}
+                              </p>
+                              <p className="font-bold text-slate-900 dark:text-slate-100 mb-3">{question.text}</p>
+                              <div className="grid gap-2">
+                                {Object.entries(question.options || {}).map(([key, label]) => (
+                                  <button
+                                    key={key}
+                                    type="button"
+                                    onClick={() => setPlacementAnswers(prev => ({ ...prev, [question.id]: key }))}
+                                    className={`text-left rounded-xl border px-4 py-3 text-sm transition-all ${
+                                      placementAnswers[question.id] === key
+                                        ? 'border-teal-500 bg-teal-50 text-teal-900 dark:border-teal-700 dark:bg-teal-950/30 dark:text-teal-100'
+                                        : 'border-slate-200 bg-white text-slate-700 hover:border-teal-300 hover:bg-teal-50/60 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-teal-950/20'
+                                    }`}
+                                  >
+                                    <span className="font-black mr-2">{key}.</span>{String(label)}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-2">
+                          <p className="text-sm text-slate-500 dark:text-slate-400">
+                            Answer every question so the recommendation is based on the full prerequisite path.
+                          </p>
+                          <Button
+                            disabled={!placementState.questions.every((question: any) => placementAnswers[question.id])}
+                            onClick={() => submitPlacementCheck(placementAnswers)}
+                            className="bg-teal-600 hover:bg-teal-700"
+                          >
+                            Check My Level
+                          </Button>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {placementState.status === 'result' ? (
+                      <div className="p-6 space-y-5">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          <div className="rounded-xl border border-slate-200 dark:border-slate-800 p-4">
+                            <p className="text-xs font-black uppercase tracking-widest text-slate-500">Score</p>
+                            <p className="text-2xl font-black text-slate-900 dark:text-slate-100">{placementState.result?.score ?? 0}%</p>
+                          </div>
+                          <div className="rounded-xl border border-slate-200 dark:border-slate-800 p-4 sm:col-span-2">
+                            <p className="text-xs font-black uppercase tracking-widest text-slate-500">Recommended Start</p>
+                            <p className="text-lg font-black text-teal-700 dark:text-teal-300">{placementState.result?.recommended_topic?.name}</p>
+                          </div>
+                        </div>
+
+                        <div className="rounded-xl border border-teal-100 bg-teal-50/70 dark:border-teal-900/50 dark:bg-teal-950/20 p-4">
+                          <p className="text-sm text-slate-700 dark:text-slate-200">{placementState.result?.reason}</p>
+                        </div>
+
+                        {placementState.result?.weak_topics?.length > 0 ? (
+                          <div>
+                            <p className="text-xs font-black uppercase tracking-widest text-slate-500 mb-2">Missed Questions Point To</p>
+                            <div className="flex flex-wrap gap-2">
+                              {placementState.result.weak_topics.map((topic: any) => (
+                                <Badge key={topic.topic_id} variant="outline" className="border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+                                  {topic.topic_name} ({topic.missed})
+                                </Badge>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
+
+                        <div className="flex flex-col sm:flex-row justify-end gap-3 pt-2">
+                          <Button variant="outline" onClick={cancelPlacementCheck}>Cancel</Button>
+                          <Button onClick={acceptPlacementRecommendation} className="bg-teal-600 hover:bg-teal-700">
+                            Unlock Recommended Lesson
+                          </Button>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
+
               <ScrollArea ref={scrollAreaRef} className="flex-1 h-full min-h-0">
                 <div className="max-w-6xl mx-auto p-4 lg:p-6 pb-20">
                   {aiChatMessages.length === 0 ? (
@@ -355,7 +503,7 @@ export const AIChatSection = ({
                       </div>
                       <h3 className="text-3xl font-black text-slate-800 dark:text-slate-100 mb-4 tracking-tight">Your AI Learning Partner</h3>
                       <p className="text-slate-500 dark:text-slate-400 max-w-md mx-auto mb-10 text-lg leading-relaxed">
-                        I'll help you master {activeSubtopic ? <span className="text-teal-600 font-bold">{activeSubtopic}</span> : 'this topic'} through interactive discussion.
+                        We'll learn <span className="text-teal-600 font-bold">{focusTopicLabel}</span> in small steps, with examples, quick checks, and help when you get stuck.
                       </p>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-lg mx-auto">
@@ -363,22 +511,22 @@ export const AIChatSection = ({
                           variant="outline"
                           disabled={roadmapLoading}
                           className="h-auto py-5 px-6 rounded-2xl border-slate-200 dark:border-slate-800 hover:border-teal-500 hover:bg-teal-50 dark:hover:bg-teal-950/20 transition-all hover:scale-[1.02] shadow-sm"
-                          onClick={() => handleAIContinue(`Introduce me to ${(typeof viewingSubtopic === 'object' ? (viewingSubtopic as any)?.name : viewingSubtopic) || activeSubtopic || selectedTopic?.name || 'this topic'} — what am I about to learn?`)}
+                          onClick={() => handleAIContinue(`Give me a learning map for ${focusTopicLabel}. Show the goal, the simple idea, and the first thing I should try.`)}
                         >
                           <div className="text-left">
-                            <p className="font-black text-teal-600 dark:text-teal-400 uppercase tracking-widest text-[10px] mb-1">Start Journey 🚀</p>
-                            <p className="text-sm font-bold text-slate-700 dark:text-slate-300">Begin with an intro</p>
+                            <p className="font-black text-teal-600 dark:text-teal-400 uppercase tracking-widest text-[10px] mb-1">Learning Map</p>
+                            <p className="text-sm font-bold text-slate-700 dark:text-slate-300">Show me the path</p>
                           </div>
                         </Button>
                         <Button
                           variant="outline"
                           disabled={roadmapLoading}
                           className="h-auto py-5 px-6 rounded-2xl border-slate-200 dark:border-slate-800 hover:border-teal-500 hover:bg-teal-50 dark:hover:bg-teal-950/20 transition-all hover:scale-[1.02] shadow-sm"
-                          onClick={() => handleAIContinue(`Teach me about ${(typeof viewingSubtopic === 'object' ? (viewingSubtopic as any)?.name : viewingSubtopic) || activeSubtopic || selectedTopic?.name || 'this topic'} using a very short, fun story`)}
+                          onClick={() => handleAIContinue(`Teach me ${focusTopicLabel} interactively. Explain one idea, ask one check question, then wait for me.`)}
                         >
                           <div className="text-left">
-                            <p className="font-black text-teal-600 dark:text-teal-400 uppercase tracking-widest text-[10px] mb-1">Story Mode 📖</p>
-                            <p className="text-sm font-bold text-slate-700 dark:text-slate-300">Learn through a story</p>
+                            <p className="font-black text-teal-600 dark:text-teal-400 uppercase tracking-widest text-[10px] mb-1">Guided Lesson</p>
+                            <p className="text-sm font-bold text-slate-700 dark:text-slate-300">Teach me interactively</p>
                           </div>
                         </Button>
                       </div>
@@ -412,47 +560,6 @@ export const AIChatSection = ({
                                 </div>
                               </div>
 
-                              {/* Mastery Confirmation Card (Only for the latest AI message if triggered) */}
-                              {msg.role === 'ai' && idx === aiChatMessages.length - 1 && showMasteryConfirm && (
-                                <Card className="border-2 border-teal-500 bg-teal-50/50 dark:bg-teal-950/20 shadow-2xl animate-in zoom-in duration-500 rounded-3xl overflow-hidden mt-2">
-                                  <CardContent className="p-6">
-                                    <div className="flex items-center gap-4 mb-4">
-                                      <div className="w-12 h-12 bg-teal-500 rounded-2xl flex items-center justify-center shadow-lg shadow-teal-500/20">
-                                        <Trophy className="w-6 h-6 text-white" />
-                                      </div>
-                                      <div>
-                                        <h4 className="text-lg font-black text-slate-800 dark:text-slate-100 uppercase tracking-tight">Mastery Test Ready! 🎓</h4>
-                                        <p className="text-sm text-slate-600 dark:text-slate-400 font-medium">You've covered all the concepts. Ready to prove your mastery?</p>
-                                      </div>
-                                    </div>
-                                    <div className="flex gap-3">
-                                      <Button
-                                        className="flex-1 bg-teal-600 hover:bg-teal-700 text-white font-black py-6 rounded-2xl shadow-xl shadow-teal-500/30 transition-all hover:scale-[1.02] active:scale-95"
-                                        onClick={() => {
-                                          if (setShowMasteryTest) {
-                                            setShowMasteryTest(true);
-                                          }
-                                          setShowMasteryConfirm(false);
-                                          // Force scroll to top of the screen when test starts
-                                          window.scrollTo({ top: 0, behavior: 'smooth' });
-                                        }}
-                                      >
-                                        I'm Ready! Start Test 🚀
-                                      </Button>
-                                      <Button
-                                        variant="ghost"
-                                        className="font-bold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
-                                        onClick={() => {
-                                          setShowMasteryConfirm(false);
-                                          handleAIContinue("I'd like to review a bit more before taking the test.");
-                                        }}
-                                      >
-                                        I need more review
-                                      </Button>
-                                    </div>
-                                  </CardContent>
-                                </Card>
-                              )}
 
                               {/* Video Suggestions for current message (if relevant) */}
                               {msg.role === 'ai' && idx === aiChatMessages.length - 1 && suggestedVideos.length > 0 && (
@@ -513,6 +620,36 @@ export const AIChatSection = ({
                         </div>
                       ))}
 
+                      {!aiLoading && !showMasteryTest && aiChatMessages.length > 0 && (
+                        <div className="max-w-6xl mx-auto rounded-2xl border border-teal-100 dark:border-teal-900/50 bg-teal-50/60 dark:bg-teal-950/10 p-4 shadow-sm">
+                          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+                            <div>
+                              <p className="text-xs font-black uppercase tracking-widest text-teal-700 dark:text-teal-300">Next Learning Move</p>
+                              <p className="text-sm text-slate-600 dark:text-slate-300">
+                                Stage: <span className="font-bold capitalize">{lessonStageLabel}</span>. {conversationTurns < 2 ? 'Start with a guided explanation, then answer one quick check.' : 'Choose what you need next: clearer explanation, example, practice, or summary.'}
+                              </p>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              {learnerActions.slice(0, conversationTurns < 2 ? 3 : 5).map((action) => {
+                                const Icon = action.icon;
+                                return (
+                                  <Button
+                                    key={action.label}
+                                    variant="outline"
+                                    size="sm"
+                                    className="rounded-2xl border-teal-100 bg-white text-slate-700 hover:bg-teal-50 hover:text-teal-800 dark:bg-slate-900 dark:border-teal-900/50 dark:text-slate-200 dark:hover:bg-teal-950/30"
+                                    onClick={() => handleAIContinue(action.prompt)}
+                                  >
+                                    <Icon className="w-4 h-4 mr-2 text-teal-600" />
+                                    {action.label}
+                                  </Button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
                       {aiLoading && (
                         <div className="flex justify-start animate-in fade-in duration-300">
                           <div className="flex gap-4 items-center">
@@ -560,7 +697,7 @@ export const AIChatSection = ({
                         </Button>
                         <Button
                           variant="outline"
-                          className="whitespace-nowrap rounded-3xl bg-indigo-100 text-indigo-800 border-indigo-200 hover:bg-indigo-200 px-6 py-6 font-black text-lg"
+                          className="whitespace-nowrap rounded-3xl bg-teal-100 text-teal-800 border-teal-200 hover:bg-teal-200 px-6 py-6 font-black text-lg"
                           onClick={() => handleAIContinue("I'm confused, help! 🙋")}
                         >
                           🙋 I'm stuck

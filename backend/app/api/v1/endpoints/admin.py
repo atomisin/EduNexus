@@ -871,6 +871,12 @@ async def admin_upload_material(
     # 3. Read file content
     content = await file.read()
     file_size = len(content)
+    max_size = 100 * 1024 * 1024
+    if file_size > max_size:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File size exceeds maximum allowed size of 100MB",
+        )
 
     # 4. Upload to storage
     object_name = f"materials/admin/{uuid.uuid4()}{file_extension}"

@@ -9,6 +9,25 @@ export interface Message {
   content: string;
 }
 
+type LessonStage = 'intro' | 'teach' | 'check_understanding' | 'practice' | 'remediate' | 'mastery_ready' | 'mastery_quiz' | 'completed';
+
+interface LessonControllerState {
+  stage: LessonStage;
+  nextActions: string[];
+  masteryReady: boolean;
+  lastUiAction?: string | null;
+}
+
+const cleanTutorResponse = (content: string) => {
+  return content
+    .replace(/---NEXT---/g, '')
+    .replace(/---QUESTION---/g, '')
+    .replace(/---CTA---/g, '')
+    .replace(/---VIDEO---/g, '')
+    .replace(/\[TRIGGER_MASTERY\]/g, '')
+    .trim();
+};
+
 const getChatStorageKey = (subjectId?: string, topicId?: string, topicName?: string, subtopicName?: string) => {
   return `edunexus_chat_${subjectId || 'default'}::${topicId || topicName || 'general'}::${topicName || 'general'}::${subtopicName || 'intro'}`;
 };
@@ -17,9 +36,15 @@ const getChatStorageKey = (subjectId?: string, topicId?: string, topicName?: str
 export type AIState = 
   | { status: 'idle' }
   | { status: 'chatting' }
-  | { status: 'quiz_confirm' }
   | { status: 'quiz_active'; masteryMetadata?: { topic: any, subject: any }; result?: any }
   | { status: 'quiz_completed'; result?: any };
+
+export type PlacementState =
+  | { status: 'idle' }
+  | { status: 'loading'; targetTopic: any }
+  | { status: 'active'; targetTopic: any; target_topic: any; prerequisite_topics: any[]; questions: any[]; message?: string }
+  | { status: 'result'; targetTopic: any; target_topic: any; prerequisite_topics: any[]; questions: any[]; result: any }
+  | { status: 'error'; targetTopic?: any; message: string };
 
 export const useAITutor = (profile?: any, getFullName?: () => string) => {
   const queryClient = useQueryClient();
@@ -29,6 +54,13 @@ export const useAITutor = (profile?: any, getFullName?: () => string) => {
   const isChattingRef = useRef<boolean>(false);
   const [currentTopic, setCurrentTopic] = useState<any>(null);
   const [currentSubject, setCurrentSubject] = useState<Subject | null>(null);
+  const [lessonController, setLessonController] = useState<LessonControllerState>({
+    stage: 'intro',
+    nextActions: ['teach_step_by_step', 'give_example', 'check_understanding'],
+    masteryReady: false,
+    lastUiAction: null,
+  });
+  const [placementState, setPlacementState] = useState<PlacementState>({ status: 'idle' });
 
   const setMessagesAndRef = useCallback((
     updater: Message[] | ((prev: Message[]) => Message[])
@@ -208,10 +240,23 @@ export const useAITutor = (profile?: any, getFullName?: () => string) => {
     try {
       // Capture current history before sending to avoid duplicate user message
       const msgsForPayload = messagesRef.current;
-      const safeHistory = msgsForPayload.filter(m => m !== userMessage).map(m => ({
+      const safeHistory = msgsForPayload.filter(m => m !== userMessage).slice(-10).map(m => ({
         role: m.role === 'ai' ? 'assistant' : 'user',
         content: m.content,
       }));
+      const topicContext = [
+        currentTopic?.name,
+        activeSubtopic ? `focus area: ${activeSubtopic}` : null,
+      ].filter(Boolean).join(' - ');
+      const userTurnCount = [...safeHistory, { role: 'user', content }].filter(m => m.role === 'user').length;
+      const lessonContext = {
+        lesson_stage: lessonController.stage,
+        user_turn_count: userTurnCount,
+        assistant_turn_count: safeHistory.filter(m => m.role === 'assistant').length,
+        active_subtopic: activeSubtopic || null,
+        topic_id: currentTopic?.id || null,
+        subject_id: currentSubject?.id || null,
+      };
 
       const response = await aiAPI.chat(
         [...safeHistory, { role: 'user', content }],
@@ -219,7 +264,8 @@ export const useAITutor = (profile?: any, getFullName?: () => string) => {
         undefined,
         0.6,
         currentSubject?.name || undefined,
-        currentTopic?.name || undefined
+        topicContext || undefined,
+        lessonContext
       );
 
       const aiContent = response.response || '';
@@ -227,10 +273,26 @@ export const useAITutor = (profile?: any, getFullName?: () => string) => {
       const hasNext = aiContent.includes('---NEXT---');
       const hasQuestion = aiContent.includes('---QUESTION---');
       const hasCTA = aiContent.includes('---CTA---');
-      const cleanContent = aiContent.replace('---NEXT---', '').replace('---QUESTION---', '').replace('---CTA---', '').trim();
+      const shouldStartMasteryQuiz = response.ui_action === 'start_mastery_quiz' || response.should_start_mastery_quiz === true || aiContent.includes('[TRIGGER_MASTERY]');
+      const cleanContent = cleanTutorResponse(aiContent);
+      const nextLessonStage: LessonStage = shouldStartMasteryQuiz
+        ? 'mastery_quiz'
+        : (response.lesson_stage || lessonController.stage || 'teach');
 
-      if (cleanContent.includes('[TRIGGER_MASTERY]')) {
-        setAiState({ status: 'quiz_confirm' });
+      setLessonController({
+        stage: nextLessonStage,
+        nextActions: Array.isArray(response.next_actions) && response.next_actions.length > 0
+          ? response.next_actions
+          : ['teach_step_by_step', 'give_example', 'check_understanding'],
+        masteryReady: Boolean(response.mastery_ready || shouldStartMasteryQuiz),
+        lastUiAction: response.ui_action || null,
+      });
+
+      if (shouldStartMasteryQuiz) {
+        setAiState({
+          status: 'quiz_active',
+          masteryMetadata: currentTopic ? { topic: currentTopic, subject: currentSubject } : undefined
+        });
       } else {
         setAiState({ status: 'idle' });
       }
@@ -248,15 +310,24 @@ export const useAITutor = (profile?: any, getFullName?: () => string) => {
         fetchVideoSuggestions(currentTopic?.name || content);
       }
     } catch (err) {
-      setMessagesAndRef(prev => [...prev, { role: 'ai', content: "Error communicating with AI." }]);
+      setMessagesAndRef(prev => [...prev, {
+        role: 'ai',
+        content: "I lost the connection for a moment. Try your last question again, or ask me to summarize where we stopped."
+      }]);
       setAiState({ status: 'idle' });
       isChattingRef.current = false;
     }
-  }, [currentTopic, currentSubject, activeSubtopic, fetchVideoSuggestions, setMessagesAndRef]);
+  }, [currentTopic, currentSubject, activeSubtopic, lessonController.stage, fetchVideoSuggestions, setMessagesAndRef]);
 
   const clearMessages = useCallback(() => {
     setMessagesAndRef([]);
     messagesRef.current = [];
+    setLessonController({
+      stage: 'intro',
+      nextActions: ['teach_step_by_step', 'give_example', 'check_understanding'],
+      masteryReady: false,
+      lastUiAction: null,
+    });
     const storageKey = getChatStorageKey(currentSubject?.id, currentTopic?.id, currentTopic?.name);
     localStorage.removeItem(storageKey);
   }, [currentSubject?.id, currentTopic?.id, currentTopic?.name, setMessagesAndRef]);
@@ -266,6 +337,12 @@ export const useAITutor = (profile?: any, getFullName?: () => string) => {
     setActiveSubtopic(subtopic.name);
     setShowAIPanel(true);
     setMessagesAndRef([]);
+    setLessonController({
+      stage: 'intro',
+      nextActions: ['teach_step_by_step', 'give_example', 'check_understanding'],
+      masteryReady: false,
+      lastUiAction: null,
+    });
 
     const topicLabel = subtopic?.name || subtopic?.title || '';
     if (topicLabel) {
@@ -310,6 +387,12 @@ export const useAITutor = (profile?: any, getFullName?: () => string) => {
 
   const onMasteryTestComplete = useCallback(async (result: any) => {
     setAiState({ status: 'quiz_completed', result });
+    setLessonController(prev => ({
+      ...prev,
+      stage: result?.passed ? 'completed' : 'remediate',
+      masteryReady: false,
+      nextActions: result?.passed ? ['next_topic', 'summary'] : ['review_missed', 'try_practice', 'simplify'],
+    }));
     queryClient.invalidateQueries({ queryKey: ['student', 'brain-power'] });
   }, [queryClient]);
 
@@ -318,10 +401,12 @@ export const useAITutor = (profile?: any, getFullName?: () => string) => {
       status: 'quiz_active',
       masteryMetadata: topic ? { topic, subject: subject || currentSubject } : undefined
     });
+    setLessonController(prev => ({ ...prev, stage: 'mastery_quiz', masteryReady: true, lastUiAction: 'start_mastery_quiz' }));
   }, [currentSubject]);
 
   const dismissQuizConfirm = useCallback(() => {
-    setAiState({ status: 'chatting' });
+    setAiState({ status: 'idle' });
+    setLessonController(prev => ({ ...prev, stage: 'remediate', masteryReady: false, nextActions: ['review_missed', 'try_practice', 'simplify'] }));
   }, []);
 
   const handleTopicSelect = useCallback(async (topic: any, subject?: Subject) => {
@@ -332,14 +417,135 @@ export const useAITutor = (profile?: any, getFullName?: () => string) => {
     clearMessages();
     setCurrentTopic(topic);
     setCurrentSubject(activeSubject);
+    setLessonController({
+      stage: 'intro',
+      nextActions: ['teach_step_by_step', 'give_example', 'check_understanding'],
+      masteryReady: false,
+      lastUiAction: null,
+    });
 
     // Fetch video recommendations for the dashboard when a topic is selected
     fetchVideoSuggestions(topic.name);
   }, [currentSubject, clearMessages, fetchVideoSuggestions]);
 
+  const startPlacementCheck = useCallback(async (targetTopic: any) => {
+    if (!currentSubject?.id || !targetTopic?.id) return;
+
+    setPlacementState({ status: 'loading', targetTopic });
+    try {
+      const result = await progressAPI.startPlacementCheck({
+        subject_id: currentSubject.id,
+        target_topic_id: targetTopic.id,
+      });
+
+      const questions = Array.isArray(result?.questions) ? result.questions : [];
+      if (questions.length === 0) {
+        await progressAPI.acceptPlacementRecommendation({
+          subject_id: currentSubject.id,
+          target_topic_id: targetTopic.id,
+          placement_token: result.placement_token,
+        });
+        await refetchStructured();
+        await handleTopicSelect(targetTopic, currentSubject);
+        setShowAIPanel(true);
+        setPlacementState({ status: 'idle' });
+        return;
+      }
+
+      setPlacementState({
+        status: 'active',
+        targetTopic,
+        target_topic: result.target_topic,
+        prerequisite_topics: result.prerequisite_topics || [],
+        questions,
+        message: result.message,
+      });
+    } catch (err: any) {
+      setPlacementState({
+        status: 'error',
+        targetTopic,
+        message: err?.message || 'Unable to start the placement check.',
+      });
+    }
+  }, [currentSubject, handleTopicSelect, refetchStructured]);
+
+  const submitPlacementCheck = useCallback(async (answersByQuestionId: Record<string, string>) => {
+    if (placementState.status !== 'active' || !currentSubject?.id) return;
+
+    const answers = placementState.questions.map((question: any) => ({
+      question_id: question.id,
+      topic_id: question.topic_id,
+      topic_name: question.topic_name,
+      selected_option: answersByQuestionId[question.id],
+    }));
+
+    try {
+      const result = await progressAPI.submitPlacementCheck({
+        subject_id: currentSubject.id,
+        target_topic_id: placementState.target_topic?.id || placementState.targetTopic?.id,
+        answers,
+      });
+
+      setPlacementState({
+        status: 'result',
+        targetTopic: placementState.targetTopic,
+        target_topic: placementState.target_topic,
+        prerequisite_topics: placementState.prerequisite_topics,
+        questions: placementState.questions,
+        result,
+      });
+    } catch (err: any) {
+      setPlacementState({
+        status: 'error',
+        targetTopic: placementState.targetTopic,
+        message: err?.message || 'Unable to score the placement check.',
+      });
+    }
+  }, [currentSubject?.id, placementState]);
+
+  const acceptPlacementRecommendation = useCallback(async () => {
+    if (placementState.status !== 'result' || !currentSubject?.id) return;
+
+    const recommendedTopicId = placementState.result?.recommended_topic?.id;
+    const placementToken = placementState.result?.placement_token;
+    if (!recommendedTopicId || !placementToken) return;
+
+    try {
+      const accepted = await progressAPI.acceptPlacementRecommendation({
+        subject_id: currentSubject.id,
+        target_topic_id: placementState.target_topic?.id || placementState.targetTopic?.id,
+        placement_token: placementToken,
+      });
+
+      await refetchStructured();
+      queryClient.invalidateQueries({ queryKey: ['topic-progress', currentSubject.id] });
+
+      const recommendedTopic =
+        structuredTopics.find((topic: any) => topic.id === recommendedTopicId) ||
+        accepted?.recommended_topic ||
+        placementState.result.recommended_topic;
+
+      await handleTopicSelect(recommendedTopic, currentSubject);
+      setShowAIPanel(true);
+      setPlacementState({ status: 'idle' });
+    } catch (err: any) {
+      setPlacementState({
+        status: 'error',
+        targetTopic: placementState.targetTopic,
+        message: err?.message || 'Unable to unlock the recommended lesson.',
+      });
+    }
+  }, [currentSubject, handleTopicSelect, placementState, queryClient, refetchStructured, structuredTopics]);
+
+  const cancelPlacementCheck = useCallback(() => {
+    setPlacementState({ status: 'idle' });
+  }, []);
+
   return {
     messages,
     aiState,
+    lessonController,
+    placementState,
     currentTopic,
     setCurrentTopic,
     currentSubject,
@@ -368,6 +574,10 @@ export const useAITutor = (profile?: any, getFullName?: () => string) => {
     handleAIContinue,
     onMasteryTestComplete,
     startQuiz,
-    dismissQuizConfirm
+    dismissQuizConfirm,
+    startPlacementCheck,
+    submitPlacementCheck,
+    acceptPlacementRecommendation,
+    cancelPlacementCheck
   };
 };

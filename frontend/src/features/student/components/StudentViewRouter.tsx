@@ -35,9 +35,9 @@ interface StudentViewRouterProps {
   activeSubtopic: string | undefined;
   messages: any[];
   aiState: any;
+  lessonController?: any;
   avatarUrl: string | null;
   user: any;
-  showMasteryConfirm: boolean;
   handleAIContinue: (msg: string) => Promise<void>;
   subjects: Subject[];
   enrolledSubjects: string[];
@@ -56,6 +56,11 @@ interface StudentViewRouterProps {
   onMasteryTestComplete: (r: any) => Promise<void>;
   startQuiz: (topic?: any, subject?: any) => void;
   dismissQuizConfirm: () => void;
+  placementState?: any;
+  startPlacementCheck?: (targetTopic: any) => Promise<void>;
+  submitPlacementCheck?: (answersByQuestionId: Record<string, string>) => Promise<void>;
+  acceptPlacementRecommendation?: () => Promise<void>;
+  cancelPlacementCheck?: () => void;
   getFullName: () => string;
   // Subjects props
   materials: any[];
@@ -83,12 +88,13 @@ export const StudentViewRouter: React.FC<StudentViewRouterProps> = ({
   setActiveView, liveSessions, upcomingSessions, handleJoinSession,
   formatDate, showAIPanel, setShowAIPanel, selectedTopic, selectedSubject,
   roadmap, viewingSubtopic, setViewingSubtopic, handleSubtopicClick,
-  showMasteryTest, activeSubtopic, messages, aiState, avatarUrl, user,
-  showMasteryConfirm, handleAIContinue, subjects, enrolledSubjects,
+  showMasteryTest, activeSubtopic, messages, aiState, lessonController, avatarUrl, user,
+  handleAIContinue, subjects, enrolledSubjects,
   handleSubjectSelect, handleTopicSelect, suggestedVideos, setSelectedVideo,
   setProfile, suggestedTopics, weaknessAreas, topics,
   roadmapLoading, structuredTopics, isStructuredLoading, scrollAreaRef, onMasteryTestComplete,
-  startQuiz, dismissQuizConfirm, getFullName, materials, handleEnroll, handleDeleteMaterial, customCourseName,
+  startQuiz, dismissQuizConfirm, placementState, startPlacementCheck, submitPlacementCheck,
+  acceptPlacementRecommendation, cancelPlacementCheck, getFullName, materials, handleEnroll, handleDeleteMaterial, customCourseName,
   setCustomCourseName, isGeneratingCourse, handleGenerateCustomCourse,
   isEditingProfile, setIsEditingProfile, profileFormData, setProfileFormData,
   setAvatarUrl, startAssessment, progress, radarData, searchQuery, setSearchQuery
@@ -124,16 +130,15 @@ export const StudentViewRouter: React.FC<StudentViewRouterProps> = ({
         setViewingSubtopic={setViewingSubtopic}
         handleSubtopicClick={handleSubtopicClick}
         showMasteryTest={showMasteryTest}
-        setShowMasteryTest={startQuiz}
         dismissQuizConfirm={dismissQuizConfirm}
         activeSubtopic={activeSubtopic}
         aiChatMessages={messages}
         aiLoading={aiState.status === 'chatting'}
+        lessonController={lessonController}
         aiState={aiState}
         avatarUrl={avatarUrl}
         profile={profile}
         user={user}
-        showMasteryConfirm={showMasteryConfirm}
         handleAIContinue={handleAIContinue}
         subjects={subjects}
         enrolledSubjects={enrolledSubjects}
@@ -156,6 +161,11 @@ export const StudentViewRouter: React.FC<StudentViewRouterProps> = ({
         isStructuredLoading={isStructuredLoading}
         scrollAreaRef={scrollAreaRef}
         onMasteryTestComplete={onMasteryTestComplete}
+        placementState={placementState}
+        startPlacementCheck={startPlacementCheck}
+        submitPlacementCheck={submitPlacementCheck}
+        acceptPlacementRecommendation={acceptPlacementRecommendation}
+        cancelPlacementCheck={cancelPlacementCheck}
         getFullName={getFullName}
       />;
       case 'quiz': return <QuizView

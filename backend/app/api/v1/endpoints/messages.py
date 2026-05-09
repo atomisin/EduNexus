@@ -10,6 +10,7 @@ import logging
 from app.db.database import get_async_db
 from app.api.v1.endpoints.auth import get_current_user
 from app.models.user import User, UserRole, TeacherStudent
+from app.models.message import Message
 from pydantic import BaseModel
 from app.services.storage_service import storage_service
 
@@ -19,6 +20,58 @@ router = APIRouter()
 class SendMessageRequest(BaseModel):
     recipient_id: str
     content: str
+
+
+async def can_message_user(db: AsyncSession, sender: User, recipient: User) -> bool:
+    """Allow messages only across explicit platform support/teaching relationships."""
+    if sender.id == recipient.id:
+        return False
+    if sender.role == UserRole.ADMIN or recipient.role == UserRole.ADMIN:
+        return True
+    if sender.role == UserRole.TEACHER and recipient.role == UserRole.STUDENT:
+        teacher_id, student_id = sender.id, recipient.id
+    elif sender.role == UserRole.STUDENT and recipient.role == UserRole.TEACHER:
+        teacher_id, student_id = recipient.id, sender.id
+    else:
+        return False
+
+    res_link = await db.execute(
+        select(TeacherStudent).filter(
+            TeacherStudent.teacher_id == teacher_id,
+            TeacherStudent.student_id == student_id,
+            TeacherStudent.status == "active",
+        )
+    )
+    return res_link.scalars().first() is not None
+
+
+async def get_allowed_contact_ids(db: AsyncSession, current_user: User) -> set:
+    if current_user.role == UserRole.ADMIN:
+        res_users = await db.execute(select(User.id).filter(User.id != current_user.id))
+        return set(res_users.scalars().all())
+
+    allowed_ids = set()
+    res_admins = await db.execute(select(User.id).filter(User.role == UserRole.ADMIN))
+    allowed_ids.update(res_admins.scalars().all())
+
+    if current_user.role == UserRole.STUDENT:
+        res_links = await db.execute(
+            select(TeacherStudent.teacher_id).filter(
+                TeacherStudent.student_id == current_user.id,
+                TeacherStudent.status == "active",
+            )
+        )
+        allowed_ids.update(res_links.scalars().all())
+    elif current_user.role == UserRole.TEACHER:
+        res_links = await db.execute(
+            select(TeacherStudent.student_id).filter(
+                TeacherStudent.teacher_id == current_user.id,
+                TeacherStudent.status == "active",
+            )
+        )
+        allowed_ids.update(res_links.scalars().all())
+
+    return allowed_ids
 
 @router.get("/conversations")
 async def get_conversations(
@@ -36,18 +89,23 @@ async def get_conversations(
     user_ids = set([r[0] for r in res_sent.all()] + [r[0] for r in res_received.all()])
 
     # 2. Add default contacts: Admins
-    res_admins = await db.execute(select(User.id).filter(User.role == UserRole.ADMIN))
-    for admin_id in res_admins.scalars().all():
-        user_ids.add(admin_id)
+    allowed_contact_ids = await get_allowed_contact_ids(db, current_user)
+    user_ids.update(allowed_contact_ids)
 
     # 3. Add linked contacts: Teachers for students, Students for teachers
     if current_user.role == UserRole.STUDENT:
         res_links = await db.execute(
-            select(TeacherStudent.teacher_id).filter(TeacherStudent.student_id == current_user.id)
+            select(TeacherStudent.teacher_id).filter(
+                TeacherStudent.student_id == current_user.id,
+                TeacherStudent.status == "active",
+            )
         )
     elif current_user.role == UserRole.TEACHER:
         res_links = await db.execute(
-            select(TeacherStudent.student_id).filter(TeacherStudent.teacher_id == current_user.id)
+            select(TeacherStudent.student_id).filter(
+                TeacherStudent.teacher_id == current_user.id,
+                TeacherStudent.status == "active",
+            )
         )
     else:
         res_links = None
@@ -56,6 +114,7 @@ async def get_conversations(
         for link_id in res_links.scalars().all():
             user_ids.add(link_id)
     
+    user_ids = {uid for uid in user_ids if uid in allowed_contact_ids}
     contacts = []
     for uid in user_ids:
         # Optimization: Fetch user info
@@ -107,6 +166,11 @@ async def get_messages(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid user ID format")
 
+    res_other = await db.execute(select(User).filter(User.id == other_uuid))
+    other_user = res_other.scalars().first()
+    if not other_user or not await can_message_user(db, current_user, other_user):
+        raise HTTPException(status_code=403, detail="You cannot message this user")
+
     stmt = select(Message).filter(
         or_(
             and_(Message.sender_id == current_user.id, Message.recipient_id == other_uuid),
@@ -143,6 +207,11 @@ async def send_message(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid recipient ID format")
 
+    res_recipient = await db.execute(select(User).filter(User.id == recipient_uuid))
+    recipient = res_recipient.scalars().first()
+    if not recipient or not await can_message_user(db, current_user, recipient):
+        raise HTTPException(status_code=403, detail="You cannot message this user")
+
     message = Message(
         id=uuid.uuid4(),
         sender_id=current_user.id,
@@ -164,7 +233,12 @@ async def search_contacts(
     current_user: User = Depends(get_current_user)
 ):
     """Search for users to start a conversation with"""
+    allowed_contact_ids = await get_allowed_contact_ids(db, current_user)
+    if not allowed_contact_ids:
+        return []
+
     stmt = select(User).filter(
+        User.id.in_(allowed_contact_ids),
         User.id != current_user.id,
         or_(
             User.full_name.ilike(f"%{query}%"),

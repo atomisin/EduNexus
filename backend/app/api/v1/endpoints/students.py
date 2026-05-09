@@ -948,15 +948,27 @@ async def get_student_recommendations(
     current_user: User = Depends(get_current_user),
 ):
     """Get personalized learning recommendations for a student"""
-    # Only teachers or the student themselves can view
-    if (
-        current_user.role not in ["teacher", "admin"]
-        and str(current_user.id) != student_id
-    ):
+    try:
+        student_uuid = uuid.UUID(student_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid student ID format")
+
+    # Only admins, the student themselves, or that student's assigned teacher can view
+    if current_user.role == UserRole.TEACHER:
+        res_rel = await db.execute(
+            select(TeacherStudent).filter(
+                TeacherStudent.teacher_id == current_user.id,
+                TeacherStudent.student_id == student_uuid,
+                TeacherStudent.status == "active",
+            )
+        )
+        if not res_rel.scalars().first():
+            raise HTTPException(status_code=403, detail="Access denied")
+    elif current_user.role != UserRole.ADMIN and str(current_user.id) != student_id:
         raise HTTPException(status_code=403, detail="Access denied")
 
     res_prof = await db.execute(
-        select(StudentProfile).filter(StudentProfile.user_id == uuid.UUID(student_id))
+        select(StudentProfile).filter(StudentProfile.user_id == student_uuid)
     )
     profile = res_prof.scalars().first()
 

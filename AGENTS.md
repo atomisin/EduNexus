@@ -1,5 +1,5 @@
 # EduNexus 2.0 — Agent Context
-Last updated: 2026-04-16 (Mobile UX & Performance Hardening)
+Last updated: 2026-05-09 (Placement Unlock Hardening)
 
 ## Project
 Nigerian EdTech platform. Creche through SS3 + professional.
@@ -39,6 +39,17 @@ Exam Student: deleted per user request (2026-04-07)
 - ALWAYS ensure the AI Tutor input box is anchored at the bottom of the card using `min-h-0` on flex children to prevent layout jumping (discovered 2026-04-10)
 - NEVER import `matplotlib`, `seaborn`, `pandas`, `torch`, or `numpy` at the module level in the backend API because they exceed the 512MB RAM limit on Render (discovered 2026-04-11)
 - ALWAYS return structured JSON for charts and delegate rendering to Recharts on the frontend to keep the backend footprint lean (discovered 2026-04-11)
+- NEVER use `SameSite=Strict` or `SameSite=Lax` on production cookies when the frontend (Vercel) and backend (Render) are on different domains; use `SameSite=None` with `Secure=True` because cross-site requests silently drop Strict/Lax cookies (discovered 2026-04-21)
+- ALWAYS wrap production `fetch()` calls with an `AbortController` timeout (25-30s) because Render free-tier cold starts can exceed mobile browser default timeouts, causing silent `TypeError: Failed to fetch` (discovered 2026-04-21)
+- NEVER expose unauthenticated utility endpoints that send email or trigger external services because they can be abused for spam, cost, or reputation damage (discovered 2026-05-08)
+- NEVER accept caller-supplied `student_id` values for engagement, proctoring, reports, or analytics without verifying the authenticated user is that student or owns the teacher/session relationship because it enables impersonation and cross-student data tampering (discovered 2026-05-08)
+- ALWAYS make AI Tutor learning turns action-oriented with a visible next step because passive answer-only chat leaves students unsure how to continue learning (discovered 2026-05-08)
+- ALWAYS transition AI Tutor `[TRIGGER_MASTERY]` directly into `quiz_active` because a confirmation state delays the mastery quiz and can leave the tutor in an inconsistent loading state after cancellation (discovered 2026-05-08)
+- ALWAYS return structured AI Tutor UI actions from the backend for state transitions because hidden text markers are too fragile to drive critical learning flow (discovered 2026-05-08)
+- ALWAYS let the platform own lesson stage transitions while the AI owns teaching language because open-ended chat alone cannot reliably guide students through teach/check/remediate/mastery progression (discovered 2026-05-09)
+- NEVER unlock later lessons on request without a prerequisite placement check because progression overrides must prove understanding and recommend the safest starting lesson first (discovered 2026-05-09)
+- NEVER ask tutor personas to emit `<thinking>` tags because student-facing math should show clear visible steps without leaking hidden reasoning or conflicting with response sanitization (discovered 2026-05-09)
+- NEVER trust client-supplied placement recommendations or partial placement answers because lesson unlocks must be derived, signed, and verified server-side before progress is mutated (discovered 2026-05-09)
 
 ## Architecture
 Backend:  backend/app/api/v1/endpoints/
@@ -54,6 +65,7 @@ Student Layout: frontend/src/features/student/components/
 Performance Charts: frontend/src/features/student/components/PerformanceCharts.tsx (Recharts library)
 App Routes:     frontend/src/routes/
 Session Modals: frontend/src/components/session/FloatingContentModal.tsx
+Placement Unlock: backend/app/api/v1/endpoints/student_progress.py (`/student/progress/placement/start`, `/submit`, `/accept`)
 
 ## Known stable files — do not modify unless instructed
 - backend/app/api/v1/endpoints/auth.py (login is stable)
@@ -151,8 +163,22 @@ See HANDOFF.md for full details on remaining bugs.
 ✅ FIXED 2026-04-16: Resolved mobile navigation visibility by implementing a responsive "Hamburger" menu on the landing page.
 ✅ FIXED 2026-04-16: Hardened platform performance by implementing aggressive code-splitting (React.lazy) for auth modules and top-level routes.
 ✅ FIXED 2026-04-16: Enhanced backend CORS configuration to support local network (LAN) IP addresses for mobile device testing.
+- ✅ FIXED 2026-04-21: Resolved mobile "Failed to fetch" on login by adding fetch timeout (AbortController), retry logic (2 attempts with server-waking UI), and fixing cross-domain cookie `SameSite=Strict` → `SameSite=None` for Vercel↔Render production setup.
 
-## No open issues remain at this time.
+- ✅ FIXED 2026-05-08: Added an unsafe-method origin guard for credentialed API requests to reduce CSRF exposure on cross-domain cookie authentication.
+- ✅ FIXED 2026-05-08: Removed login response bearer tokens from frontend persistence by relying on HttpOnly cookies instead of localStorage token fallback.
+- ✅ FIXED 2026-05-08: Admin-protected the SMTP test email utility to prevent unauthenticated email abuse.
+- ✅ FIXED 2026-05-08: Hardened engagement/video-frame submission to derive student identity from the authenticated user and require session enrollment.
+- ✅ FIXED 2026-05-08: Restricted messaging contact search and direct messages to admins and explicit teacher-student relationships.
+- ✅ FIXED 2026-05-08: Added teacher ownership checks around student recommendations and report approval, and added a 100MB admin material upload limit.
+- ✅ FIXED 2026-05-08: Improved the AI Tutor student learning experience with guided lesson prompts, a next-learning-move panel, stronger context handling, cleaner AI marker stripping, and a tutor prompt that teaches one step at a time.
+- ✅ FIXED 2026-05-08: Confirmed and fixed mastery quiz triggering so `[TRIGGER_MASTERY]` immediately opens the mastery modal, removes the visible trigger marker from chat, and returns cleanly to idle on cancellation.
+- ✅ FIXED 2026-05-08: Replaced mastery-confirmation state with structured `ui_action` handling, removed conflicting AI control-marker prompt rules, and made subtopic mastery evaluation update legacy and current roadmap progress keys.
+- ✅ FIXED 2026-05-09: Added a deterministic AI Tutor lesson controller for teach/check/practice/remediate/mastery stages, passed lesson context into chat, surfaced the active lesson stage in the learning UI, and added fallback mastery questions plus richer fallback subtopic outlines.
+
+- ✅ FIXED 2026-05-09: Added placement-based locked lesson unlocks with prerequisite checks, score-based start recommendations, learner acceptance, and topic unlock updates from the recommended lesson.
+- ✅ FIXED 2026-05-09: Tightened AI Tutor prompts with a stage-specific teaching contract, one-action-per-turn lesson flow, stronger mastery trigger discipline, and persona math rules that avoid hidden reasoning tags.
+- ✅ FIXED 2026-05-09: Hardened placement unlocks by requiring enrolled-subject access, full prerequisite answer coverage, server-derived signed placement tokens, and stricter mastery readiness gating.
 
 ## Self-update instructions for agents
 

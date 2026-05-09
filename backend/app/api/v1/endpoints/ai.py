@@ -12,6 +12,7 @@ from app.api.v1.endpoints.auth import get_current_user
 from app.models.user import User
 from app.models.student import StudentProfile
 from app.models.student_progress import StudentSubjectProgress
+from app.models.subject import Subject
 from app.services.llm_service import llm_service
 from app.services.ai_service import tts_service, stt_service
 from app.utils.validators import sanitize_user_input
@@ -52,6 +53,82 @@ def handle_api_error(
 
 
 router = APIRouter()
+
+
+def build_fallback_mastery_questions(topic: str, subject: str) -> List[Dict[str, Any]]:
+    """Small deterministic fallback so the mastery modal never dead-ends."""
+    topic_label = topic or "this topic"
+    subject_label = subject or "this subject"
+    return [
+        {
+            "id": f"fallback-{idx}",
+            "text": text.format(topic=topic_label, subject=subject_label),
+            "options": options,
+            "correct_option": "A",
+            "explanation": explanation.format(topic=topic_label, subject=subject_label),
+            "difficulty": difficulty,
+        }
+        for idx, (text, options, explanation, difficulty) in enumerate(
+            [
+                (
+                    "Which option best describes the main idea of {topic} in {subject}?",
+                    {
+                        "A": "Understanding the key idea and applying it correctly",
+                        "B": "Memorizing random facts without context",
+                        "C": "Skipping the examples",
+                        "D": "Guessing without checking",
+                    },
+                    "Mastery means you can explain and apply {topic}, not just recognize words from the lesson.",
+                    "easy",
+                ),
+                (
+                    "What should you do first when solving a question on {topic}?",
+                    {
+                        "A": "Identify what the question is asking",
+                        "B": "Choose an answer immediately",
+                        "C": "Ignore the given information",
+                        "D": "Start with the hardest step",
+                    },
+                    "A strong first step is to identify the target of the question before choosing a method.",
+                    "easy",
+                ),
+                (
+                    "Why are examples useful when learning {topic}?",
+                    {
+                        "A": "They show how the idea works in real situations",
+                        "B": "They replace understanding",
+                        "C": "They make practice unnecessary",
+                        "D": "They remove the need to check answers",
+                    },
+                    "Examples connect the core idea to practical use, which strengthens understanding.",
+                    "medium",
+                ),
+                (
+                    "If you get a {topic} question wrong, what is the best next action?",
+                    {
+                        "A": "Review the mistake and try a similar question",
+                        "B": "Move on without checking",
+                        "C": "Assume the topic is impossible",
+                        "D": "Memorize only the answer",
+                    },
+                    "Reviewing the mistake helps you fix the exact misunderstanding.",
+                    "medium",
+                ),
+                (
+                    "What shows the strongest mastery of {topic}?",
+                    {
+                        "A": "Explaining the idea and applying it to a new question",
+                        "B": "Reading the topic title",
+                        "C": "Copying one example only",
+                        "D": "Avoiding practice",
+                    },
+                    "The best evidence of mastery is transfer: using the idea correctly in a new situation.",
+                    "hard",
+                ),
+            ],
+            start=1,
+        )
+    ]
 
 
 def user_key(request: Request):
@@ -273,6 +350,8 @@ async def chat(
             student_name=current_user.first_name,
             subject_name=chat_req.subject_name,
             topic_name=chat_req.topic_name,
+            user_id=current_user.id,
+            lesson_context=chat_req.context,
         )
         # Add student_context for frontend compatibility
         result["student_context"] = student_context
@@ -474,6 +553,12 @@ async def generate_mastery_test(
             chat_history=test_req.chat_history,
             user_id=current_user.id,
         )
+        if not questions:
+            logger.warning("[mastery-test] Falling back to deterministic questions for topic %s", test_req.topic)
+            questions = build_fallback_mastery_questions(
+                sanitize_user_input(test_req.topic),
+                sanitize_user_input(test_req.subject),
+            )
         return {"questions": questions}
     except Exception:
         await refund_brain_power(current_user.id, 1, db)
@@ -512,6 +597,11 @@ async def get_topic_breakdown(
             grade_level = student_profile.grade_level or ""
 
         topic_name_str = str(body.topic)
+        subject_name = "Subject"
+        res_subject = await db.execute(select(Subject).filter(Subject.id == body.subject_id))
+        subject = res_subject.scalars().first()
+        if subject:
+            subject_name = subject.name
 
         # Check SHARED outline cache first (across all teachers)
         # Use subject_id FK for proper relational integrity
@@ -601,7 +691,7 @@ async def get_topic_breakdown(
             # Generate new breakdown
             result = await llm_service.generate_subtopics(
                 topic=sanitize_user_input(body.topic),
-                subject="Subject",
+                subject=subject_name,
                 education_level=education_level,
                 grade_level=grade_level,
                 user_id=current_user.id,
@@ -617,8 +707,13 @@ async def get_topic_breakdown(
             subtopics_list = result
 
         if not subtopics_list:
-            # Fallback: use topic name as single subtopic
-            subtopics_list = [body.topic]
+            # Fallback: still provide a usable learning journey.
+            subtopics_list = [
+                f"Foundations of {body.topic}",
+                f"Worked examples in {body.topic}",
+                f"Practice and common mistakes in {body.topic}",
+                f"Mastery application of {body.topic}",
+            ]
 
         breakdown = {
             "subtopics": [
@@ -739,10 +834,15 @@ async def evaluate_mastery_test(
             all_progress = res_prog.scalars().all()
 
             for progress in all_progress:
-                    # FIX 3A: Isolated Chat History by Subject & Topic IDs
-                    topic_key = f"{progress.subject_id}::{request.topic_id or request.topic}::{request.topic}"
-                    if topic_key in progress.subtopic_progress:
-                        road_map = dict(progress.subtopic_progress[topic_key])
+                    subtopic_progress = progress.subtopic_progress or {}
+                    topic_key_candidates = [
+                        f"{progress.subject_id}::{request.topic_id or request.topic}::{request.topic}",
+                        str(request.topic_id) if request.topic_id else None,
+                        request.topic,
+                    ]
+                    topic_key = next((key for key in topic_key_candidates if key and key in subtopic_progress), None)
+                    if topic_key:
+                        road_map = dict(subtopic_progress[topic_key])
                         current_idx = road_map.get("current_index", 0)
                         subtopics = list(road_map.get("subtopics", []))
 

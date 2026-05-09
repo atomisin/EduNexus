@@ -134,6 +134,33 @@ app = FastAPI(
 
 app.state.limiter = limiter
 
+
+def _is_allowed_browser_origin(origin: str) -> bool:
+    """Return True when a browser Origin is allowed to make credentialed calls."""
+    allowed = settings.allowed_origins_list
+    is_vercel_preview = origin.startswith("https://edu-nexus-") and origin.endswith(".vercel.app")
+    return origin in allowed or "*" in allowed or is_vercel_preview
+
+
+@app.middleware("http")
+async def csrf_origin_guard(request: Request, call_next):
+    """Reject cross-site state-changing browser requests before cookies authenticate them."""
+    unsafe_method = request.method in {"POST", "PUT", "PATCH", "DELETE"}
+    if unsafe_method and request.url.path.startswith(settings.API_V1_STR):
+        origin = request.headers.get("origin")
+        fetch_site = request.headers.get("sec-fetch-site")
+        if origin and not _is_allowed_browser_origin(origin):
+            return JSONResponse(
+                status_code=403,
+                content={"detail": "Cross-site request origin is not allowed."},
+            )
+        if not origin and fetch_site == "cross-site":
+            return JSONResponse(
+                status_code=403,
+                content={"detail": "Cross-site request is not allowed."},
+            )
+    return await call_next(request)
+
 async def custom_rate_limit_handler(request: Request, exc: RateLimitExceeded):
     if request.url.path.startswith("/api/v1/ai/"):
         try:
@@ -186,10 +213,7 @@ def _add_cors_headers(request: Request, response: JSONResponse) -> JSONResponse:
     origin = request.headers.get("origin")
     if not origin:
         return response
-    allowed = settings.allowed_origins_list
-    # Allow explicit origins or anything matching our Vercel pattern
-    is_vercel_preview = ".vercel.app" in origin and "edu-nexus" in origin
-    if origin in allowed or "*" in allowed or is_vercel_preview:
+    if _is_allowed_browser_origin(origin):
         response.headers["Access-Control-Allow-Origin"] = origin
         response.headers["Access-Control-Allow-Credentials"] = "true"
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, PATCH, OPTIONS"

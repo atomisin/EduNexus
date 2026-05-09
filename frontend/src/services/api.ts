@@ -59,12 +59,6 @@ export async function fetchWithAuth(endpoint: string, options: RequestInit & { s
     ...(fetchOptions.headers as Record<string, string>),
   };
 
-  // Add Authorization header if token exists in localStorage (C-05 fallback)
-  const token = localStorage.getItem('edunexus_token');
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-
   const targetUrl = `${API_BASE_URL}${endpoint}`;
   try {
     const response = await fetchWithTimeout(targetUrl, {
@@ -204,11 +198,6 @@ export const authAPI = {
 
         const data = await response.json();
         
-        // Store access_token for Authorization header fallback (C-05)
-        if (data && data.access_token) {
-          localStorage.setItem('edunexus_token', data.access_token);
-        }
-        
         return data;
       } catch (err: any) {
         const isRetryable = err.name === 'AbortError' || err.name === 'TypeError' || err.message?.includes('Failed to fetch');
@@ -347,11 +336,6 @@ export const adminAPI = {
       }
 
       const data = await response.json();
-
-      // Store access_token for Authorization header fallback (C-05)
-      if (data && data.access_token) {
-        localStorage.setItem('edunexus_token', data.access_token);
-      }
 
       return data;
     } catch (err: any) {
@@ -762,10 +746,10 @@ export const aiAPI = {
   getExplanationTypes: () => fetchWithAuth('/ai/explanation-types'),
 
   // Smart Helper Chat
-  chat: (messages: { role: string; content: string }[], mode?: string, model?: string, temperature?: number, subject_name?: string, topic_name?: string) =>
+  chat: (messages: { role: string; content: string }[], mode?: string, model?: string, temperature?: number, subject_name?: string, topic_name?: string, context?: Record<string, any>) =>
     fetchWithAuth('/ai/chat', {
       method: 'POST',
-      body: JSON.stringify({ messages, mode, model, temperature, subject_name, topic_name }),
+      body: JSON.stringify({ messages, mode, model, temperature, subject_name, topic_name, context }),
     }),
 
   // Evaluate understanding
@@ -1189,6 +1173,24 @@ export const progressAPI = {
   getProgressSummary: () => fetchWithAuth('/student/progress/summary'),
 
   getTopicProgress: (subjectId: string) => fetchWithAuth(`/student/progress/topics/${subjectId}`),
+
+  startPlacementCheck: (data: { subject_id: string; target_topic_id: string }) =>
+    fetchWithAuth('/student/progress/placement/start', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  submitPlacementCheck: (data: { subject_id: string; target_topic_id: string; answers: any[] }) =>
+    fetchWithAuth('/student/progress/placement/submit', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  acceptPlacementRecommendation: (data: { subject_id: string; target_topic_id: string; placement_token: string }) =>
+    fetchWithAuth('/student/progress/placement/accept', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
 
   completeTopic: (topicId: string) =>
     fetchWithAuth('/student/progress/complete-topic', {

@@ -164,6 +164,15 @@ async def approve_report(
         raise HTTPException(status_code=400, detail="Invalid report ID")
 
     try:
+        res_report = await db.execute(
+            select(StudentReport).filter(
+                StudentReport.id == report_uuid,
+                StudentReport.teacher_id == current_user.id,
+            )
+        )
+        if not res_report.scalars().first():
+            raise HTTPException(status_code=404, detail="Report not found")
+
         # 1. Update status to approved in the Service
         report = await ReportService.approve_report(db, report_uuid, request.teacher_notes)
         
@@ -210,6 +219,8 @@ async def approve_report(
             "status": report.status,
             "email_sent": False
         }
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error in approve_report: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to approve report: {str(e)}")

@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from app.services.email_service import EmailService
+from app.api.v1.endpoints.auth import get_current_admin
+from app.models.user import User
 
 router = APIRouter()
 email_service = EmailService()
@@ -11,7 +13,10 @@ class TestEmailRequest(BaseModel):
 
 
 @router.post("/test-email")
-async def test_email(request: TestEmailRequest):
+async def test_email(
+    request: TestEmailRequest,
+    current_user: User = Depends(get_current_admin),
+):
     """Test SMTP email sending"""
     try:
         success = email_service.send_email(

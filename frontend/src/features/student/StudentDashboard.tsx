@@ -71,6 +71,7 @@ export const StudentDashboard = ({
 
   const {
     messages, aiState, currentTopic: selectedTopic,
+    lessonController,
     setCurrentTopic: setSelectedTopic, currentSubject: selectedSubject,
     setCurrentSubject: setSelectedSubject, sendMessage, clearMessages,
     topics, roadmap, roadmapLoading, showAIPanel, setShowAIPanel,
@@ -78,12 +79,13 @@ export const StudentDashboard = ({
     suggestedVideos, selectedVideo, setSelectedVideo,
     weaknessAreas, suggestedTopics, structuredTopics, isStructuredLoading, refetchStructured,
     handleSubjectSelect, handleTopicSelect, handleSubtopicClick,
-    handleAIContinue, onMasteryTestComplete, startQuiz, dismissQuizConfirm
+    handleAIContinue, onMasteryTestComplete, startQuiz, dismissQuizConfirm,
+    placementState, startPlacementCheck, submitPlacementCheck,
+    acceptPlacementRecommendation, cancelPlacementCheck
   } = useAITutor(profile, getFullName);
 
   const isLoading = isDataLoading || aiState.status === 'chatting';
   const showMasteryTest = aiState.status === 'quiz_active';
-  const showMasteryConfirm = aiState.status === 'quiz_confirm';
 
   const {
     learningStyle, isAssessmentOpen: showLearningStyleModal, assessmentStep, setAssessmentStep,
@@ -214,7 +216,7 @@ export const StudentDashboard = ({
                    selectedSubject={selectedSubject} roadmap={roadmap} viewingSubtopic={viewingSubtopic}
                    setViewingSubtopic={setViewingSubtopic} handleSubtopicClick={handleSubtopicClick}
                    showMasteryTest={showMasteryTest} activeSubtopic={activeSubtopic} messages={messages}
-                   aiState={aiState} avatarUrl={avatarUrl} user={user} showMasteryConfirm={showMasteryConfirm}
+                   aiState={aiState} lessonController={lessonController} avatarUrl={avatarUrl} user={user}
                    handleAIContinue={handleAIContinue} subjects={subjects} enrolledSubjects={enrolledSubjects}
                    handleSubjectSelect={handleSubjectSelect} handleTopicSelect={handleTopicSelect}
                    suggestedVideos={suggestedVideos} setSelectedVideo={setSelectedVideo} setProfile={setProfile}
@@ -222,6 +224,9 @@ export const StudentDashboard = ({
                    roadmapLoading={roadmapLoading} structuredTopics={structuredTopics} isStructuredLoading={isStructuredLoading}
                    scrollAreaRef={scrollAreaRef} onMasteryTestComplete={async (r) => { await onMasteryTestComplete(r); refetchStructured(); }}
                    startQuiz={startQuiz} dismissQuizConfirm={dismissQuizConfirm}
+                   placementState={placementState} startPlacementCheck={startPlacementCheck}
+                   submitPlacementCheck={submitPlacementCheck} acceptPlacementRecommendation={acceptPlacementRecommendation}
+                   cancelPlacementCheck={cancelPlacementCheck}
                    getFullName={getFullName} materials={materials} handleEnroll={handleEnroll} handleDeleteMaterial={handleDeleteMaterial}
                    customCourseName={customCourseName} setCustomCourseName={setCustomCourseName} isGeneratingCourse={isGeneratingCourse}
                    handleGenerateCustomCourse={handleGenerateCustomCourse} isEditingProfile={isEditingProfile}
@@ -242,7 +247,7 @@ export const StudentDashboard = ({
                      selectedSubject={selectedSubject} roadmap={roadmap} viewingSubtopic={viewingSubtopic}
                      setViewingSubtopic={setViewingSubtopic} handleSubtopicClick={handleSubtopicClick}
                      showMasteryTest={showMasteryTest} activeSubtopic={activeSubtopic} messages={messages}
-                     aiState={aiState} avatarUrl={avatarUrl} user={user} showMasteryConfirm={showMasteryConfirm}
+                     aiState={aiState} lessonController={lessonController} avatarUrl={avatarUrl} user={user}
                      handleAIContinue={handleAIContinue} subjects={subjects} enrolledSubjects={enrolledSubjects}
                      handleSubjectSelect={handleSubjectSelect} handleTopicSelect={handleTopicSelect}
                      suggestedVideos={suggestedVideos} setSelectedVideo={setSelectedVideo} setProfile={setProfile}
@@ -250,6 +255,9 @@ export const StudentDashboard = ({
                      roadmapLoading={roadmapLoading} structuredTopics={structuredTopics} isStructuredLoading={isStructuredLoading}
                      scrollAreaRef={scrollAreaRef} onMasteryTestComplete={async (r) => { await onMasteryTestComplete(r); refetchStructured(); }}
                      startQuiz={startQuiz} dismissQuizConfirm={dismissQuizConfirm}
+                     placementState={placementState} startPlacementCheck={startPlacementCheck}
+                     submitPlacementCheck={submitPlacementCheck} acceptPlacementRecommendation={acceptPlacementRecommendation}
+                     cancelPlacementCheck={cancelPlacementCheck}
                      getFullName={getFullName} materials={materials} handleEnroll={handleEnroll} handleDeleteMaterial={handleDeleteMaterial}
                      customCourseName={customCourseName} setCustomCourseName={setCustomCourseName} isGeneratingCourse={isGeneratingCourse}
                      handleGenerateCustomCourse={handleGenerateCustomCourse} isEditingProfile={isEditingProfile}

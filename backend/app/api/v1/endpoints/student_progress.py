@@ -2,12 +2,17 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone, date
 import uuid
+import base64
+import hashlib
+import hmac
+import time
 
 from app.db.database import get_async_db
 from app.api.v1.endpoints.auth import get_current_user
+from app.core.config import settings
 from app.models.user import User
 from app.models.student_progress import (
     StudentSubjectProgress,
@@ -462,6 +467,462 @@ class TopicProgressUpdate(BaseModel):
     topic_id: str
     progress_pct: int  # 0-100
     completed: bool = False
+
+
+class PlacementStartRequest(BaseModel):
+    subject_id: str
+    target_topic_id: str
+
+
+class PlacementSubmitRequest(BaseModel):
+    subject_id: str
+    target_topic_id: str
+    answers: List[Dict[str, Any]]
+
+
+class PlacementAcceptRequest(BaseModel):
+    subject_id: str
+    target_topic_id: str
+    placement_token: str
+
+
+def get_placement_signing_key() -> bytes:
+    if settings.ENVIRONMENT == "production" and not settings.SECRET_KEY:
+        raise HTTPException(status_code=500, detail="Placement signing is not configured")
+    return (settings.SECRET_KEY or "edunexus-dev-placement-secret").encode("utf-8")
+
+
+def sign_placement_payload(payload: Dict[str, Any]) -> str:
+    raw = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    body = base64.urlsafe_b64encode(raw).decode("utf-8").rstrip("=")
+    signature = hmac.new(get_placement_signing_key(), body.encode("utf-8"), hashlib.sha256).digest()
+    sig = base64.urlsafe_b64encode(signature).decode("utf-8").rstrip("=")
+    return f"{body}.{sig}"
+
+
+def verify_placement_token(token: str) -> Dict[str, Any]:
+    try:
+        body, sig = token.split(".", 1)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid placement token")
+
+    expected = hmac.new(get_placement_signing_key(), body.encode("utf-8"), hashlib.sha256).digest()
+    try:
+        actual = base64.urlsafe_b64decode(sig + "=" * (-len(sig) % 4))
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid placement token")
+    if not hmac.compare_digest(expected, actual):
+        raise HTTPException(status_code=400, detail="Invalid placement token")
+
+    try:
+        raw = base64.urlsafe_b64decode(body + "=" * (-len(body) % 4))
+        payload = json.loads(raw.decode("utf-8"))
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid placement token")
+
+    if int(payload.get("exp") or 0) < int(time.time()):
+        raise HTTPException(status_code=400, detail="Placement token has expired")
+
+    return payload
+
+
+def make_placement_token(
+    student_id: uuid.UUID,
+    subject_id: uuid.UUID,
+    target_topic: Topic,
+    recommended_topic_id: str,
+    prerequisite_topics: List[Topic],
+    score: float,
+) -> str:
+    return sign_placement_payload({
+        "student_id": str(student_id),
+        "subject_id": str(subject_id),
+        "target_topic_id": str(target_topic.id),
+        "recommended_topic_id": recommended_topic_id,
+        "prerequisite_topic_ids": [str(topic.id) for topic in prerequisite_topics],
+        "score": score,
+        "exp": int(time.time()) + 15 * 60,
+    })
+
+
+def placement_correct_option(topic: Topic) -> str:
+    options = ["A", "B", "C", "D"]
+    digest = hashlib.sha256(str(topic.id).encode("utf-8")).digest()[0]
+    return options[digest % len(options)]
+
+
+def build_placement_question(topic: Topic, idx: int, include_answer: bool = False) -> Dict[str, Any]:
+    """Build a deterministic placement question tied to one prerequisite topic."""
+    correct_option = placement_correct_option(topic)
+    lesson_detail = " ".join((topic.description or "").split())
+    if len(lesson_detail) > 180:
+        lesson_detail = lesson_detail[:177].rsplit(" ", 1)[0] + "..."
+    correct_text = (
+        f"It focuses on {lesson_detail}"
+        if lesson_detail
+        else f"It explains {topic.name} and uses it to solve or understand a new example."
+    )
+    distractors = [
+        f"It only names {topic.name} without explaining what it means.",
+        "It skips the main idea and guesses from one keyword.",
+        "It memorizes a sentence but cannot use it in a fresh question.",
+    ]
+    option_keys = ["A", "B", "C", "D"]
+    options: Dict[str, str] = {}
+    distractor_index = 0
+    for key in option_keys:
+        if key == correct_option:
+            options[key] = correct_text
+        else:
+            options[key] = distractors[distractor_index]
+            distractor_index += 1
+
+    question = {
+        "id": f"{topic.id}:{idx}",
+        "topic_id": str(topic.id),
+        "topic_name": topic.name,
+        "text": f"Which answer best matches the lesson '{topic.name}'?",
+        "options": options,
+        "explanation": f"Understanding '{topic.name}' means you can explain it and use it in a new situation.",
+    }
+    if include_answer:
+        question["correct_option"] = correct_option
+    return question
+
+
+def summarize_placement(
+    prerequisite_topics: List[Topic],
+    answers: List[Dict[str, Any]],
+    target_topic: Topic,
+) -> Dict[str, Any]:
+    total = len(answers)
+    correct = sum(1 for answer in answers if answer.get("is_correct"))
+    score = round((correct / total) * 100, 1) if total else 0
+
+    missed_by_topic: Dict[str, Dict[str, Any]] = {}
+    for answer in answers:
+        if answer.get("is_correct"):
+            continue
+        topic_id = str(answer.get("topic_id") or "")
+        if not topic_id:
+            continue
+        if topic_id not in missed_by_topic:
+            missed_by_topic[topic_id] = {
+                "topic_id": topic_id,
+                "topic_name": answer.get("topic_name") or "Earlier lesson",
+                "missed": 0,
+            }
+        missed_by_topic[topic_id]["missed"] += 1
+
+    weak_topics = sorted(
+        missed_by_topic.values(),
+        key=lambda item: item["missed"],
+        reverse=True,
+    )
+
+    if not prerequisite_topics:
+        recommended_topic = target_topic
+        reason = "There are no earlier locked lessons to check, so this lesson can be opened."
+    elif score <= 20:
+        recommended_topic = prerequisite_topics[0]
+        reason = "The placement score is very low, so the safest path is to restart from the beginning."
+    elif score >= 85:
+        if weak_topics:
+            weak_topic_id = uuid.UUID(weak_topics[0]["topic_id"])
+            recommended_topic = next((topic for topic in prerequisite_topics if topic.id == weak_topic_id), target_topic)
+            reason = f"You scored well overall, but the missed questions point mostly to '{recommended_topic.name}'. Start there briefly, then continue forward."
+        else:
+            recommended_topic = target_topic
+            reason = "You showed strong understanding of the earlier lessons, so the requested lesson can be unlocked."
+    else:
+        if weak_topics:
+            ordered_weak = [
+                topic for topic in prerequisite_topics
+                if str(topic.id) in {item["topic_id"] for item in weak_topics}
+            ]
+            recommended_topic = ordered_weak[0] if ordered_weak else prerequisite_topics[0]
+        else:
+            recommended_topic = prerequisite_topics[0]
+        reason = "The score shows partial understanding, so the system is placing you at the earliest lesson that needs strengthening."
+
+    return {
+        "score": score,
+        "correct": correct,
+        "total": total,
+        "passed_for_target": score >= 85 and not weak_topics,
+        "weak_topics": weak_topics,
+        "recommended_topic": {
+            "id": str(recommended_topic.id),
+            "name": recommended_topic.name,
+            "sort_order": recommended_topic.sort_order,
+        },
+        "target_topic": {
+            "id": str(target_topic.id),
+            "name": target_topic.name,
+            "sort_order": target_topic.sort_order,
+        },
+        "reason": reason,
+    }
+
+
+async def get_ordered_subject_topics(
+    db: AsyncSession,
+    subject_id: str,
+    target_topic_id: str,
+) -> tuple[uuid.UUID, uuid.UUID, List[Topic], Topic, List[Topic]]:
+    try:
+        subject_uuid = uuid.UUID(subject_id)
+        target_uuid = uuid.UUID(target_topic_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid subject or topic ID")
+
+    res_topics = await db.execute(
+        select(Topic)
+        .filter(Topic.subject_id == subject_uuid)
+        .order_by(Topic.sort_order.asc(), Topic.name.asc())
+    )
+    topics = res_topics.scalars().all()
+    target_topic = next((topic for topic in topics if topic.id == target_uuid), None)
+
+    if not target_topic:
+        raise HTTPException(status_code=404, detail="Target lesson was not found")
+
+    target_index = topics.index(target_topic)
+    prerequisite_topics = topics[:target_index]
+    return subject_uuid, target_uuid, topics, target_topic, prerequisite_topics
+
+
+async def ensure_student_subject_access(
+    db: AsyncSession,
+    student_id: uuid.UUID,
+    subject_id: uuid.UUID,
+):
+    res_profile = await db.execute(
+        select(StudentProfile).filter(StudentProfile.user_id == student_id)
+    )
+    profile = res_profile.scalars().first()
+    enrolled_subjects = profile.enrolled_subjects if profile else []
+
+    if not enrolled_subjects:
+        raise HTTPException(
+            status_code=403,
+            detail="You must be enrolled in this subject before unlocking lessons",
+        )
+
+    res_subject = await db.execute(select(Subject).filter(Subject.id == subject_id))
+    subject = res_subject.scalars().first()
+    enrolled_keys = {str(item).strip().lower() for item in enrolled_subjects if item}
+    allowed_keys = {str(subject_id).lower()}
+    if subject and subject.name:
+        allowed_keys.add(subject.name.strip().lower())
+
+    if enrolled_keys.isdisjoint(allowed_keys):
+        raise HTTPException(
+            status_code=403,
+            detail="You can only unlock lessons for subjects you are enrolled in",
+        )
+
+
+@router.post("/progress/placement/start")
+async def start_placement_check(
+    data: PlacementStartRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """Create a prerequisite placement check before unlocking a later lesson."""
+    if current_user.role != "student":
+        raise HTTPException(status_code=403, detail="Only students can request placement")
+
+    subject_uuid, _, _, target_topic, prerequisite_topics = await get_ordered_subject_topics(
+        db,
+        data.subject_id,
+        data.target_topic_id,
+    )
+    await ensure_student_subject_access(db, current_user.id, subject_uuid)
+
+    questions = [
+        build_placement_question(topic, idx + 1)
+        for idx, topic in enumerate(prerequisite_topics)
+    ]
+
+    response = {
+        "target_topic": {
+            "id": str(target_topic.id),
+            "name": target_topic.name,
+            "sort_order": target_topic.sort_order,
+        },
+        "prerequisite_topics": [
+            {
+                "id": str(topic.id),
+                "name": topic.name,
+                "sort_order": topic.sort_order,
+            }
+            for topic in prerequisite_topics
+        ],
+        "questions": questions,
+        "message": "Answer this quick placement check so EduNexus can recommend the right lesson to start from.",
+    }
+    if not prerequisite_topics:
+        response["placement_token"] = make_placement_token(
+            current_user.id,
+            subject_uuid,
+            target_topic,
+            str(target_topic.id),
+            prerequisite_topics,
+            100.0,
+        )
+    return response
+
+
+@router.post("/progress/placement/submit")
+async def submit_placement_check(
+    data: PlacementSubmitRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """Score a placement check and recommend the safest starting lesson."""
+    if current_user.role != "student":
+        raise HTTPException(status_code=403, detail="Only students can submit placement")
+
+    subject_uuid, _, _, target_topic, prerequisite_topics = await get_ordered_subject_topics(
+        db,
+        data.subject_id,
+        data.target_topic_id,
+    )
+    await ensure_student_subject_access(db, current_user.id, subject_uuid)
+
+    valid_topic_ids = {str(topic.id) for topic in prerequisite_topics}
+    answers_by_topic: Dict[str, Dict[str, Any]] = {}
+    for answer in data.answers:
+        topic_id = str(answer.get("topic_id") or "")
+        if topic_id not in valid_topic_ids:
+            continue
+        if topic_id in answers_by_topic:
+            raise HTTPException(status_code=400, detail="Duplicate placement answer")
+
+        selected_option = str(answer.get("selected_option") or "").upper()
+        if selected_option not in {"A", "B", "C", "D"}:
+            raise HTTPException(status_code=400, detail="Invalid placement answer")
+
+        topic = next((item for item in prerequisite_topics if str(item.id) == topic_id), None)
+        correct_option = placement_correct_option(topic) if topic else ""
+        answers_by_topic[topic_id] = {
+            **answer,
+            "topic_id": topic_id,
+            "topic_name": topic.name if topic else answer.get("topic_name"),
+            "selected_option": selected_option,
+            "is_correct": selected_option == correct_option,
+        }
+
+    missing_topic_ids = valid_topic_ids.difference(answers_by_topic.keys())
+    if missing_topic_ids:
+        raise HTTPException(status_code=400, detail="Answer every prerequisite lesson question")
+
+    answers = [answers_by_topic[str(topic.id)] for topic in prerequisite_topics]
+    summary = summarize_placement(prerequisite_topics, answers, target_topic)
+    summary["placement_token"] = make_placement_token(
+        current_user.id,
+        subject_uuid,
+        target_topic,
+        summary["recommended_topic"]["id"],
+        prerequisite_topics,
+        summary["score"],
+    )
+    return summary
+
+
+@router.post("/progress/placement/accept")
+async def accept_placement_recommendation(
+    data: PlacementAcceptRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """Unlock the recommended lesson after a learner accepts placement advice."""
+    if current_user.role != "student":
+        raise HTTPException(status_code=403, detail="Only students can accept placement")
+
+    token_payload = verify_placement_token(data.placement_token)
+    if token_payload.get("student_id") != str(current_user.id):
+        raise HTTPException(status_code=403, detail="Placement token does not belong to this student")
+    if token_payload.get("subject_id") != data.subject_id or token_payload.get("target_topic_id") != data.target_topic_id:
+        raise HTTPException(status_code=400, detail="Placement token does not match this lesson")
+
+    subject_uuid, _, topics, target_topic, prerequisite_topics = await get_ordered_subject_topics(
+        db,
+        data.subject_id,
+        data.target_topic_id,
+    )
+    await ensure_student_subject_access(db, current_user.id, subject_uuid)
+
+    try:
+        recommended_uuid = uuid.UUID(token_payload.get("recommended_topic_id") or "")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid recommended lesson ID")
+
+    current_prerequisite_ids = [str(topic.id) for topic in prerequisite_topics]
+    if token_payload.get("prerequisite_topic_ids") != current_prerequisite_ids:
+        raise HTTPException(status_code=400, detail="Placement token is no longer valid for this lesson path")
+
+    allowable_topics = prerequisite_topics + [target_topic]
+    recommended_topic = next(
+        (topic for topic in allowable_topics if topic.id == recommended_uuid),
+        None,
+    )
+    if not recommended_topic:
+        raise HTTPException(
+            status_code=400,
+            detail="Recommended lesson must be the requested lesson or one of its prerequisites",
+        )
+
+    recommended_index = topics.index(recommended_topic)
+    topics_to_unlock = topics[: recommended_index + 1]
+    topic_ids = [topic.id for topic in topics_to_unlock]
+
+    res_prog = await db.execute(
+        select(StudentTopicProgress).filter(
+            StudentTopicProgress.student_id == current_user.id,
+            StudentTopicProgress.topic_id.in_(topic_ids),
+        )
+    )
+    progress_by_topic = {progress.topic_id: progress for progress in res_prog.scalars().all()}
+    now = datetime.now(timezone.utc)
+
+    for topic in topics_to_unlock:
+        progress = progress_by_topic.get(topic.id)
+        if not progress:
+            db.add(
+                StudentTopicProgress(
+                    student_id=current_user.id,
+                    topic_id=topic.id,
+                    subject_id=subject_uuid,
+                    status="unlocked",
+                    progress_pct=0,
+                    unlocked_at=now,
+                    last_accessed=now if topic.id == recommended_topic.id else None,
+                )
+            )
+        elif progress.status == "locked":
+            progress.status = "unlocked"
+            progress.unlocked_at = progress.unlocked_at or now
+            if topic.id == recommended_topic.id:
+                progress.last_accessed = now
+
+    await db.commit()
+
+    return {
+        "status": "success",
+        "recommended_topic": {
+            "id": str(recommended_topic.id),
+            "name": recommended_topic.name,
+            "sort_order": recommended_topic.sort_order,
+        },
+        "target_topic": {
+            "id": str(target_topic.id),
+            "name": target_topic.name,
+            "sort_order": target_topic.sort_order,
+        },
+        "unlocked_topic_ids": [str(topic.id) for topic in topics_to_unlock],
+    }
 
 
 @router.post("/progress/update")

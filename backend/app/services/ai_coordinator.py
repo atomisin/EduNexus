@@ -27,13 +27,83 @@ BASE_SYSTEM_PROMPT = (
     "and their proficiency in this subject is {proficiency}%."
     "\n\nGuidelines:\n"
     "- Friendly, encouraging tone. Use the student's name approximately every 2‑3 messages.\n"
-    "- Provide concise explanations (max 3 sentences). End each logical chunk with the marker '---NEXT---'.\n"
-    "- After every explanation, always ask a reflective question and prepend it with '---QUESTION---'.\n"
-    "- Generate call‑to‑action suggestions (examples, videos, exercises) and prepend them with '---CTA---'.\n"
-    "- If relevant, suggest up to 2 educational videos. Precede the list with '---VIDEO---' and format each as '[title](url)'.\n"
+    "- Provide concise explanations and ask one reflective question when it helps the lesson move forward.\n"
+    "- Offer useful next steps such as examples, practice, summaries, videos, or mastery checks in natural language.\n"
+    "- If relevant, suggest up to 2 educational videos as normal markdown links.\n"
     "- Never include <thinking> tags or internal reasoning. Keep responses within a reasonable token budget.\n"
-    "- Avoid disallowed content."
+    "- Avoid disallowed content. Do not include UI control markers in student-visible prose."
 )
+
+LEARNING_TURN_PROMPT = """
+
+EDUNEXUS STUDENT LEARNING EXPERIENCE:
+Your job is not to answer and disappear. Your job is to move the learner through a lesson.
+
+CORE TEACHING CONTRACT:
+- Stay on the current subject, topic, and active focus area. Do not jump to a different topic unless the student explicitly asks and it is needed for a prerequisite.
+- Teach one idea per turn. Avoid long notes, textbook dumps, and lists of many facts.
+- Every teaching turn must end with exactly one learner action: a short question, a tiny task, or a choice of next move.
+- Use the student's answer as evidence. Diagnose whether they are confident, guessing, confused, or ready.
+- If the learner is wrong or vague, praise the attempt briefly, correct the misconception, and ask a simpler follow-up.
+- If the learner is correct, explain why it is correct, then move one small step forward.
+- If the learner says "ok", "yes", or similar, do not assume mastery. Ask them to apply the idea in one quick check.
+- If the learner sounds confused, change method immediately: analogy, worked example, diagram description, smaller steps, or a local Nigerian example.
+- For exam-track students, include WAEC/NECO/JAMB thinking only when relevant and keep it practical.
+
+RESPONSE SHAPE BY STAGE:
+- intro or teach: "Goal" in one line, "Core idea" in a few simple sentences, then "Try this" with one check question.
+- check_understanding: ask exactly one question and wait. Do not answer your own question.
+- practice: give exactly one practice question. Wait for the learner before marking it.
+- remediate: name the likely confusion kindly, reteach using a different method, then ask one easier check.
+- mastery_ready or mastery_quiz: give a brief transition only; the app will open the quiz.
+- completed: summarize what was learned and point to the next unlocked lesson.
+
+MASTERY TRIGGER DISCIPLINE:
+- Append [TRIGGER_MASTERY] only when the current topic or active focus area has been taught AND the learner has demonstrated understanding by answering or applying it.
+- Do not append [TRIGGER_MASTERY] just because the learner says "yes", "ok", "I understand", or asks to continue.
+- If the learner asks for a final test before showing understanding, ask one checkpoint question first.
+- When the mastery point is genuinely reached, append [TRIGGER_MASTERY] at the very end of the response.
+
+OUTPUT RULES:
+- Never include <thinking> tags or hidden reasoning.
+- Never include the marker strings ---NEXT---, ---QUESTION---, ---CTA---, or ---VIDEO--- in the visible response.
+- Keep the language age-appropriate for the persona. Use markdown lightly, only when it improves scanning.
+"""
+
+STAGE_RESPONSE_RULES = {
+    "intro": "Open the lesson gently. State the goal, teach the first idea, then ask one easy check question.",
+    "teach": "Teach one new idea only. Use a concrete example, then ask one short check question.",
+    "check_understanding": "Ask exactly one question that tests the current idea. Do not answer it for the learner.",
+    "practice": "Give exactly one practice question. Wait for the learner's answer before marking or explaining.",
+    "remediate": "Assume the learner needs a different route. Reteach with smaller steps or an analogy, then ask an easier check.",
+    "mastery_ready": "If the learner has demonstrated understanding, give a brief transition and append [TRIGGER_MASTERY].",
+    "mastery_quiz": "Do not teach new content. Briefly tell the learner the mastery quiz is starting.",
+    "completed": "Summarize the win briefly and invite the learner to move to the next unlocked lesson.",
+}
+
+
+def build_lesson_control_prompt(lesson_context: Optional[Dict[str, Any]]) -> str:
+    lesson_context = lesson_context or {}
+    stage = lesson_context.get("lesson_stage", "intro")
+    active_subtopic = lesson_context.get("active_subtopic")
+    user_turn_count = lesson_context.get("user_turn_count", 0)
+    assistant_turn_count = lesson_context.get("assistant_turn_count", 0)
+    stage_rule = STAGE_RESPONSE_RULES.get(stage, STAGE_RESPONSE_RULES["teach"])
+
+    prompt = (
+        "\n\nLESSON CONTROL STATE:"
+        f"\n- Stage: {stage}"
+        f"\n- User turns in this lesson: {user_turn_count}"
+        f"\n- Tutor turns in this lesson: {assistant_turn_count}"
+        f"\n- Required behavior now: {stage_rule}"
+    )
+    if active_subtopic:
+        prompt += f"\n- Active focus area: {active_subtopic}"
+    prompt += (
+        "\nRULE: Match this stage exactly. The platform controls lesson progression; your response supplies the teaching language."
+        "\nRULE: End with one clear learner action unless the stage is mastery_quiz or completed."
+    )
+    return prompt
 
 def build_system_prompt(
     student_name: str,
@@ -59,6 +129,80 @@ def build_system_prompt(
 logger = logging.getLogger(__name__)
 
 import re
+
+MASTERY_CONFIDENCE_PHRASES = (
+    "i'm ready",
+    "im ready",
+    "ready for the test",
+    "ready for mastery",
+    "ready for the mastery",
+    "ready for the quiz",
+    "i can solve it",
+    "i can explain it",
+)
+
+
+def infer_lesson_control(
+    messages: List[Dict[str, str]],
+    lesson_context: Optional[Dict[str, Any]] = None,
+    marker_triggered: bool = False,
+) -> Dict[str, Any]:
+    """Return deterministic lesson-state hints for the UI.
+
+    The LLM can still teach naturally, but critical UI flow should use
+    structured state rather than hidden prose markers alone.
+    """
+    lesson_context = lesson_context or {}
+    user_turns = [
+        (msg.get("content") or "").strip()
+        for msg in messages
+        if msg.get("role") == "user" and (msg.get("content") or "").strip()
+    ]
+    assistant_turns = [msg for msg in messages if msg.get("role") == "assistant"]
+    user_turn_count = int(lesson_context.get("user_turn_count") or len(user_turns))
+    assistant_turn_count = int(lesson_context.get("assistant_turn_count") or len(assistant_turns))
+    previous_stage = lesson_context.get("lesson_stage") or "intro"
+    latest_user = user_turns[-1].lower() if user_turns else ""
+
+    asks_for_mastery = any(phrase in latest_user for phrase in ("mastery test", "test me", "final quiz"))
+    asks_for_practice = asks_for_mastery or any(phrase in latest_user for phrase in ("quiz me", "practice", "question"))
+    confused = any(phrase in latest_user for phrase in ("confused", "stuck", "don't understand", "dont understand", "lost"))
+    confident = any(phrase in latest_user for phrase in MASTERY_CONFIDENCE_PHRASES)
+
+    mastery_ready = marker_triggered or (
+        user_turn_count >= 3
+        and assistant_turn_count >= 2
+        and confident
+        and previous_stage in {"practice", "mastery_ready"}
+    )
+
+    if mastery_ready:
+        stage = "mastery_ready"
+        next_actions = ["start_mastery_quiz", "review_summary"]
+        ui_action = "start_mastery_quiz"
+    elif confused:
+        stage = "remediate"
+        next_actions = ["simplify", "worked_example", "smaller_steps"]
+        ui_action = None
+    elif asks_for_practice:
+        stage = "practice"
+        next_actions = ["one_question", "worked_example", "hint"]
+        ui_action = None
+    elif user_turn_count <= 1:
+        stage = "teach"
+        next_actions = ["teach_step_by_step", "give_example", "check_understanding"]
+        ui_action = None
+    else:
+        stage = "check_understanding"
+        next_actions = ["ask_check_question", "practice", "summarize"]
+        ui_action = None
+
+    return {
+        "lesson_stage": stage,
+        "next_actions": next_actions,
+        "mastery_ready": mastery_ready,
+        "ui_action": ui_action,
+    }
 
 
 def strip_thinking_tags(text: str) -> str:
@@ -735,6 +879,7 @@ Format your response using markdown:
         subject_name: Optional[str] = None,
         topic_name: Optional[str] = None,
         user_id: Optional[Any] = None,
+        lesson_context: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         Adaptive chat response with persona and engagement detection.
@@ -779,7 +924,7 @@ Do NOT teach concepts or provide in-depth explanations.
 Tone: Professional, concise."""
             max_tokens = 100
         else:
-            system_prompt = persona.system_prompt
+            system_prompt = persona.system_prompt + LEARNING_TURN_PROMPT
 
             if student_name:
                 system_prompt += f"\n\nSTUDENT NAME: {student_name}\nGREETING RULE: Greet the student by their name '{student_name}' if appropriate for the conversation state. Do NOT use generic terms like 'young friend' or 'dear student' if you know their actual name."
@@ -796,6 +941,9 @@ Tone: Professional, concise."""
 
             if subject_name and topic_name:
                 system_prompt += f"\n\nCURRENT CONTEXT:\n- Subject: {subject_name}\n- Topic: {topic_name}\nSTRICT RULE: Focus your teaching and conversation ONLY on this topic. If the student asks about something else, politely redirect them back to {topic_name}."
+
+            if lesson_context:
+                system_prompt += build_lesson_control_prompt(lesson_context)
 
             # Token cap based on persona
             # TTS personas need very short responses
@@ -824,7 +972,7 @@ Then explain the concept differently.
                 system_prompt += """
                 
 CRITICAL RULE FOR MASTERY QUIZ:
-If you have fully taught ALL the required concepts for the current topic, and the student has demonstrated a clear understanding, you MUST append the exact string [TRIGGER_MASTERY] at the very end of your response to test them. Do NOT trigger this too early. Wait until you have comprehensively reviewed the current topic.
+If you have fully taught ALL the required concepts for the current topic or the active focus area/subtopic, and the student has demonstrated clear understanding through an answer or application, append the exact string [TRIGGER_MASTERY] at the very end of your response. Do not trigger from polite agreement alone. If unsure, ask one checkpoint question instead.
 """
 
         # 5. Call LLM
@@ -837,6 +985,13 @@ If you have fully taught ALL the required concepts for the current topic, and th
             user_id=user_id or (student_profile.user_id if student_profile else None),
         )
         response = strip_thinking_tags(response)
+        should_start_mastery_quiz = "[TRIGGER_MASTERY]" in response
+        response = response.replace("[TRIGGER_MASTERY]", "").strip()
+        lesson_control = infer_lesson_control(
+            messages=messages,
+            lesson_context=lesson_context,
+            marker_triggered=should_start_mastery_quiz,
+        )
 
         # 6. Post-process response (Prefix for young learners)
         if persona.use_emoji and persona.name:
@@ -851,6 +1006,11 @@ If you have fully taught ALL the required concepts for the current topic, and th
 
         return {
             "response": response,
+            "ui_action": lesson_control["ui_action"],
+            "should_start_mastery_quiz": lesson_control["mastery_ready"],
+            "lesson_stage": lesson_control["lesson_stage"],
+            "next_actions": lesson_control["next_actions"],
+            "mastery_ready": lesson_control["mastery_ready"],
             "needs_tts": persona.use_tts,
             "persona": {
                 "name": persona.name,

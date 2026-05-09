@@ -1,7 +1,6 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import {
-  Brain, ToggleLeft, Target, Network, ChevronRight, CheckCircle,
-  Video, Settings, BookOpen, Trophy, Menu, X
+  Brain, CheckCircle, Video, BookOpen, Trophy, Menu
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -10,6 +9,8 @@ import ThemeToggle from '@/components/ThemeToggle';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogTitle,
 } from '@/components/ui/dialog';
 import {
   Sheet,
@@ -50,9 +51,9 @@ export const LandingPage = ({
   }, []);
 
   const features = [
-    { icon: Brain, title: 'AI Tutor, Always Available', desc: 'Get instant explanations, worked examples, and practice questions tailored to your level — any time, any subject.', color: 'text-primary' },
+    { icon: Brain, title: 'AI Tutor, Always Available', desc: 'Get instant explanations, worked examples, and practice questions tailored to your level, any time, any subject.', color: 'text-primary' },
     { icon: Video, title: 'Live Sessions with Real Teachers', desc: 'Book one-on-one or group sessions with verified Nigerian teachers. Learn in real time, ask questions, get answers.', color: 'text-primary' },
-    { icon: BookOpen, title: 'Curriculum-Aligned Materials', desc: 'Every topic mapped to the Nigerian curriculum — from Basic Science in Primary 1 to Further Mathematics in SS3.', color: 'text-primary' },
+    { icon: BookOpen, title: 'Curriculum-Aligned Materials', desc: 'Every topic mapped to the Nigerian curriculum, from Basic Science in Primary 1 to Further Mathematics in SS3.', color: 'text-primary' },
     { icon: Trophy, title: 'Track Your Progress', desc: 'Brain Power points, streaks, and detailed progress reports keep students motivated and parents informed.', color: 'text-primary' },
   ];
 
@@ -61,9 +62,9 @@ export const LandingPage = ({
       {/* Navigation */}
       <nav className="fixed top-0 left-0 right-0 z-50 glass border-b border-border/40">
         <div className="max-w-7xl mx-auto px-6">
-          <div className="flex items-center justify-between h-20">
+          <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-3">
-              <img src="/edunexus-logo.png" alt="EduNexus" className="h-[100px] w-auto" />
+              <img src="/edunexus-logo.png" alt="EduNexus" className="h-12 w-auto object-contain" />
             </div>
             <div className="hidden md:flex items-center gap-8">
               <a href="#features" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Platform</a>
@@ -105,15 +106,15 @@ export const LandingPage = ({
                     <a href="#contact" className="text-lg font-medium hover:text-primary transition-colors">Contact</a>
                     <Separator className="my-2" />
                     {user && onGoDashboard ? (
-                      <Button onClick={onGoDashboard} className="w-full h-12 bg-primary text-primary-foreground font-semibold rounded-xl">
+                      <Button onClick={onGoDashboard} className="w-full h-12 bg-primary text-primary-foreground font-semibold rounded-lg">
                         Go to Dashboard
                       </Button>
                     ) : (
                       <>
-                        <Button onClick={() => setAuthMode('login')} variant="outline" className="w-full h-12 font-semibold rounded-xl">
+                        <Button onClick={() => setAuthMode('login')} variant="outline" className="w-full h-12 font-semibold rounded-lg">
                           Sign In
                         </Button>
-                        <Button onClick={() => setAuthMode('register')} className="w-full h-12 bg-primary text-primary-foreground font-semibold rounded-xl">
+                        <Button onClick={() => setAuthMode('register')} className="w-full h-12 bg-primary text-primary-foreground font-semibold rounded-lg">
                           Get Started
                         </Button>
                       </>
@@ -127,32 +128,36 @@ export const LandingPage = ({
       </nav>
 
       {/* Hero Section */}
-      <section className="relative pt-32 pb-24 overflow-hidden border-b border-border">
-        <div className="absolute inset-0 bg-subtle" />
-        <div className="relative max-w-7xl mx-auto px-6 pt-12">
-          <div className="grid lg:grid-cols-2 gap-16 items-center">
-            <div className="space-y-8 animate-fade-in">
+      <section className="relative min-h-[92vh] overflow-hidden border-b border-border">
+        <img
+          src="/images/Whisk_ygohrtzlddm3mmym1yy2uwotq2n3qtl0idox0co.jpeg"
+          alt="Students learning attentively in a modern environment"
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+        <div className="absolute inset-0 bg-slate-950/70" />
+        <div className="relative max-w-7xl mx-auto px-6 pt-32 pb-16 min-h-[92vh] flex items-end">
+            <div className="max-w-3xl space-y-8 animate-fade-in text-white">
               <Badge variant="secondary" className="px-3 py-1 font-medium bg-secondary text-secondary-foreground rounded-full">
                 Built for Nigerian Students
               </Badge>
 
-              <h1 className="text-5xl lg:text-7xl font-bold leading-tight text-foreground tracking-tight font-display">
+              <h1 className="text-5xl lg:text-7xl font-bold leading-tight tracking-tight font-display">
                 Unlock Your Full <br />
                 Academic Potential
               </h1>
 
-              <p className="text-xl text-muted-foreground leading-relaxed max-w-xl">
-                EduNexus combines AI-powered tutoring, live sessions, and curriculum-aligned materials to help students from Pre-Primary through SS3 — and beyond — achieve more.
+              <p className="text-xl text-white/80 leading-relaxed max-w-2xl">
+                EduNexus combines AI-powered tutoring, live sessions, and curriculum-aligned materials to help students from Pre-Primary through SS3 and beyond achieve more.
               </p>
 
               <div className="flex flex-wrap gap-4 pt-4">
                 <Button size="lg" className="bg-primary text-primary-foreground rounded-lg px-8 font-semibold" onClick={() => setAuthMode('register')}>
-                  Start Learning Free →
+                  Start Learning Free
                 </Button>
                 <Button
                   size="lg"
                   variant="outline"
-                  className="px-8 border-border rounded-lg"
+                  className="px-8 border-white/40 text-white bg-white/10 hover:bg-white/20 rounded-lg"
                   onClick={() => document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })}
                 >
                   See How It Works
@@ -161,7 +166,7 @@ export const LandingPage = ({
                   <Button
                     size="lg"
                     variant="outline"
-                    className="px-8 border-primary text-primary rounded-lg flex items-center gap-2"
+                    className="px-8 border-white/40 text-white bg-white/10 hover:bg-white/20 rounded-lg flex items-center gap-2"
                     onClick={onJoinSession}
                   >
                     <Video className="w-5 h-5" /> Join a Live Session
@@ -169,7 +174,7 @@ export const LandingPage = ({
                 )}
               </div>
 
-              <div className="flex items-center gap-6 pt-6 text-sm font-medium text-muted-foreground border-t border-border/50">
+              <div className="flex flex-wrap items-center gap-6 pt-6 text-sm font-medium text-white/75 border-t border-white/20">
                 <div className="flex items-center gap-2">
                   <CheckCircle className="w-4 h-4 text-emerald-600" /> Nigerian Curriculum Aligned
                 </div>
@@ -181,16 +186,6 @@ export const LandingPage = ({
                 </div>
               </div>
             </div>
-
-            <div className="relative animate-fade-in delay-200 lg:h-[600px] flex items-center justify-center">
-              <div className="absolute inset-0 bg-primary/5 rounded-[2.5rem] transform rotate-3 scale-105" />
-              <img
-                src="/images/Whisk_ygohrtzlddm3mmym1yy2uwotq2n3qtl0idox0co.jpeg"
-                alt="Students learning attentively in a modern environment"
-                className="relative z-10 w-full h-full object-cover rounded-[2rem] shadow-2xl border border-border/50"
-              />
-            </div>
-          </div>
         </div>
       </section>
 
@@ -208,7 +203,7 @@ export const LandingPage = ({
           </div>
 
           <div className="grid md:grid-cols-2 gap-x-12 gap-y-16 items-center">
-            <div className="order-2 md:order-1 relative rounded-[2rem] overflow-hidden shadow-2xl border border-border aspect-[4/3]">
+            <div className="order-2 md:order-1 relative rounded-lg overflow-hidden border border-border aspect-[4/3]">
               <img
                 src="/images/Whisk_yzy4m2mhvznxcjm50sn0ymytajnmrtlykjn10sm.jpeg"
                 alt="Focused student at desk"
@@ -218,7 +213,7 @@ export const LandingPage = ({
             <div className="order-1 md:order-2 space-y-10">
               {features.map((feature, i) => (
                 <div key={i} className="flex gap-6 group">
-                  <div className="hidden sm:flex shrink-0 w-14 h-14 rounded-xl bg-background border border-border shadow-sm items-center justify-center transition-colors group-hover:border-primary">
+                  <div className="hidden sm:flex shrink-0 w-14 h-14 rounded-lg bg-background border border-border shadow-sm items-center justify-center transition-colors group-hover:border-primary">
                     <feature.icon className={`w-6 h-6 ${feature.color}`} />
                   </div>
                   <div>
@@ -247,7 +242,7 @@ export const LandingPage = ({
             Join EduNexus and take control of your education.
           </p>
           <div className="flex flex-wrap justify-center gap-6 pt-8">
-            <Button size="lg" className="bg-background text-foreground hover:bg-background/90 font-semibold px-10 rounded-lg" onClick={onRegister}>
+            <Button size="lg" className="bg-background text-foreground hover:bg-background/90 font-semibold px-10 rounded-lg" onClick={() => setAuthMode('register')}>
               Get Started
             </Button>
             <Button size="lg" variant="outline" className="border-background text-background hover:bg-background/10 font-semibold px-10 rounded-lg bg-transparent">
@@ -262,9 +257,9 @@ export const LandingPage = ({
         <div className="max-w-6xl mx-auto px-6 grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
           {[
             { value: "17", label: "Education Levels" },
-            { value: "JSS–SS3", label: "Full Coverage" },
+            { value: "JSS-SS3", label: "Full Coverage" },
             { value: "AI + Live", label: "Dual Learning" },
-            { value: "🇳🇬", label: "Nigerian Curriculum" }
+            { value: "NG", label: "Nigerian Curriculum" }
           ].map(stat => (
             <div key={stat.label} className="text-primary-foreground">
               <div className="text-3xl font-display font-bold text-accent mb-2">
@@ -327,9 +322,15 @@ export const LandingPage = ({
       {/* Floating Auth Overlays */}
       <Dialog open={authMode !== null} onOpenChange={(open) => !open && setAuthMode(null)}>
         <DialogContent className="max-w-md p-0 overflow-hidden border-none bg-transparent shadow-none [&>button]:hidden">
+          <DialogTitle className="sr-only">
+            {authMode === 'login' ? 'Sign in to EduNexus' : 'Create an EduNexus account'}
+          </DialogTitle>
+          <DialogDescription className="sr-only">
+            {authMode === 'login' ? 'Enter your email and password to continue.' : 'Complete the registration form to create your account.'}
+          </DialogDescription>
           <div className="relative animate-in zoom-in-95 duration-200">
             <Suspense fallback={
-              <div className="p-12 flex flex-col items-center justify-center bg-background rounded-xl">
+              <div className="p-12 flex flex-col items-center justify-center bg-background rounded-lg">
                 <div className="h-10 w-10 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4" />
                 <p className="text-muted-foreground font-medium animate-pulse">Initializing Portal...</p>
               </div>
@@ -343,7 +344,7 @@ export const LandingPage = ({
                   onRegisterClick={() => setAuthMode('register')}
                 />
               ) : (
-                <div className="max-h-[85vh] overflow-y-auto rounded-xl bg-background shadow-2xl">
+                <div className="max-h-[85vh] overflow-y-auto rounded-lg bg-background shadow-xl">
                   <RegistrationPage 
                     onSuccess={() => {
                       setAuthMode('login');
@@ -361,3 +362,4 @@ export const LandingPage = ({
     </div>
   );
 };
+

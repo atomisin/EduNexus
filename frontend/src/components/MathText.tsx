@@ -1,9 +1,10 @@
 import React, { useMemo } from 'react';
 import katex from 'katex';
 import 'katex/dist/katex.min.css';
+import { normalizeAcademicTextForDisplay } from '@/utils/academicText';
 
 interface MathTextProps {
-  children: string;
+  children: React.ReactNode;
   className?: string;
 }
 
@@ -13,8 +14,20 @@ interface MathTextProps {
  * and $$...$$ and \[...\] for display math.
  */
 const MathText: React.FC<MathTextProps> = ({ children, className }) => {
+  const text = useMemo(() => {
+    if (children === null || children === undefined) return '';
+    if (typeof children === 'string' || typeof children === 'number') return String(children);
+    if (Array.isArray(children)) {
+      return children
+        .map((child) => (typeof child === 'string' || typeof child === 'number' ? String(child) : ''))
+        .join('');
+    }
+    return '';
+  }, [children]);
+
   const rendered = useMemo(() => {
-    if (!children) return '';
+    if (!text) return '';
+    const normalizedChildren = normalizeAcademicTextForDisplay(text);
 
     // Split on display math first ($$...$$), then inline math ($...$)
     // Also handle \[...\] and \(...\)
@@ -27,10 +40,10 @@ const MathText: React.FC<MathTextProps> = ({ children, className }) => {
     let lastIndex = 0;
     let match: RegExpExecArray | null;
 
-    while ((match = combined.exec(children)) !== null) {
+    while ((match = combined.exec(normalizedChildren)) !== null) {
       // Text before the match
       if (match.index > lastIndex) {
-        parts.push({ type: 'text', content: children.slice(lastIndex, match.index) });
+        parts.push({ type: 'text', content: normalizedChildren.slice(lastIndex, match.index) });
       }
 
       const raw = match[0];
@@ -50,15 +63,15 @@ const MathText: React.FC<MathTextProps> = ({ children, className }) => {
     }
 
     // Remaining text
-    if (lastIndex < children.length) {
-      parts.push({ type: 'text', content: children.slice(lastIndex) });
+    if (lastIndex < normalizedChildren.length) {
+      parts.push({ type: 'text', content: normalizedChildren.slice(lastIndex) });
     }
 
     return parts;
-  }, [children]);
+  }, [text]);
 
   if (typeof rendered === 'string') {
-    return <span className={className}>{children}</span>;
+    return <span className={className}>{normalizeAcademicTextForDisplay(text)}</span>;
   }
 
   return (

@@ -1,4 +1,4 @@
-import { Sparkles, Brain, X, Target, CheckCircle2, Lock, Play, RefreshCw, Trophy, Zap, Star, Video, BookMarked, Loader2, Layers, Repeat, FileText, Activity, BookOpen, Clock } from 'lucide-react';
+import { Sparkles, Brain, X, Target, CheckCircle2, Lock, Play, RefreshCw, Trophy, Zap, Star, Video, BookMarked, Loader2, Layers, Repeat, FileText, Activity, BookOpen, Clock, Mic, MicOff, Volume2, VolumeX } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -6,14 +6,38 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
 import ReactMarkdown from 'react-markdown';
+import MathText from '@/components/MathText';
+import { normalizeAcademicTextForDisplay } from '@/utils/academicText';
 import { AIMasteryTest } from './AIMasteryTest';
 import { BrainPowerCard } from '@/features/student/learning/BrainPowerCard';
 import type { BrainPowerCardData } from '@/features/student/learning/BrainPowerCard';
 import { useReadingRecommendations } from '@/features/student/hooks/useReadingRecommendations';
 import { useTopicProgress } from '@/features/student/hooks/useTopicProgress';
 import { useTTS } from '@/features/student/hooks/useTTS';
+import { useSpeechRecognition } from '@/features/student/hooks/useSpeechRecognition';
 import { getPersonaEmoji, getPersonaName } from '@/features/student/utils/personaUtils';
-import { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
+
+const renderMathChildren = (children: React.ReactNode): React.ReactNode =>
+  React.Children.map(children, (child) => {
+    if (typeof child === 'string' || typeof child === 'number') {
+      return <MathText>{String(child)}</MathText>;
+    }
+    if (React.isValidElement(child)) {
+      const element = child as React.ReactElement<{ children?: React.ReactNode }>;
+      return React.cloneElement(element, {
+        children: renderMathChildren(element.props.children),
+      });
+    }
+    return child;
+  });
+
+const mathMarkdownComponents = {
+  p: ({ children }: any) => <p>{renderMathChildren(children)}</p>,
+  li: ({ children }: any) => <li>{renderMathChildren(children)}</li>,
+  strong: ({ children }: any) => <strong>{renderMathChildren(children)}</strong>,
+  em: ({ children }: any) => <em>{renderMathChildren(children)}</em>,
+};
 
 interface AIChatSectionProps {
   tutorGender: 'male' | 'female';
@@ -57,10 +81,12 @@ interface AIChatSectionProps {
   dismissQuizConfirm?: () => void;
   aiState?: any;
   placementState?: any;
+  lockedLessonNotice?: any;
   startPlacementCheck?: (targetTopic: any) => Promise<void>;
   submitPlacementCheck?: (answersByQuestionId: Record<string, string>) => Promise<void>;
   acceptPlacementRecommendation?: () => Promise<void>;
   cancelPlacementCheck?: () => void;
+  openCurrentUnlockedLesson?: () => Promise<void>;
 }
 
 export const AIChatSection = ({
@@ -105,15 +131,33 @@ export const AIChatSection = ({
   dismissQuizConfirm = () => {},
   aiState = { status: 'idle' },
   placementState = { status: 'idle' },
+  lockedLessonNotice = null,
   startPlacementCheck = async () => {},
   submitPlacementCheck = async () => {},
   acceptPlacementRecommendation = async () => {},
-  cancelPlacementCheck = () => {}
+  cancelPlacementCheck = () => {},
+  openCurrentUnlockedLesson = async () => {}
 }: AIChatSectionProps) => {
   const { getTopicProgress } = useTopicProgress();
-  const { speak, stop, isYoungLearner } = useTTS(profile?.education_level);
+  const { speak, stop, isYoungLearner, isSpeechSupported, isSpeaking } = useTTS(profile?.education_level);
   const [activeVideo, setActiveVideo] = useState<string | null>(null);
   const [placementAnswers, setPlacementAnswers] = useState<Record<string, string>>({});
+  const [chatInput, setChatInput] = useState('');
+
+  const appendVoiceTranscript = useCallback((transcript: string) => {
+    setChatInput((current) => {
+      const prefix = current.trim();
+      return `${prefix ? `${prefix} ` : ''}${transcript}`.trim();
+    });
+  }, []);
+
+  const {
+    isSpeechRecognitionSupported,
+    isListening,
+    interimTranscript,
+    speechError,
+    toggleListening,
+  } = useSpeechRecognition({ onTranscript: appendVoiceTranscript });
 
   const topicsForCurrentSubject = structuredTopics.filter(
     (t: any) => !selectedSubject || !t.subject_id || t.subject_id === selectedSubject.id
@@ -131,11 +175,16 @@ export const AIChatSection = ({
     { label: 'Summarize', icon: FileText, prompt: `Summarize what I need to remember about ${focusTopicLabel} in a short study note with three key points.` },
   ];
 
+  const submitChatInput = useCallback(async () => {
+    const message = chatInput.trim();
+    if (!message || showMasteryTest || aiLoading || isCurrentTopicCompleted) return;
+    setChatInput('');
+    await handleAIContinue(message);
+  }, [aiLoading, chatInput, handleAIContinue, isCurrentTopicCompleted, showMasteryTest]);
+
   const displaySubjects = enrolledSubjects.length > 0
     ? subjects.filter(s => enrolledSubjects.some((e: any) => (e.id || e) === s.id))
     : subjects;
-
-  console.log('[AI Tutor] subjects:', subjects.length, 'enrolled:', enrolledSubjects.length, 'display:', displaySubjects.length);
 
   // Auto-speak new AI messages for young learners
   useEffect(() => {
@@ -162,19 +211,19 @@ export const AIChatSection = ({
             <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 p-1 rounded-full border border-slate-200 dark:border-slate-700">
               <button
                 onClick={() => setTutorGender('female')}
-                className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${tutorGender === 'female' ? 'bg-white dark:bg-slate-700 shadow-sm text-teal-600' : 'text-slate-500'}`}
+                className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${tutorGender === 'female' ? 'bg-white dark:bg-slate-700 shadow-none text-teal-600' : 'text-slate-500'}`}
               >
                 Female
               </button>
               <button
                 onClick={() => setTutorGender('male')}
-                className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${tutorGender === 'male' ? 'bg-white dark:bg-slate-700 shadow-sm text-teal-600' : 'text-slate-500'}`}
+                className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${tutorGender === 'male' ? 'bg-white dark:bg-slate-700 shadow-none text-teal-600' : 'text-slate-500'}`}
               >
                 Male
               </button>
             </div>
             {!showAIPanel && (
-              <Button onClick={() => setShowAIPanel(true)} className="gap-2 bg-gradient-to-r from-teal-600 to-teal-600 hover:from-teal-700 hover:to-teal-700 shadow-md">
+              <Button onClick={() => setShowAIPanel(true)} className="gap-2 bg-primary hover:bg-primary/90 shadow-none">
                 <Sparkles className="w-4 h-4" /> Open AI Tutor
               </Button>
             )}
@@ -183,11 +232,11 @@ export const AIChatSection = ({
       )}
 
       {showAIPanel ? (
-        <Card className="flex-1 flex flex-col shadow-2xl border-0 overflow-hidden bg-white dark:bg-slate-900 min-h-0">
+        <Card className="flex-1 flex flex-col shadow-none border-0 overflow-hidden bg-white dark:bg-slate-900 min-h-0">
           <CardHeader className="h-14 py-0 border-b bg-white dark:bg-slate-900 z-10 shrink-0 flex items-center justify-center">
             <div className="flex items-center justify-between w-full">
               <div className="flex items-center gap-3">
-                <Avatar className="w-12 h-12 border-2 border-teal-100 dark:border-teal-900 shadow-sm">
+                <Avatar className="w-12 h-12 border-2 border-teal-100 dark:border-teal-900 shadow-none">
                   <AvatarImage src={avatarUrl || ''} />
                   <AvatarFallback className="bg-teal-50 text-teal-600">
                     <Brain className="w-6 h-6" />
@@ -207,13 +256,13 @@ export const AIChatSection = ({
                 <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800/50 p-1 rounded-full border border-slate-100 dark:border-slate-700 mr-2">
                   <button
                     onClick={() => setTutorGender('female')}
-                    className={`px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-tight transition-all ${tutorGender === 'female' ? 'bg-white dark:bg-slate-700 shadow-sm text-teal-600' : 'text-slate-400'}`}
+                    className={`px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-tight transition-all ${tutorGender === 'female' ? 'bg-white dark:bg-slate-700 shadow-none text-teal-600' : 'text-slate-400'}`}
                   >
                     Female
                   </button>
                   <button
                     onClick={() => setTutorGender('male')}
-                    className={`px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-tight transition-all ${tutorGender === 'male' ? 'bg-white dark:bg-slate-700 shadow-sm text-teal-600' : 'text-slate-400'}`}
+                    className={`px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-tight transition-all ${tutorGender === 'male' ? 'bg-white dark:bg-slate-700 shadow-none text-teal-600' : 'text-slate-400'}`}
                   >
                     Male
                   </button>
@@ -248,7 +297,7 @@ export const AIChatSection = ({
                       </div>
                       <div className="h-2 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden border border-white/50 dark:border-slate-700 shadow-inner">
                         <div
-                          className="h-full bg-gradient-to-r from-teal-500 to-emerald-500 transition-all duration-1000 ease-out shadow-[0_0_8px_rgba(20,184,166,0.3)]"
+                          className="h-full bg-primary transition-all duration-500 ease-out"
                           style={{ width: `${(topicsForCurrentSubject.filter((s: any) => s.status === 'completed').length / topicsForCurrentSubject.length) * 100}%` }}
                         />
                       </div>
@@ -263,7 +312,7 @@ export const AIChatSection = ({
                       </div>
                       <div className="h-2 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden border border-white/50 dark:border-slate-700 shadow-inner">
                         <div
-                          className="h-full bg-gradient-to-r from-teal-500 to-emerald-500 transition-all duration-1000 ease-out shadow-[0_0_8px_rgba(20,184,166,0.3)]"
+                          className="h-full bg-primary transition-all duration-500 ease-out"
                           style={{ width: `${(roadmap.subtopics.filter((s: any) => s.status === 'completed').length / roadmap.subtopics.length) * 100}%` }}
                         />
                       </div>
@@ -284,7 +333,7 @@ export const AIChatSection = ({
                             onClick={() => isLocked ? startPlacementCheck(st) : handleTopicSelect(st)}
                             className={`w-full text-left p-3 rounded-xl transition-all border group relative ${
                               isActive 
-                                ? 'bg-teal-50 dark:bg-teal-900/20 border-teal-200 dark:border-teal-800 shadow-sm' 
+                                ? 'bg-teal-50 dark:bg-teal-900/20 border-teal-200 dark:border-teal-800 shadow-none' 
                                 : isLocked
                                   ? 'bg-slate-50 dark:bg-slate-900 border-dashed border-slate-200 dark:border-slate-700 hover:bg-amber-50 dark:hover:bg-amber-950/20 hover:border-amber-300 dark:hover:border-amber-800'
                                   : 'hover:bg-white dark:hover:bg-slate-800 hover:border-slate-200 dark:hover:border-slate-700 bg-transparent border-transparent'
@@ -295,7 +344,7 @@ export const AIChatSection = ({
                                 isCompleted 
                                   ? 'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600' 
                                   : isActive 
-                                    ? 'bg-teal-600 text-white shadow-md' 
+                                    ? 'bg-teal-600 text-white shadow-none' 
                                     : isLocked
                                       ? 'bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 group-hover:bg-amber-200 dark:group-hover:bg-amber-900/50'
                                       : 'bg-slate-100 dark:bg-slate-800 text-slate-400 group-hover:bg-slate-200 dark:group-hover:bg-slate-700'
@@ -368,7 +417,7 @@ export const AIChatSection = ({
 
               {placementState?.status !== 'idle' ? (
                 <div className="fixed inset-0 z-[110] bg-slate-950/60 backdrop-blur-md overflow-y-auto p-4 md:p-8 flex justify-center items-start animate-in fade-in duration-300">
-                  <div className="w-full max-w-3xl my-auto rounded-2xl bg-white dark:bg-slate-950 shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+                  <div className="w-full max-w-3xl my-auto rounded-lg bg-white dark:bg-slate-950 shadow-none border border-slate-200 dark:border-slate-800 overflow-hidden">
                     <div className="flex items-start justify-between gap-4 p-5 border-b border-slate-100 dark:border-slate-800">
                       <div>
                         <p className="text-xs font-black uppercase tracking-widest text-teal-700 dark:text-teal-300">Placement Check</p>
@@ -416,7 +465,9 @@ export const AIChatSection = ({
                               <p className="text-xs font-black uppercase tracking-widest text-slate-500 mb-2">
                                 {index + 1}. {question.topic_name}
                               </p>
-                              <p className="font-bold text-slate-900 dark:text-slate-100 mb-3">{question.text}</p>
+                              <p className="font-bold text-slate-900 dark:text-slate-100 mb-3">
+                                <MathText>{question.text}</MathText>
+                              </p>
                               <div className="grid gap-2">
                                 {Object.entries(question.options || {}).map(([key, label]) => (
                                   <button
@@ -429,7 +480,8 @@ export const AIChatSection = ({
                                         : 'border-slate-200 bg-white text-slate-700 hover:border-teal-300 hover:bg-teal-50/60 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-teal-950/20'
                                     }`}
                                   >
-                                    <span className="font-black mr-2">{key}.</span>{String(label)}
+                                    <span className="font-black mr-2">{key}.</span>
+                                    <MathText>{String(label)}</MathText>
                                   </button>
                                 ))}
                               </div>
@@ -498,7 +550,7 @@ export const AIChatSection = ({
                 <div className="max-w-6xl mx-auto p-4 lg:p-6 pb-20">
                   {aiChatMessages.length === 0 ? (
                     <div className="text-center py-20 animate-in fade-in zoom-in duration-700">
-                      <div className="w-28 h-28 bg-gradient-to-br from-teal-500 to-emerald-600 rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-2xl shadow-teal-500/20 rotate-3 hover:rotate-0 transition-transform duration-500 overflow-hidden border-4 border-white dark:border-slate-800">
+                      <div className="w-28 h-28 bg-primary rounded-lg flex items-center justify-center mx-auto mb-8 shadow-none  transition-transform duration-500 overflow-hidden border-4 border-white dark:border-slate-800">
                         <img src={`/avatars/ai_tutor_${tutorGender}.png`} alt="AI Tutor" className="w-full h-full object-cover scale-110" />
                       </div>
                       <h3 className="text-3xl font-black text-slate-800 dark:text-slate-100 mb-4 tracking-tight">Your AI Learning Partner</h3>
@@ -510,7 +562,7 @@ export const AIChatSection = ({
                         <Button
                           variant="outline"
                           disabled={roadmapLoading}
-                          className="h-auto py-5 px-6 rounded-2xl border-slate-200 dark:border-slate-800 hover:border-teal-500 hover:bg-teal-50 dark:hover:bg-teal-950/20 transition-all hover:scale-[1.02] shadow-sm"
+                          className="h-auto py-5 px-6 rounded-lg border-slate-200 dark:border-slate-800 hover:border-teal-500 hover:bg-teal-50 dark:hover:bg-teal-950/20 transition-all  shadow-none"
                           onClick={() => handleAIContinue(`Give me a learning map for ${focusTopicLabel}. Show the goal, the simple idea, and the first thing I should try.`)}
                         >
                           <div className="text-left">
@@ -521,7 +573,7 @@ export const AIChatSection = ({
                         <Button
                           variant="outline"
                           disabled={roadmapLoading}
-                          className="h-auto py-5 px-6 rounded-2xl border-slate-200 dark:border-slate-800 hover:border-teal-500 hover:bg-teal-50 dark:hover:bg-teal-950/20 transition-all hover:scale-[1.02] shadow-sm"
+                          className="h-auto py-5 px-6 rounded-lg border-slate-200 dark:border-slate-800 hover:border-teal-500 hover:bg-teal-50 dark:hover:bg-teal-950/20 transition-all  shadow-none"
                           onClick={() => handleAIContinue(`Teach me ${focusTopicLabel} interactively. Explain one idea, ask one check question, then wait for me.`)}
                         >
                           <div className="text-left">
@@ -536,7 +588,7 @@ export const AIChatSection = ({
                       {aiChatMessages.map((msg, idx) => (
                         <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-4 duration-500`}>
                           <div className={`flex gap-4 max-w-[90%] lg:max-w-[80%] ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
-                            <Avatar className="w-10 h-10 flex-shrink-0 shadow-lg border-2 border-white dark:border-slate-800">
+                            <Avatar className="w-10 h-10 flex-shrink-0 shadow-none border-2 border-white dark:border-slate-800">
                               {msg.role === 'ai' ? (
                                 <AvatarImage src={`/avatars/ai_tutor_${tutorGender}.png`} className="object-cover" />
                               ) : (
@@ -547,15 +599,15 @@ export const AIChatSection = ({
                               </AvatarFallback>
                             </Avatar>
                             <div className="flex flex-col gap-3 max-w-full">
-                              <div className={`p-5 rounded-3xl shadow-xl ${msg.role === 'user'
-                                ? 'bg-gradient-to-br from-teal-600 to-teal-700 text-white rounded-tr-none'
+                              <div className={`p-5 rounded-lg shadow-none ${msg.role === 'user'
+                                ? 'bg-primary text-primary-foreground rounded-tr-none'
                                 : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-100 dark:border-slate-700 rounded-tl-none ring-1 ring-black/5 dark:ring-white/5'
                                 }`}>
                                 <div className={`${isYoungLearner && msg.role === 'ai' ? 'text-xl font-bold font-display' : 'text-base'} leading-relaxed prose dark:prose-invert max-w-none break-words overflow-hidden`}>
                                   {msg.role === 'ai' ? (
-                                    <ReactMarkdown>{msg.content}</ReactMarkdown>
+                                    <ReactMarkdown components={mathMarkdownComponents}>{normalizeAcademicTextForDisplay(msg.content)}</ReactMarkdown>
                                   ) : (
-                                    <p className="whitespace-pre-wrap">{msg.content}</p>
+                                    <p className="whitespace-pre-wrap"><MathText>{msg.content}</MathText></p>
                                   )}
                                 </div>
                               </div>
@@ -568,7 +620,7 @@ export const AIChatSection = ({
                                     <Video className="w-4 h-4" /> Watch these to understand better:
                                   </p>
                                   {activeVideo && (
-                                    <div className="relative w-full rounded-xl overflow-hidden shadow-2xl ring-1 ring-black/10 transition-all duration-700" 
+                                    <div className="relative w-full rounded-xl overflow-hidden shadow-none ring-1 ring-black/10 transition-all duration-700" 
                                          style={{paddingBottom: '56.25%'}}>
                                       <iframe
                                         className="absolute inset-0 w-full h-full"
@@ -579,7 +631,7 @@ export const AIChatSection = ({
                                       />
                                       <button
                                         className="absolute top-2 right-2 bg-black/60 text-white 
-                                                   rounded-full p-2 hover:bg-black/80 shadow-lg"
+                                                   rounded-full p-2 hover:bg-black/80 shadow-none"
                                         onClick={() => setActiveVideo(null)}
                                       >
                                         <X className="w-4 h-4" />
@@ -588,7 +640,7 @@ export const AIChatSection = ({
                                   )}
                                   <div className="flex gap-4 overflow-x-auto pb-2 no-scrollbar">
                                     {suggestedVideos.map((video, vIdx) => (
-                                      <Card key={vIdx} className="min-w-[200px] max-w-[200px] shrink-0 overflow-hidden cursor-pointer hover:border-teal-400 transition-all shadow-md group" onClick={() => { setSelectedVideo(video); setActiveVideo(video.id); }}>
+                                      <Card key={vIdx} className="min-w-[200px] max-w-[200px] shrink-0 overflow-hidden cursor-pointer hover:border-teal-400 transition-all shadow-none group" onClick={() => { setSelectedVideo(video); setActiveVideo(video.id); }}>
                                         <div className="relative aspect-video">
                                           <img src={video.thumbnail} alt={video.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform" />
                                           <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
@@ -604,15 +656,22 @@ export const AIChatSection = ({
                                 </div>
                               )}
 
-                              {/* Young Learner Speaker Icon */}
-                              {msg.role === 'ai' && isYoungLearner && (
+                              {/* Speaker control */}
+                              {msg.role === 'ai' && isSpeechSupported && (
                                 <Button 
                                   variant="ghost" 
                                   size="sm" 
-                                  onClick={() => speak(msg.content)}
-                                  className="self-start text-teal-600 dark:text-teal-400 hover:text-teal-700 mt-1"
+                                  onClick={() => {
+                                    if (isSpeaking) {
+                                      stop();
+                                    } else {
+                                      speak(msg.content, { force: true });
+                                    }
+                                  }}
+                                  className="self-start text-teal-600 dark:text-teal-400 hover:text-teal-700 mt-1 gap-2"
                                 >
-                                  🔊 Listen again
+                                  {isSpeaking ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+                                  {isSpeaking ? 'Stop audio' : 'Listen'}
                                 </Button>
                               )}
                             </div>
@@ -621,7 +680,7 @@ export const AIChatSection = ({
                       ))}
 
                       {!aiLoading && !showMasteryTest && aiChatMessages.length > 0 && (
-                        <div className="max-w-6xl mx-auto rounded-2xl border border-teal-100 dark:border-teal-900/50 bg-teal-50/60 dark:bg-teal-950/10 p-4 shadow-sm">
+                        <div className="max-w-6xl mx-auto rounded-lg border border-teal-100 dark:border-teal-900/50 bg-teal-50/60 dark:bg-teal-950/10 p-4 shadow-none">
                           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
                             <div>
                               <p className="text-xs font-black uppercase tracking-widest text-teal-700 dark:text-teal-300">Next Learning Move</p>
@@ -637,7 +696,7 @@ export const AIChatSection = ({
                                     key={action.label}
                                     variant="outline"
                                     size="sm"
-                                    className="rounded-2xl border-teal-100 bg-white text-slate-700 hover:bg-teal-50 hover:text-teal-800 dark:bg-slate-900 dark:border-teal-900/50 dark:text-slate-200 dark:hover:bg-teal-950/30"
+                                    className="rounded-lg border-teal-100 bg-white text-slate-700 hover:bg-teal-50 hover:text-teal-800 dark:bg-slate-900 dark:border-teal-900/50 dark:text-slate-200 dark:hover:bg-teal-950/30"
                                     onClick={() => handleAIContinue(action.prompt)}
                                   >
                                     <Icon className="w-4 h-4 mr-2 text-teal-600" />
@@ -653,11 +712,11 @@ export const AIChatSection = ({
                       {aiLoading && (
                         <div className="flex justify-start animate-in fade-in duration-300">
                           <div className="flex gap-4 items-center">
-                            <Avatar className="w-10 h-10 shadow-lg border-2 border-white dark:border-slate-800">
+                            <Avatar className="w-10 h-10 shadow-none border-2 border-white dark:border-slate-800">
                               <AvatarImage src={`/avatars/ai_tutor_${tutorGender}.png`} />
                               <AvatarFallback className="bg-teal-600 text-white"><Brain className="w-5 h-5" /></AvatarFallback>
                             </Avatar>
-                            <div className="flex items-center gap-2 p-4 px-6 bg-slate-50 dark:bg-slate-800/50 rounded-3xl rounded-tl-none border border-slate-100 dark:border-slate-700">
+                            <div className="flex items-center gap-2 p-4 px-6 bg-slate-50 dark:bg-slate-800/50 rounded-lg rounded-tl-none border border-slate-100 dark:border-slate-700">
                               <div className="flex gap-1">
                                 <span className="w-2 h-2 bg-teal-500 rounded-full animate-bounce [animation-duration:0.6s]" />
                                 <span className="w-2 h-2 bg-teal-500 rounded-full animate-bounce [animation-duration:0.6s] [animation-delay:0.2s]" />
@@ -683,21 +742,21 @@ export const AIChatSection = ({
                       <>
                         <Button
                           variant="outline"
-                          className="whitespace-nowrap rounded-3xl bg-amber-100 text-amber-800 border-amber-200 hover:bg-amber-200 px-6 py-6 font-black text-lg"
+                          className="whitespace-nowrap rounded-lg bg-amber-100 text-amber-800 border-amber-200 hover:bg-amber-200 px-6 py-6 font-black text-lg"
                           onClick={() => handleAIContinue("Explain like I'm 5! 🐥")}
                         >
                           🐥 Explain simpler
                         </Button>
                         <Button
                           variant="outline"
-                          className="whitespace-nowrap rounded-3xl bg-teal-100 text-teal-800 border-teal-200 hover:bg-teal-200 px-6 py-6 font-black text-lg"
+                          className="whitespace-nowrap rounded-lg bg-teal-100 text-teal-800 border-teal-200 hover:bg-teal-200 px-6 py-6 font-black text-lg"
                           onClick={() => handleAIContinue("Show me a picture or video! 🎥")}
                         >
                           🎥 See it
                         </Button>
                         <Button
                           variant="outline"
-                          className="whitespace-nowrap rounded-3xl bg-teal-100 text-teal-800 border-teal-200 hover:bg-teal-200 px-6 py-6 font-black text-lg"
+                          className="whitespace-nowrap rounded-lg bg-teal-100 text-teal-800 border-teal-200 hover:bg-teal-200 px-6 py-6 font-black text-lg"
                           onClick={() => handleAIContinue("I'm confused, help! 🙋")}
                         >
                           🙋 I'm stuck
@@ -708,7 +767,7 @@ export const AIChatSection = ({
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="whitespace-nowrap rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-teal-50 dark:hover:bg-teal-900/20 px-5 py-5 font-bold"
+                          className="whitespace-nowrap rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-teal-50 dark:hover:bg-teal-900/20 px-5 py-5 font-bold"
                           onClick={() => {
                             const lastAI = aiChatMessages.filter(m => m.role === 'ai').slice(-1)[0]?.content || '';
                             const contextSnippet = lastAI.length > 60 ? lastAI.substring(0, 60) + "..." : lastAI;
@@ -720,7 +779,7 @@ export const AIChatSection = ({
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="whitespace-nowrap rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-teal-50 dark:hover:bg-teal-900/20 px-5 py-5 font-bold"
+                          className="whitespace-nowrap rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-teal-50 dark:hover:bg-teal-900/20 px-5 py-5 font-bold"
                           onClick={() => {
                             const lastAI = aiChatMessages.filter(m => m.role === 'ai').slice(-1)[0]?.content || '';
                             const contextSnippet = lastAI.length > 60 ? lastAI.substring(0, 60) + "..." : lastAI;
@@ -736,8 +795,8 @@ export const AIChatSection = ({
 
                 <div className="relative group max-w-6xl mx-auto">
                   {isCurrentTopicCompleted && (
-                    <div className="absolute inset-0 z-20 flex items-center justify-center bg-slate-50/80 dark:bg-slate-900/80 rounded-3xl backdrop-blur-[1px] border border-emerald-200 dark:border-emerald-900/50">
-                      <div className="flex items-center gap-3 px-6 py-3 bg-white dark:bg-slate-900 rounded-2xl shadow-xl shadow-emerald-500/10 border border-emerald-100 dark:border-emerald-900">
+                    <div className="absolute inset-0 z-20 flex items-center justify-center bg-slate-50/80 dark:bg-slate-900/80 rounded-lg backdrop-blur-[1px] border border-emerald-200 dark:border-emerald-900/50">
+                      <div className="flex items-center gap-3 px-6 py-3 bg-white dark:bg-slate-900 rounded-lg shadow-none  border border-emerald-100 dark:border-emerald-900">
                         <Trophy className="w-6 h-6 text-emerald-500 animate-bounce" />
                         <div>
                           <p className="text-sm font-black text-slate-800 dark:text-slate-100">Topic Mastered! 🏆</p>
@@ -756,33 +815,56 @@ export const AIChatSection = ({
                   )}
                   <Input
                     placeholder={showMasteryTest ? "Mastery Test in Progress..." : (isCheckingUnderstanding ? "Type your explanation here..." : isCurrentTopicCompleted ? "Topic completed!" : `Ask about ${(typeof viewingSubtopic === 'object' ? (viewingSubtopic as any)?.name : viewingSubtopic) || activeSubtopic || "this topic"}...`)}
-                    className="rounded-3xl py-6 pl-6 pr-20 bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 focus:ring-4 focus:ring-teal-500/10 transition-all shadow-2xl text-lg resize-none"
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    className="rounded-lg py-6 pl-6 pr-32 bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 focus:ring-4 focus:ring-teal-500/10 transition-all shadow-none text-lg resize-none"
                     autoFocus
                     disabled={showMasteryTest || aiLoading || isCurrentTopicCompleted}
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter' && e.currentTarget.value.trim() && !showMasteryTest && !isCurrentTopicCompleted) {
-                        handleAIContinue(e.currentTarget.value);
-                        e.currentTarget.value = '';
+                      if (e.key === 'Enter' && chatInput.trim() && !showMasteryTest && !isCurrentTopicCompleted) {
+                        e.preventDefault();
+                        submitChatInput();
                       }
                     }}
                   />
                   {!showMasteryTest && !isCurrentTopicCompleted && (
-                    <Button
-                      size="icon"
-                      disabled={aiLoading}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 w-12 h-12 rounded-2xl bg-gradient-to-br from-teal-500 to-teal-600 hover:from-teal-600 hover:to-teal-700 shadow-2xl shadow-teal-500/30 transition-all hover:scale-105 active:scale-95 disabled:opacity-50"
-                      onClick={(e) => {
-                        const input = e.currentTarget.parentElement?.querySelector('input');
-                        if (input && input.value.trim() && !isCurrentTopicCompleted) {
-                          handleAIContinue(input.value);
-                          input.value = '';
-                        }
-                      }}
-                    >
-                      <Brain className="w-7 h-7 text-white" />
-                    </Button>
+                    <>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="outline"
+                        disabled={!isSpeechRecognitionSupported || aiLoading}
+                        title={isListening ? 'Stop voice input' : 'Start voice input'}
+                        className={`absolute right-16 top-1/2 -translate-y-1/2 w-12 h-12 rounded-lg shadow-none transition-all active:scale-95 disabled:opacity-50 ${isListening ? 'border-teal-500 bg-teal-50 text-teal-700 dark:bg-teal-950/30' : 'border-slate-200 bg-white text-slate-600 hover:bg-teal-50 hover:text-teal-700 dark:bg-slate-950 dark:border-slate-800'}`}
+                        onClick={toggleListening}
+                      >
+                        {isListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+                      </Button>
+                      <Button
+                        type="button"
+                        size="icon"
+                        disabled={aiLoading || !chatInput.trim()}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 w-12 h-12 rounded-lg bg-primary hover:bg-primary/90 shadow-none transition-all active:scale-95 disabled:opacity-50"
+                        onClick={submitChatInput}
+                      >
+                        <Brain className="w-7 h-7 text-white" />
+                      </Button>
+                    </>
                   )}
                 </div>
+                {(isListening || interimTranscript || speechError || !isSpeechRecognitionSupported) && !showMasteryTest && !isCurrentTopicCompleted && (
+                  <div className="max-w-6xl mx-auto mt-2 min-h-5 text-xs font-medium text-slate-500 dark:text-slate-400">
+                    {isListening && (
+                      <span className="text-teal-700 dark:text-teal-300">
+                        Listening{interimTranscript ? `: ${interimTranscript}` : '...'}
+                      </span>
+                    )}
+                    {!isListening && speechError && <span className="text-rose-600 dark:text-rose-400">{speechError}</span>}
+                    {!isListening && !speechError && !isSpeechRecognitionSupported && (
+                      <span>Voice input is not supported in this browser. Try Chrome or Edge.</span>
+                    )}
+                  </div>
+                )}
                 <div className="flex items-center justify-center gap-6 mt-4 opacity-50">
                   <p className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">EduNexus Socratic Engineering v2.0</p>
                   <div className="h-1 w-1 bg-slate-400 rounded-full" />
@@ -793,31 +875,31 @@ export const AIChatSection = ({
           </div>
         </Card>
       ) : (
-        <div className="grid lg:grid-cols-3 gap-6 flex-1 min-h-0 overflow-y-auto no-scrollbar pb-6 px-4">
-          <div className="lg:col-span-2 space-y-6">
-            <Card className="border-0 shadow-lg bg-white dark:bg-slate-900">
-              <CardHeader className="flex flex-row items-center justify-between">
+        <div className="grid xl:grid-cols-[minmax(0,1fr)_320px] gap-4 flex-1 min-h-0 overflow-y-auto no-scrollbar pb-6 px-4">
+          <div className="min-w-0 space-y-4">
+            <Card className="rounded-lg border-border shadow-none bg-card">
+              <CardHeader className="flex flex-row items-center justify-between py-4">
                 <div>
-                  <CardTitle>Select Subject</CardTitle>
+                  <CardTitle className="text-lg font-semibold">Select Subject</CardTitle>
                   <p className="text-xs text-muted-foreground mt-1">Pick a subject you are enrolled in to start learning</p>
                 </div>
               </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+              <CardContent className="pt-0">
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
                   {displaySubjects.length > 0 ? (
                     displaySubjects.map(subject => (
                       <button
                         key={subject.id}
-                        className={`group p-4 rounded-2xl border-2 transition-all flex flex-col items-center gap-3 text-center ${selectedSubject?.id === subject.id
-                          ? 'border-teal-500 bg-teal-50/50 dark:bg-teal-950/20'
-                          : 'border-slate-100 dark:border-slate-800 hover:border-teal-200 dark:hover:border-teal-900/50 hover:bg-slate-50/50 dark:hover:bg-slate-900/50'
+                        className={`group min-w-0 p-3 rounded-lg border transition-all flex items-center gap-3 text-left ${selectedSubject?.id === subject.id
+                          ? 'border-primary bg-primary/10'
+                          : 'border-border hover:border-primary/40 hover:bg-muted/40'
                           }`}
                         onClick={() => handleSubjectSelect(subject)}
                       >
-                        <div className="w-12 h-12 rounded-xl bg-teal-100 dark:bg-teal-500/10 flex items-center justify-center text-teal-600 dark:text-teal-400 group-hover:scale-110 transition-transform">
-                          <BookMarked className="w-6 h-6" />
+                        <div className="w-9 h-9 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0">
+                          <BookMarked className="w-4 h-4" />
                         </div>
-                        <span className="font-semibold text-sm">{subject.name}</span>
+                        <span className="min-w-0 font-semibold text-sm truncate">{subject.name}</span>
                       </button>
                     ))
                   ) : (
@@ -847,7 +929,7 @@ export const AIChatSection = ({
 
             {/* Suggested Videos Section */}
             {selectedTopic && suggestedVideos.length > 0 && (
-              <Card className="border-0 shadow-lg bg-gradient-to-br from-teal-50 to-white dark:from-teal-950/10 dark:to-slate-900 border-teal-100 dark:border-teal-900/50 mb-6">
+              <Card className="border-0 shadow-none bg-card border-teal-100 dark:border-teal-900/50 mb-6">
                 <CardHeader className="pb-2">
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-lg flex items-center gap-2">
@@ -858,7 +940,7 @@ export const AIChatSection = ({
                 </CardHeader>
                 <CardContent>
                   {activeVideo && (
-                    <div className="mb-6 relative w-full rounded-xl overflow-hidden shadow-2xl ring-1 ring-black/10 transition-all duration-700" 
+                    <div className="mb-6 relative w-full rounded-xl overflow-hidden shadow-none ring-1 ring-black/10 transition-all duration-700" 
                          style={{paddingBottom: '56.25%'}}>
                       <iframe
                         className="absolute inset-0 w-full h-full"
@@ -869,7 +951,7 @@ export const AIChatSection = ({
                       />
                       <button
                         className="absolute top-2 right-2 bg-black/60 text-white 
-                                   rounded-full p-2 hover:bg-black/80 shadow-lg"
+                                   rounded-full p-2 hover:bg-black/80 shadow-none"
                         onClick={() => setActiveVideo(null)}
                       >
                         <X className="w-4 h-4" />
@@ -885,7 +967,7 @@ export const AIChatSection = ({
                           setActiveVideo(video.id);
                         }}>
                           <div className="relative aspect-video overflow-hidden">
-                            <img src={video.thumbnail} alt={video.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                            <img src={video.thumbnail} alt={video.title} className="w-full h-full object-cover group- transition-transform duration-500" />
                             <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                               <Play className="w-10 h-10 text-white fill-current" />
                             </div>
@@ -904,14 +986,14 @@ export const AIChatSection = ({
             )}
 
             {selectedSubject && (
-              <Card className="border-0 shadow-lg animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <CardHeader className="flex flex-row items-center justify-between">
+              <Card className="rounded-lg border-border shadow-none animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <CardHeader className="flex flex-row items-center justify-between py-4">
                   <div>
-                    <CardTitle className="text-lg">Topics in {selectedSubject.name}</CardTitle>
+                    <CardTitle className="text-lg font-semibold">Topics in {selectedSubject.name}</CardTitle>
                     <p className="text-xs text-muted-foreground mt-1">Choose a specific area to focus on</p>
                   </div>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="pt-0">
                   {loading ? (
                     <div className="flex justify-center py-10"><Loader2 className="w-8 h-8 animate-spin text-teal-500" /></div>
                   ) : (
@@ -925,23 +1007,25 @@ export const AIChatSection = ({
                             <BookOpen className="w-4 h-4 text-teal-500" />
                             {termGroup as string}
                           </h4>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                          <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
                             {topics.filter(t => (t.term || 'Other') === termGroup).map(topic => {
                               const tp = getTopicProgress(topic.id);
+                              const structuredTopic = topicsForCurrentSubject.find((st: any) => st.id === topic.id);
+                              const isLocked = structuredTopic?.status === 'locked';
                               const pct = tp?.progress_pct ?? 0;
                               const done = !!tp?.completed_at;
                               return (
                                 <Button
                                   key={topic.id}
                                   variant={selectedTopic?.id === topic.id ? 'default' : 'outline'}
-                                  className={`h-auto min-h-[3.5rem] rounded-xl text-sm justify-start px-4 gap-3 flex-col items-stretch ${selectedTopic?.id === topic.id ? 'bg-teal-600' : 'hover:bg-teal-50 dark:hover:bg-teal-950/30'
+                                  className={`h-auto min-h-[3.25rem] rounded-lg text-sm justify-start px-3 gap-2 flex-col items-stretch ${selectedTopic?.id === topic.id ? 'bg-primary text-primary-foreground' : isLocked ? 'border-dashed border-amber-200 bg-amber-50/40 text-slate-600 hover:bg-amber-50 dark:border-amber-900 dark:bg-amber-950/10' : 'hover:bg-muted'
                                     }`}
                                   onClick={() => handleTopicSelect(topic)}
                                 >
                                   <div className="flex items-center gap-3 w-full">
                                     <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${selectedTopic?.id === topic.id ? 'bg-white/20' : 'bg-slate-100 dark:bg-slate-800'
                                       }`}>
-                                      {done ? <CheckCircle2 className="w-4 h-4 text-emerald-500" /> : <Layers className="w-4 h-4" />}
+                                      {done ? <CheckCircle2 className="w-4 h-4 text-emerald-500" /> : isLocked ? <Lock className="w-4 h-4 text-amber-600" /> : <Layers className="w-4 h-4" />}
                                     </div>
                                     <span className="flex-1 text-left whitespace-normal">{topic.name}</span>
                                     {pct > 0 && !done && (
@@ -970,11 +1054,36 @@ export const AIChatSection = ({
               </Card>
             )}
 
+            {lockedLessonNotice && (
+              <Card className="border border-amber-200 bg-amber-50 dark:border-amber-900/70 dark:bg-amber-950/20 shadow-none animate-in fade-in slide-in-from-bottom-4 duration-300">
+                <CardContent className="p-5">
+                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center text-amber-700 dark:text-amber-200 shrink-0">
+                        <Lock className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-black uppercase tracking-widest text-amber-700 dark:text-amber-300">Lesson Locked</p>
+                        <h3 className="text-lg font-black text-slate-900 dark:text-slate-100">{lockedLessonNotice.requestedTopic?.name}</h3>
+                        <p className="text-sm text-slate-700 dark:text-slate-300 mt-1">{lockedLessonNotice.message}</p>
+                      </div>
+                    </div>
+                    {lockedLessonNotice.currentTopic ? (
+                      <Button className="bg-teal-600 hover:bg-teal-700 rounded-xl gap-2" onClick={openCurrentUnlockedLesson}>
+                        <Play className="w-4 h-4" />
+                        Open {lockedLessonNotice.currentTopic.name}
+                      </Button>
+                    ) : null}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             {selectedTopic && (
-              <Card className="border-0 shadow-xl bg-gradient-to-r from-teal-600 to-teal-700 text-white animate-in zoom-in-95 duration-500">
+              <Card className="border-0 shadow-none bg-primary hover:bg-primary/90 text-white animate-in zoom-in-95 duration-500">
                 <CardContent className="p-8">
                   <div className="flex flex-col md:flex-row items-center gap-8">
-                    <div className="w-32 h-32 bg-white/20 backdrop-blur-md rounded-3xl flex items-center justify-center flex-shrink-0 border border-white/20 overflow-hidden shadow-2xl">
+                    <div className="w-32 h-32 bg-white/20 backdrop-blur-md rounded-lg flex items-center justify-center flex-shrink-0 border border-white/20 overflow-hidden shadow-none">
                       <img src={`/avatars/ai_tutor_${tutorGender}.png`} alt="AI Tutor" className="w-full h-full object-cover" />
                     </div>
                     <div className="flex-1 text-center md:text-left">
@@ -1001,7 +1110,7 @@ export const AIChatSection = ({
           </div>
 
           <div className="space-y-6">
-            <Card className="border-0 shadow-lg">
+            <Card className="border-0 shadow-none">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm flex items-center gap-2">
                   <Target className="w-4 h-4 text-amber-500" /> Suggested Topics
@@ -1032,7 +1141,7 @@ export const AIChatSection = ({
               </CardContent>
             </Card>
 
-            <Card className="border-0 shadow-lg">
+            <Card className="border-0 shadow-none">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm flex items-center gap-2">
                   <Activity className="w-4 h-4 text-red-500" /> Areas for Improvement
@@ -1049,10 +1158,10 @@ export const AIChatSection = ({
               </CardContent>
             </Card>
 
-            <Card className="border-0 shadow-lg bg-teal-50 dark:bg-emerald-950/20 border-teal-100 dark:border-teal-900/50">
+            <Card className="border-0 shadow-none bg-teal-50 dark:bg-emerald-950/20 border-teal-100 dark:border-teal-900/50">
               <CardContent className="p-6">
                 <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-white dark:bg-slate-900 rounded-2xl flex items-center justify-center shadow-sm">
+                  <div className="w-12 h-12 bg-white dark:bg-slate-900 rounded-lg flex items-center justify-center shadow-none">
                     <Trophy className="w-6 h-6 text-teal-600" />
                   </div>
                   <div>
@@ -1085,7 +1194,7 @@ function BrainPowerCardsSection({ topicName, subjectName, onJumpIn }: { topicNam
   const cards = data?.cards || [];
 
   return (
-    <Card className="border-0 shadow-lg bg-gradient-to-br from-teal-50 to-white dark:from-teal-950/10 dark:to-slate-900 border-teal-100 dark:border-teal-900/50 mb-6">
+    <Card className="border-0 shadow-none bg-card border-teal-100 dark:border-teal-900/50 mb-6">
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg flex items-center gap-2">

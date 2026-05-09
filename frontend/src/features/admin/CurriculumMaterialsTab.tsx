@@ -34,7 +34,7 @@ export const CurriculumMaterialsTab: React.FC<CurriculumMaterialsTabProps> = ({ 
   const fetchMaterials = async () => {
     try {
       const data = await adminAPI.listMaterials(matFilters);
-      setMaterials(data);
+      setMaterials(Array.isArray(data) ? data : data?.materials || []);
     } catch (error: any) {
       toast.error('Failed to fetch materials: ' + error.message);
     }
@@ -86,9 +86,9 @@ export const CurriculumMaterialsTab: React.FC<CurriculumMaterialsTabProps> = ({ 
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
       {/* Upload Form */}
-      <Card className="lg:col-span-1">
+      <Card className="lg:col-span-1 rounded-lg border-border shadow-none">
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
             <Upload className="w-4 h-4" /> Bulk Upload
@@ -118,7 +118,7 @@ export const CurriculumMaterialsTab: React.FC<CurriculumMaterialsTabProps> = ({ 
             <div className="space-y-2">
               <Label>Education Level *</Label>
               <select
-                className="w-full h-10 px-3 rounded-md border border-slate-200 dark:border-slate-800 bg-transparent"
+                className="w-full h-10 px-3 rounded-lg border border-border bg-background"
                 value={materialForm.education_level}
                 onChange={e => setMaterialForm({ ...materialForm, education_level: e.target.value })}
                 required
@@ -155,17 +155,17 @@ export const CurriculumMaterialsTab: React.FC<CurriculumMaterialsTabProps> = ({ 
       </Card>
 
       {/* Materials List */}
-      <Card className="lg:col-span-2">
+      <Card className="lg:col-span-2 rounded-lg border-border shadow-none">
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
               <CardTitle className="text-lg">Uploaded Materials</CardTitle>
               <CardDescription>Manage curriculum content</CardDescription>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 sm:justify-end">
               <Input
                 placeholder="Search..."
-                className="w-32 h-8 text-xs"
+                className="h-9 w-full text-sm sm:w-44"
                 value={matFilters.search}
                 onChange={e => setMatFilters({ ...matFilters, search: e.target.value })}
               />
@@ -181,20 +181,20 @@ export const CurriculumMaterialsTab: React.FC<CurriculumMaterialsTabProps> = ({ 
               </div>
             ) : (
               materials.map(mat => (
-                <div key={mat.id} className="flex items-center justify-between p-3 border border-slate-100 dark:border-slate-800 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors">
-                  <div className="flex items-center gap-3">
+                <div key={mat.id} className="flex flex-col gap-3 p-3 border border-border rounded-lg hover:bg-muted/50 transition-colors sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0 flex items-center gap-3">
                     <div className="p-2 bg-primary/10 rounded-md">
                       <FileText className="w-4 h-4 text-primary" />
                     </div>
-                    <div>
-                      <h4 className="font-semibold text-sm">{mat.title}</h4>
-                      <div className="flex gap-2 text-[10px] text-slate-500">
+                    <div className="min-w-0">
+                      <h4 className="font-semibold text-sm truncate">{mat.title || 'Untitled material'}</h4>
+                      <div className="flex flex-wrap gap-2 text-[10px] text-slate-500">
                         <span className="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">{(mat.subject || 'N/A').replace(/_/g, ' ')}</span>
                         <span className="bg-accent/10 text-amber-700 px-1.5 py-0.5 rounded uppercase font-bold">{(mat.education_level || 'N/A').replace(/_/g, ' ')}</span>
                       </div>
                     </div>
                   </div>
-                  <Button variant="ghost" size="icon" onClick={() => handleDeleteMaterial(mat.id)} className="text-slate-400 hover:text-red-500">
+                  <Button variant="ghost" size="icon" onClick={() => handleDeleteMaterial(mat.id)} className="self-end rounded-lg text-slate-400 hover:text-red-500 sm:self-auto">
                     <Trash2 className="w-4 h-4" />
                   </Button>
                 </div>

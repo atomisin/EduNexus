@@ -157,24 +157,24 @@ export const TeacherReports: React.FC<TeacherReportsProps> = ({ onNavigate }) =>
   if (loading && reports.length === 0) {
     return (
       <div className="flex justify-center items-center py-20">
-        <Loader2 className="w-8 h-8 animate-spin text-teal-600" />
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
+    <div className="space-y-5">
+      <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Monthly Reports</h2>
-          <p className="text-sm text-slate-500">Review AI-generated student progress reports before sending them to parents.</p>
+          <h2 className="text-2xl font-semibold tracking-tight">Monthly Reports</h2>
+          <p className="text-sm text-muted-foreground">Review student progress reports before sending them to parents.</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={fetchReports} disabled={loading} size="sm">
             <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
-          <Button onClick={handleGenerateReports} disabled={isGenerating} size="sm" className="bg-teal-600 hover:bg-teal-700">
+          <Button onClick={handleGenerateReports} disabled={isGenerating} size="sm" className="bg-primary hover:bg-primary/90">
             {isGenerating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Calendar className="w-4 h-4 mr-2" />}
             Generate Current Month
           </Button>
@@ -184,7 +184,7 @@ export const TeacherReports: React.FC<TeacherReportsProps> = ({ onNavigate }) =>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Reports List */}
         <div className="lg:col-span-1 space-y-4">
-          <Card>
+          <Card className="rounded-lg border-border shadow-none">
             <CardHeader className="py-4 border-b">
               <CardTitle className="text-base">All Reports</CardTitle>
             </CardHeader>
@@ -193,7 +193,7 @@ export const TeacherReports: React.FC<TeacherReportsProps> = ({ onNavigate }) =>
                 <div className="p-8 text-center text-slate-500">
                   <FileText className="w-10 h-10 mx-auto mb-3 opacity-20" />
                   <p className="text-sm">No reports generated yet.</p>
-                  <Button variant="link" onClick={handleGenerateReports} className="text-teal-600">
+                  <Button variant="link" onClick={handleGenerateReports} className="text-primary">
                     Generate now
                   </Button>
                 </div>
@@ -203,7 +203,7 @@ export const TeacherReports: React.FC<TeacherReportsProps> = ({ onNavigate }) =>
                     <div 
                       key={report.id}
                       onClick={() => handleSelectReport(report)}
-                      className={`p-4 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors ${selectedReport?.id === report.id ? 'bg-primary/5 dark:bg-primary/10 border-l-4 border-primary' : ''}`}
+                      className={`p-4 cursor-pointer hover:bg-muted/50 transition-colors ${selectedReport?.id === report.id ? 'bg-primary/5 dark:bg-primary/10 border-l-4 border-primary' : ''}`}
                     >
                       <div className="flex justify-between items-start mb-2">
                         <div className="font-medium">{report.student_name}</div>
@@ -224,8 +224,8 @@ export const TeacherReports: React.FC<TeacherReportsProps> = ({ onNavigate }) =>
         {/* Report Review Panel */}
         <div className="lg:col-span-2">
           {selectedReport ? (
-            <Card className="border-t-4 border-t-primary">
-              <CardHeader className="flex flex-row items-start justify-between bg-slate-50 dark:bg-slate-900/50">
+            <Card className="rounded-lg border border-border shadow-none">
+              <CardHeader className="flex flex-row items-start justify-between bg-muted/30 border-b border-border">
                 <div>
                   <CardTitle>{selectedReport.student_name} - Progress Report</CardTitle>
                   <CardDescription className="mt-1">
@@ -242,7 +242,7 @@ export const TeacherReports: React.FC<TeacherReportsProps> = ({ onNavigate }) =>
               <CardContent className="p-6 space-y-6">
                 
                 {/* Visual indicator of what happened in background */}
-                <div className="bg-primary/5 dark:bg-primary/10 p-4 rounded-xl border border-primary/10 dark:border-primary/20">
+                <div className="bg-primary/5 dark:bg-primary/10 p-4 rounded-lg border border-primary/10 dark:border-primary/20">
                     <h4 className="flex items-center gap-2 font-medium text-primary mb-2">
                     <CheckCircle className="w-4 h-4" /> AI Generated Content Ready
                   </h4>
@@ -254,7 +254,7 @@ export const TeacherReports: React.FC<TeacherReportsProps> = ({ onNavigate }) =>
                 {/* Session Stats Cards */}
                 {selectedReport.report_data && (
                   <div className="grid grid-cols-3 gap-4 mb-6">
-                    <div className="bg-emerald-50 dark:bg-emerald-900/10 p-4 rounded-xl border border-emerald-200 dark:border-emerald-800">
+                    <div className="bg-emerald-50 dark:bg-emerald-900/10 p-4 rounded-lg border border-emerald-200 dark:border-emerald-800">
                       <div className="flex items-center gap-2 mb-1">
                         <Users className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                         <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium uppercase tracking-wide">Sessions</span>
@@ -263,7 +263,7 @@ export const TeacherReports: React.FC<TeacherReportsProps> = ({ onNavigate }) =>
                         {selectedReport.report_data.total_sessions}
                       </div>
                     </div>
-                    <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
+                    <div className="bg-muted/40 p-4 rounded-lg border border-border">
                       <div className="flex items-center gap-2 mb-1">
                         <Clock className="w-4 h-4 text-slate-600 dark:text-slate-400" />
                         <span className="text-xs text-slate-600 dark:text-slate-400 font-medium uppercase tracking-wide">Total Minutes</span>
@@ -272,7 +272,7 @@ export const TeacherReports: React.FC<TeacherReportsProps> = ({ onNavigate }) =>
                         {selectedReport.report_data.total_duration_minutes}
                       </div>
                     </div>
-                    <div className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 p-4 rounded-xl border border-amber-100 dark:border-amber-800">
+                    <div className="bg-amber-50 dark:bg-amber-900/20 p-4 rounded-lg border border-amber-100 dark:border-amber-800">
                       <div className="flex items-center gap-2 mb-1">
                         <TrendingUp className="w-4 h-4 text-amber-600 dark:text-amber-400" />
                         <span className="text-xs text-amber-600 dark:text-amber-400 font-medium uppercase tracking-wide">Attendance</span>
@@ -392,7 +392,7 @@ export const TeacherReports: React.FC<TeacherReportsProps> = ({ onNavigate }) =>
                 <div className="flex gap-4 pt-4 border-t border-slate-100 dark:border-slate-800">
                   {selectedReport.status === 'generated' || selectedReport.status === 'approved' ? (
                     <Button 
-                      className="flex-1 bg-white hover:bg-slate-50 text-slate-900 border border-slate-200"
+                    className="flex-1 bg-background hover:bg-muted text-foreground border border-border"
                       onClick={handleApprove}
                       disabled={isApproving}
                     >
@@ -420,7 +420,7 @@ export const TeacherReports: React.FC<TeacherReportsProps> = ({ onNavigate }) =>
               </CardContent>
             </Card>
           ) : (
-            <div className="h-full flex flex-col items-center justify-center p-12 text-slate-400 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-xl">
+            <div className="h-full flex flex-col items-center justify-center p-12 text-muted-foreground border-2 border-dashed border-border rounded-lg">
               <FileText className="w-16 h-16 mb-4 opacity-50" />
               <p className="text-lg font-medium text-slate-600 dark:text-slate-400">No Report Selected</p>
               <p className="text-sm mt-2 text-center max-w-sm">Select a student report from the list on the left to review metrics, add notes, and send to parents.</p>

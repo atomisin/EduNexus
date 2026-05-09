@@ -37,7 +37,10 @@ interface TeacherDashboardProps {
 
 export const TeacherDashboard = ({ user, onLogout, onUserUpdate, onStartSession, refreshKey }: TeacherDashboardProps) => {
   const [activeView, setActiveView] = useState<View>('dashboard');
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    return window.innerWidth >= 1024;
+  });
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showCreateSession, setShowCreateSession] = useState(false);
   const [aiConfig, setAiConfig] = useState<AIConfig>({
@@ -186,17 +189,19 @@ export const TeacherDashboard = ({ user, onLogout, onUserUpdate, onStartSession,
   return (
     <div className="min-h-screen bg-subtle flex w-full relative overflow-x-hidden">
       {sidebarOpen && (
-        <div
+        <button
+          type="button"
+          aria-label="Close navigation"
           className="fixed inset-0 z-40 bg-slate-900/60 backdrop-blur-sm md:hidden animate-in fade-in"
           onClick={() => setSidebarOpen(false)}
         />
       )}
       <aside
-        className={`fixed md:relative z-50 h-screen bg-background border-r border-border transition-all duration-300 flex flex-col shadow-2xl md:shadow-none ${sidebarOpen ? 'w-64 translate-x-0' : 'w-64 -translate-x-full md:w-20 md:translate-x-0'
+        className={`fixed lg:relative z-50 h-screen bg-background border-r border-border transition-all duration-300 flex flex-col shadow-2xl lg:shadow-none ${sidebarOpen ? 'w-64 lg:w-60 translate-x-0' : 'w-64 -translate-x-full lg:w-20 lg:translate-x-0'
           }`}
       >
-        <div className="p-5 flex items-center justify-start">
-          <img src="/edunexus-logo.png" alt="EduNexus" className="h-[100px] w-auto" />
+        <div className="h-16 px-4 flex items-center justify-start border-b border-border">
+          <img src="/edunexus-logo.png" alt="EduNexus" className="h-12 w-auto object-contain" />
         </div>
 
         <ScrollArea className="flex-1 py-4 px-3">
@@ -205,9 +210,11 @@ export const TeacherDashboard = ({ user, onLogout, onUserUpdate, onStartSession,
               <button
                 key={item.id}
                 onClick={() => setActiveView(item.id as View)}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all ${
+                aria-label={item.label}
+                title={item.label}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
                   activeView === item.id
-                    ? 'bg-secondary text-foreground'
+                    ? 'bg-primary text-primary-foreground'
                     : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
                 }`}
               >
@@ -221,20 +228,20 @@ export const TeacherDashboard = ({ user, onLogout, onUserUpdate, onStartSession,
         {/* Sidebar Footer Removed */}
       </aside>
 
-      <main className="flex-1 flex flex-col min-h-screen overflow-hidden">
-        <header className="bg-background border-b border-border px-6 py-4 flex items-center justify-between text-foreground">
-          <div className="flex items-center gap-4">
+      <main className="flex-1 flex flex-col min-h-screen min-w-0 overflow-hidden">
+        <header className="h-14 bg-background border-b border-border px-3 md:px-5 flex items-center justify-between text-foreground">
+          <div className="min-w-0 flex items-center gap-3">
             <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(!sidebarOpen)} className="text-slate-500">
               <Menu className="w-5 h-5" />
             </Button>
-            <div>
-              <h1 className="text-lg md:text-xl font-semibold line-clamp-1">
+            <div className="min-w-0">
+              <h1 className="text-base md:text-lg font-semibold truncate">
                 Welcome back, {user.first_name || user.name?.split(' ')[0] || 'Teacher'}!
               </h1>
               <p className="text-xs md:text-sm text-muted-foreground hidden sm:block">Here's what's happening today</p>
             </div>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 md:gap-4">
             <ThemeToggle />
             <NotificationBell />
             <div className="relative">
@@ -256,7 +263,7 @@ export const TeacherDashboard = ({ user, onLogout, onUserUpdate, onStartSession,
                     className="fixed inset-0 z-10"
                     onClick={() => setShowUserMenu(false)}
                   />
-                  <div className="absolute right-0 top-12 z-20 w-48 rounded-xl border border-border bg-background shadow-lg py-1">
+                  <div className="absolute right-0 top-12 z-20 w-48 rounded-lg border border-border bg-background shadow-lg py-1">
                     <button
                       onClick={() => {
                         setActiveView('settings');
@@ -302,24 +309,32 @@ export const TeacherDashboard = ({ user, onLogout, onUserUpdate, onStartSession,
           </div>
         </header>
 
-        <ScrollArea className="flex-1 p-6">
+        <ScrollArea className="flex-1">
+          <div className="w-full max-w-7xl mx-auto p-4 md:p-6">
           {activeView === 'dashboard' && (
-            <div className="space-y-8">
-              <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-5">
+            <div className="space-y-5">
+              <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+                <div>
+                  <h2 className="text-2xl font-semibold tracking-tight">Teacher Dashboard</h2>
+                  <p className="text-sm text-muted-foreground">Manage sessions, students, subjects, and AI-assisted teaching.</p>
+                </div>
+                <Button onClick={() => { setShowCreateSession(true); loadLinkedStudents(); }} className="w-fit bg-primary hover:bg-primary/90 rounded-lg">
+                  <Video className="w-4 h-4 mr-2" /> New Session
+                </Button>
+              </div>
+
+              <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {quickStats.map((stat: any, i: number) => (
-                  <Card key={i} className="border border-border shadow-sm hover-lift overflow-hidden">
+                  <Card key={i} className="rounded-lg border border-border shadow-none overflow-hidden">
                     <div className="h-1 bg-primary" />
-                    <CardContent className="p-5">
+                    <CardContent className="p-4">
                       <div className="flex items-start justify-between">
                         <div>
-                          <p className="text-sm text-muted-foreground">{stat.label}</p>
-                          <p className="text-3xl font-bold text-foreground mt-1">{stat.value}</p>
-                          <Badge variant="outline" className="mt-2 border-primary/20 text-primary">
-                            +{stat.change} this week
-                          </Badge>
+                          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{stat.label}</p>
+                          <p className="text-2xl font-semibold text-foreground mt-2">{stat.value}</p>
                         </div>
-                        <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
-                          <stat.icon className="w-6 h-6 text-primary" />
+                        <div className="w-10 h-10 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center">
+                          <stat.icon className="w-5 h-5 text-primary" />
                         </div>
                       </div>
                     </CardContent>
@@ -331,12 +346,9 @@ export const TeacherDashboard = ({ user, onLogout, onUserUpdate, onStartSession,
                 <div className="lg:col-span-2 space-y-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <h2 className="text-2xl font-bold tracking-tight">My Sessions</h2>
-                      <p className="text-muted-foreground italic">Manage your active and upcoming teaching sessions</p>
+                      <h2 className="text-xl font-semibold tracking-tight">My Sessions</h2>
+                      <p className="text-sm text-muted-foreground">Manage active and upcoming teaching sessions.</p>
                     </div>
-                    <Button onClick={() => { setShowCreateSession(true); loadLinkedStudents(); }} className="btn-primary shadow-lg shadow-primary/20 rounded-xl px-6">
-                      <Video className="w-4 h-4 mr-2" /> New Session
-                    </Button>
                   </div>
                   <TeacherSessionsView onStart={onStartSession} onDelete={handleDeleteSession} />
                 </div>
@@ -353,6 +365,7 @@ export const TeacherDashboard = ({ user, onLogout, onUserUpdate, onStartSession,
           {activeView === 'settings' && <SettingsView user={user} onUserUpdate={onUserUpdate} />}
           {activeView === 'students' && <StudentManagementView />}
           {activeView === 'messages' && <MessagingView currentUser={user} />}
+          </div>
         </ScrollArea>
       </main>
 

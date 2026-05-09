@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Menu, Zap, Sun, Moon, User as UserIcon, MessageSquare, LogOut } from 'lucide-react';
+import { Menu, Zap, User as UserIcon, MessageSquare, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { NotificationBell } from '@/components/NotificationBell';
@@ -31,37 +31,37 @@ export const StudentHeader: React.FC<StudentHeaderProps> = ({
 }) => {
   const [showUserMenu, setShowUserMenu] = useState(false);
 
-
   return (
-    <header className="bg-background border-b border-border px-6 py-0.5 h-12 flex items-center justify-between shrink-0">
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(!sidebarOpen)} className="w-8 h-8">
+    <header className="bg-background border-b border-border px-3 md:px-5 h-14 flex items-center justify-between shrink-0 gap-3">
+      <div className="min-w-0 flex items-center gap-3">
+        <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(!sidebarOpen)} className="w-8 h-8 shrink-0">
           <Menu className="w-4 h-4" />
         </Button>
-        <div>
-          <h1 className="text-base md:text-lg font-bold line-clamp-1 leading-none">
-            Hello, {getFullName()}! 👋
+        <div className="min-w-0">
+          <h1 className="text-sm md:text-base font-semibold truncate leading-none">
+            Hello, {getFullName()}!
           </h1>
-          <p className="text-[10px] text-muted-foreground hidden sm:block leading-none mt-0.5">
+          <p className="text-[11px] text-muted-foreground hidden md:block leading-none mt-1 truncate">
             {getAgeAppropriateGreeting(profile?.age)}
           </p>
         </div>
       </div>
-      <div className="flex items-center gap-4">
-        <div className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-amber-100 to-orange-100 rounded-full border border-amber-200">
-          <Zap className="w-5 h-5 text-amber-600" />
-          <span className="font-semibold text-amber-700">{profile?.current_streak || 0} day streak!</span>
+
+      <div className="shrink-0 flex items-center gap-2 md:gap-3">
+        <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-amber-100 rounded-full border border-amber-200">
+          <Zap className="w-4 h-4 text-amber-600" />
+          <span className="text-sm font-semibold text-amber-700">{profile?.current_streak || 0} day streak</span>
         </div>
         <NotificationBell />
         <ThemeToggle />
         <div className="relative">
           <button
             onClick={() => setShowUserMenu(!showUserMenu)}
-            className="relative w-9 h-9 rounded-full overflow-hidden border-2 border-border hover:border-primary transition-colors"
+            className="relative w-9 h-9 rounded-full overflow-hidden border border-border hover:border-primary transition-colors"
           >
             <Avatar className="w-full h-full">
               <AvatarImage src={avatarUrl || user?.avatar_url || profile?.avatar_url || user?.avatar} />
-              <AvatarFallback>{user?.name?.[0] || user?.full_name?.[0]}</AvatarFallback>
+              <AvatarFallback>{user?.name?.[0] || user?.full_name?.[0] || 'S'}</AvatarFallback>
             </Avatar>
           </button>
 
@@ -71,7 +71,7 @@ export const StudentHeader: React.FC<StudentHeaderProps> = ({
                 className="fixed inset-0 z-10"
                 onClick={() => setShowUserMenu(false)}
               />
-              <div className="absolute right-0 top-11 z-20 w-48 rounded-xl border border-border bg-background shadow-lg py-1">
+              <div className="absolute right-0 top-11 z-20 w-48 rounded-lg border border-border bg-background shadow-lg py-1">
                 <button
                   onClick={() => {
                     setActiveView('profile');

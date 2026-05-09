@@ -96,7 +96,7 @@ export const QuizView: React.FC<QuizViewProps> = ({
             {selectedTopic && (
               <div className="pt-4 animate-in zoom-in-95">
                 <Button
-                  className="w-full py-6 text-lg rounded-2xl bg-gradient-to-r from-teal-600 to-teal-700 shadow-xl shadow-teal-200 dark:shadow-none font-bold"
+                  className="w-full py-6 text-lg rounded-lg bg-primary hover:bg-primary/90 shadow-none shadow-teal-200 dark:shadow-none font-bold"
                   onClick={() => {
                     if (selectedTopic) {
                       setSelectedTopic(selectedTopic);
@@ -112,7 +112,7 @@ export const QuizView: React.FC<QuizViewProps> = ({
             )}
 
             {!selectedSubject && (
-              <div className="py-20 text-center border-2 border-dashed rounded-2xl border-slate-100 dark:border-slate-800">
+              <div className="py-20 text-center border-2 border-dashed rounded-lg border-slate-100 dark:border-slate-800">
                 <div className="w-16 h-16 bg-teal-50 dark:bg-teal-600/20 rounded-full flex items-center justify-center mx-auto mb-4">
                   <Target className="w-8 h-8 text-teal-400" />
                 </div>

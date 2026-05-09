@@ -50,9 +50,9 @@ export const StudentSidebar: React.FC<StudentSidebarProps> = ({
   ].filter(item => !item.hidden);
 
   return (
-    <aside className={`fixed lg:static inset-y-0 left-0 z-50 w-64 bg-background border-r border-border transition-transform duration-300 transform lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-      <div className="p-5 flex items-center justify-start">
-        <img src="/edunexus-logo.png" alt="EduNexus" className="h-[100px] w-auto" />
+    <aside className={`fixed lg:static inset-y-0 left-0 z-50 w-64 lg:w-60 bg-background border-r border-border transition-transform duration-300 transform lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+      <div className="px-5 py-4 flex items-center justify-start border-b border-border/60">
+        <img src="/edunexus-logo.png" alt="EduNexus" className="h-16 w-auto" />
       </div>
       <ScrollArea className="flex-1 py-4 px-3">
         <nav className="space-y-1">
@@ -60,7 +60,7 @@ export const StudentSidebar: React.FC<StudentSidebarProps> = ({
             <button
               key={item.id}
               onClick={() => setActiveView(item.id as ViewType)}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all ${
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
                 activeView === item.id
                   ? 'bg-secondary text-foreground'
                   : 'text-muted-foreground hover:bg-secondary/50'

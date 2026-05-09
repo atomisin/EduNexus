@@ -4,9 +4,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { ChevronLeft, Eye, EyeOff, Loader2, Wifi } from 'lucide-react';
+import { ChevronLeft, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { warmUpServer } from '@/services/api';
+
+const COLD_START_MESSAGE = 'Connecting to server — free hosting can take up to 60 seconds on cold start. Please wait...';
 
 interface LoginFormProps {
   onSuccess?: () => void;
@@ -34,8 +35,13 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, onRegisterClick
   // Listen for server wake-up retry events
   useEffect(() => {
     const handleWaking = () => setServerWaking(true);
+    const handleReady = () => setServerWaking(false);
     window.addEventListener('api:server_waking', handleWaking);
-    return () => window.removeEventListener('api:server_waking', handleWaking);
+    window.addEventListener('api:server_ready', handleReady);
+    return () => {
+      window.removeEventListener('api:server_waking', handleWaking);
+      window.removeEventListener('api:server_ready', handleReady);
+    };
   }, []);
 
   // Reset waking state when loading finishes
@@ -55,12 +61,12 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, onRegisterClick
   // Determine the button label
   const getButtonLabel = () => {
     if (!isLoading) return 'Sign In';
-    if (serverWaking) return 'Connecting to server...';
+    if (serverWaking) return COLD_START_MESSAGE;
     return 'Signing in...';
   };
 
   return (
-    <Card className="w-full max-w-md border border-slate-200 shadow-2xl bg-white dark:bg-slate-950 overflow-hidden">
+    <Card className="w-full max-w-md border border-slate-200 shadow-none bg-white dark:bg-slate-950 overflow-hidden rounded-lg">
       <div className="h-1.5 bg-primary" />
       <CardHeader className="text-center pt-8 relative">
         {onRegisterClick && (
@@ -90,9 +96,9 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, onRegisterClick
             </div>
           )}
           {serverWaking && !error && (
-            <div className="p-4 rounded-xl bg-amber-50 text-amber-700 text-sm border border-amber-200 animate-in fade-in slide-in-from-top-1 flex items-center gap-2">
+            <div className="p-4 rounded-lg bg-amber-50 text-amber-700 text-sm border border-amber-200 animate-in fade-in slide-in-from-top-1 flex items-center gap-2">
               <Loader2 className="h-4 w-4 animate-spin flex-shrink-0" />
-              <span>Connecting to server — free hosting can take up to 60 seconds on cold start. Please wait...</span>
+              <span>{COLD_START_MESSAGE}</span>
             </div>
           )}
           <div className="space-y-4 pt-2">
@@ -105,7 +111,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, onRegisterClick
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="h-14 rounded-2xl bg-slate-50/50 border-slate-100 focus:border-primary/30 focus:ring-primary/10 text-base"
+                className="h-14 rounded-lg bg-slate-50/50 border-slate-100 focus:border-primary/30 focus:ring-primary/10 text-base"
               />
             </div>
 
@@ -119,7 +125,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, onRegisterClick
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  className="h-14 rounded-2xl bg-blue-50/30 border-slate-100 focus:border-primary/30 focus:ring-primary/10 text-base"
+                  className="h-14 rounded-lg bg-slate-50/50 border-slate-100 focus:border-primary/30 focus:ring-primary/10 text-base"
                 />
                 <button
                   type="button"
@@ -134,13 +140,13 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, onRegisterClick
 
           <Button
             type="submit"
-            className="w-full h-14 rounded-full bg-[#35322e] hover:bg-[#2a2825] text-white text-lg font-bold shadow-lg shadow-black/10 transition-all active:scale-[0.98] mt-4"
+            className="w-full min-h-14 h-auto rounded-lg bg-primary hover:bg-primary/90 text-white text-base font-bold shadow-none transition-all active:scale-[0.98] mt-4 px-4 py-3"
             disabled={isLoading}
           >
             {isLoading ? (
               <>
-                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                {getButtonLabel()}
+                <Loader2 className="mr-2 h-5 w-5 animate-spin shrink-0" />
+                <span className="leading-snug">{getButtonLabel()}</span>
               </>
             ) : (
               'Sign In'

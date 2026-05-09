@@ -23,6 +23,10 @@ from app.models.student import StudentProfile
 from sqlalchemy.orm.attributes import flag_modified
 from app.models.junction_tables import StudentTopicProgress
 from app.models.subject import Topic, Subject
+from app.services.revision_context import (
+    get_revision_context,
+    is_revision_topic,
+)
 
 router = APIRouter()
 
@@ -551,39 +555,194 @@ def placement_correct_option(topic: Topic) -> str:
     return options[digest % len(options)]
 
 
-def build_placement_question(topic: Topic, idx: int, include_answer: bool = False) -> Dict[str, Any]:
+def normalize_placement_text(*parts: Optional[str]) -> str:
+    return " ".join(part or "" for part in parts).lower()
+
+
+def build_competency_question_spec(topic: Topic, subject: Optional[Subject]) -> Dict[str, Any]:
+    """Return deterministic, answerable placement checks instead of metadata-recognition prompts."""
+    subject_name = (subject.name if subject else "").strip()
+    subject_text = normalize_placement_text(subject_name, subject.curriculum_type if subject else "")
+    topic_text = normalize_placement_text(topic.name, topic.description)
+
+    if "math" in subject_text or any(keyword in topic_text for keyword in ["logarithm", "equation", "factor", "ratio", "percent", "trigonometry"]):
+        if "logarithm" in topic_text:
+            if "table" in topic_text:
+                return {
+                    "text": "A student wants to multiply two numbers using common logarithms. Which step is mathematically correct?",
+                    "correct": "Add the logarithms of the two numbers, then use the antilogarithm to get the product.",
+                    "distractors": [
+                        "Subtract the logarithms, then use the antilogarithm to get the product.",
+                        "Multiply the logarithms directly and keep that as the final product.",
+                        "Ignore the characteristic and read only the mantissa from the table.",
+                    ],
+                    "explanation": "For multiplication, common logarithms change products into sums: \\(\\log(ab)=\\log a+\\log b\\).",
+                }
+            if "less than 1" in topic_text:
+                return {
+                    "text": "What is \\(\\log_{10}(0.01)\\)?",
+                    "correct": "\\(-2\\), because \\(0.01 = 10^{-2}\\).",
+                    "distractors": [
+                        "\\(2\\), because the decimal has two places.",
+                        "\\(0.2\\), because \\(0.01\\) has two zeros.",
+                        "\\(100\\), because \\(0.01\\) is one hundredth.",
+                    ],
+                    "explanation": "Numbers less than 1 have negative common logarithms when they are powers of 10.",
+                }
+            return {
+                "text": "If \\(\\log_{10}(1000)=x\\), what is \\(x\\)?",
+                "correct": "\\(3\\), because \\(1000=10^{3}\\).",
+                "distractors": [
+                    "\\(2\\), because 1000 has two zeros after the first digit.",
+                    "\\(10\\), because the base is 10.",
+                    "\\(100\\), because 1000 divided by 10 is 100.",
+                ],
+                "explanation": "A logarithm asks for the power needed on the base. Here, \\(10^{3}=1000\\).",
+            }
+        if "percent" in topic_text or "percentage" in topic_text:
+            return {
+                "text": "A price of \u20a65000 is reduced by 20%. What is the new price?",
+                "correct": "\u20a64000",
+                "distractors": ["\u20a61000", "\u20a64800", "\u20a65200"],
+                "explanation": "20% of \u20a65000 is \u20a61000, so the new price is \u20a64000.",
+            }
+        return {
+            "text": "Solve: \\(2x + 3 = 11\\).",
+            "correct": "\\(x = 4\\)",
+            "distractors": ["\\(x = 7\\)", "\\(x = 5.5\\)", "\\(x = 14\\)"],
+            "explanation": "Subtract 3 from both sides to get \\(2x=8\\), then divide by 2.",
+        }
+
+    if "physics" in subject_text or any(keyword in topic_text for keyword in ["force", "motion", "energy", "current", "voltage", "density", "pressure"]):
+        if "density" in topic_text:
+            return {
+                "text": "A block has mass \\(20\\,kg\\) and volume \\(4\\,m^{3}\\). What is its density?",
+                "correct": "\\(5\\,kg/m^{3}\\)",
+                "distractors": ["\\(80\\,kg/m^{3}\\)", "\\(16\\,kg/m^{3}\\)", "\\(24\\,kg/m^{3}\\)"],
+                "explanation": "Density is mass divided by volume: \\(20/4=5\\,kg/m^{3}\\).",
+            }
+        return {
+            "text": "A force of \\(10\\,N\\) acts on a mass of \\(2\\,kg\\). What is the acceleration?",
+            "correct": "\\(5\\,m/s^{2}\\)",
+            "distractors": ["\\(20\\,m/s^{2}\\)", "\\(12\\,m/s^{2}\\)", "\\(8\\,m/s^{2}\\)"],
+            "explanation": "Using \\(F=ma\\), acceleration is \\(a=F/m=10/2=5\\,m/s^{2}\\).",
+        }
+
+    if "chem" in subject_text or any(keyword in topic_text for keyword in ["atom", "mole", "acid", "base", "salt", "bond", "reaction"]):
+        if "mole" in topic_text:
+            return {
+                "text": "How many moles are in \\(18\\,g\\) of \\(H_{2}O\\)? \\((H=1, O=16)\\)",
+                "correct": "\\(1\\,mol\\)",
+                "distractors": ["\\(18\\,mol\\)", "\\(9\\,mol\\)", "\\(2\\,mol\\)"],
+                "explanation": "The molar mass of \\(H_{2}O\\) is \\(18\\,g/mol\\), so \\(18\\,g\\) is \\(1\\,mol\\).",
+            }
+        return {
+            "text": "Which formula correctly represents carbon dioxide?",
+            "correct": "\\(CO_{2}\\)",
+            "distractors": ["\\(C_{2}O\\)", "\\(CO\\)", "\\(CaO_{2}\\)"],
+            "explanation": "Carbon dioxide has one carbon atom and two oxygen atoms, so its formula is \\(CO_{2}\\).",
+        }
+
+    if "biology" in subject_text or any(keyword in topic_text for keyword in ["cell", "photosynthesis", "respiration", "classification", "nutrition", "genetics"]):
+        if "photosynthesis" in topic_text:
+            return {
+                "text": "Which substances are the main products of photosynthesis?",
+                "correct": "Glucose and oxygen.",
+                "distractors": ["Carbon dioxide and water.", "Oxygen and water only.", "Protein and nitrogen."],
+                "explanation": "Plants use light energy to convert carbon dioxide and water into glucose and oxygen.",
+            }
+        return {
+            "text": "Which structure controls most activities of a typical animal cell?",
+            "correct": "The nucleus.",
+            "distractors": ["The cell wall.", "The vacuole only.", "The chloroplast."],
+            "explanation": "The nucleus contains genetic material and controls most cell activities.",
+        }
+
+    if any(keyword in subject_text for keyword in ["account", "commerce", "business", "finance", "economics"]) or any(keyword in topic_text for keyword in ["ledger", "journal", "asset", "liability", "equity", "profit", "account"]):
+        if "profit" in topic_text:
+            return {
+                "text": "A business has sales of \u20a650000 and cost of goods sold of \u20a632000. What is gross profit?",
+                "correct": "\u20a618000",
+                "distractors": ["\u20a682000", "\u20a632000", "\u20a650000"],
+                "explanation": "Gross profit is sales minus cost of goods sold.",
+            }
+        return {
+            "text": "Which equation is the accounting equation?",
+            "correct": "\\(Assets = Liabilities + Equity\\)",
+            "distractors": [
+                "\\(Assets = Liabilities - Equity\\)",
+                "\\(Profit = Assets + Drawings\\)",
+                "\\(Capital = Sales - Expenses\\)",
+            ],
+            "explanation": "The accounting equation shows that assets are financed by liabilities and owner's equity.",
+        }
+
+    if any(keyword in subject_text for keyword in ["computer", "programming", "software", "data"]) or any(keyword in topic_text for keyword in ["algorithm", "program", "database", "network", "data"]):
+        return {
+            "text": "Which option best describes an algorithm?",
+            "correct": "A clear step-by-step procedure for solving a problem.",
+            "distractors": [
+                "A computer virus that changes program output.",
+                "Any paragraph written in a textbook.",
+                "A random guess made before coding.",
+            ],
+            "explanation": "An algorithm is a precise sequence of steps that can be followed to solve a problem.",
+        }
+
+    if any(keyword in subject_text for keyword in ["nursing", "medicine", "health", "pharmacy"]) or any(keyword in topic_text for keyword in ["patient", "diagnosis", "drug", "care", "infection"]):
+        return {
+            "text": "A patient-care question is unclear. What is the safest professional first step?",
+            "correct": "Clarify the instruction and verify the patient information before acting.",
+            "distractors": [
+                "Guess the missing detail and continue quickly.",
+                "Ignore the patient record if the ward is busy.",
+                "Ask another patient what should be done.",
+            ],
+            "explanation": "Technical health decisions require verification before action to protect the patient.",
+        }
+
+    return {
+        "text": f"Which response shows real understanding of '{topic.name}'?",
+        "correct": "Applying the main idea correctly to a new example and explaining the reason.",
+        "distractors": [
+            "Repeating the lesson title without solving anything.",
+            "Choosing an answer only because one keyword looks familiar.",
+            "Memorizing one sentence without being able to use it.",
+        ],
+        "explanation": "Placement checks should measure usable understanding, not recognition of lesson metadata.",
+    }
+
+
+def build_placement_question(
+    topic: Topic,
+    idx: int,
+    subject: Optional[Subject] = None,
+    include_answer: bool = False,
+    unlock_topic: Optional[Topic] = None,
+) -> Dict[str, Any]:
     """Build a deterministic placement question tied to one prerequisite topic."""
     correct_option = placement_correct_option(topic)
-    lesson_detail = " ".join((topic.description or "").split())
-    if len(lesson_detail) > 180:
-        lesson_detail = lesson_detail[:177].rsplit(" ", 1)[0] + "..."
-    correct_text = (
-        f"It focuses on {lesson_detail}"
-        if lesson_detail
-        else f"It explains {topic.name} and uses it to solve or understand a new example."
-    )
-    distractors = [
-        f"It only names {topic.name} without explaining what it means.",
-        "It skips the main idea and guesses from one keyword.",
-        "It memorizes a sentence but cannot use it in a fresh question.",
-    ]
+    spec = build_competency_question_spec(topic, subject)
     option_keys = ["A", "B", "C", "D"]
     options: Dict[str, str] = {}
     distractor_index = 0
     for key in option_keys:
         if key == correct_option:
-            options[key] = correct_text
+            options[key] = spec["correct"]
         else:
-            options[key] = distractors[distractor_index]
+            options[key] = spec["distractors"][distractor_index]
             distractor_index += 1
 
     question = {
         "id": f"{topic.id}:{idx}",
         "topic_id": str(topic.id),
         "topic_name": topic.name,
-        "text": f"Which answer best matches the lesson '{topic.name}'?",
+        "unlock_topic_id": str(unlock_topic.id) if unlock_topic else str(topic.id),
+        "unlock_topic_name": unlock_topic.name if unlock_topic else topic.name,
+        "source": "revision" if unlock_topic and unlock_topic.id != topic.id else "prerequisite",
+        "text": spec["text"],
         "options": options,
-        "explanation": f"Understanding '{topic.name}' means you can explain it and use it in a new situation.",
+        "explanation": spec["explanation"],
     }
     if include_answer:
         question["correct_option"] = correct_option
@@ -591,7 +750,7 @@ def build_placement_question(topic: Topic, idx: int, include_answer: bool = Fals
 
 
 def summarize_placement(
-    prerequisite_topics: List[Topic],
+    recommendation_topics: List[Topic],
     answers: List[Dict[str, Any]],
     target_topic: Topic,
 ) -> Dict[str, Any]:
@@ -603,16 +762,18 @@ def summarize_placement(
     for answer in answers:
         if answer.get("is_correct"):
             continue
-        topic_id = str(answer.get("topic_id") or "")
+        topic_id = str(answer.get("unlock_topic_id") or answer.get("topic_id") or "")
         if not topic_id:
             continue
         if topic_id not in missed_by_topic:
             missed_by_topic[topic_id] = {
                 "topic_id": topic_id,
-                "topic_name": answer.get("topic_name") or "Earlier lesson",
+                "topic_name": answer.get("unlock_topic_name") or answer.get("topic_name") or "Earlier lesson",
                 "missed": 0,
+                "missed_sources": [],
             }
         missed_by_topic[topic_id]["missed"] += 1
+        missed_by_topic[topic_id]["missed_sources"].append(answer.get("topic_name") or "Earlier concept")
 
     weak_topics = sorted(
         missed_by_topic.values(),
@@ -620,16 +781,16 @@ def summarize_placement(
         reverse=True,
     )
 
-    if not prerequisite_topics:
+    if not recommendation_topics:
         recommended_topic = target_topic
         reason = "There are no earlier locked lessons to check, so this lesson can be opened."
     elif score <= 20:
-        recommended_topic = prerequisite_topics[0]
+        recommended_topic = recommendation_topics[0]
         reason = "The placement score is very low, so the safest path is to restart from the beginning."
     elif score >= 85:
         if weak_topics:
             weak_topic_id = uuid.UUID(weak_topics[0]["topic_id"])
-            recommended_topic = next((topic for topic in prerequisite_topics if topic.id == weak_topic_id), target_topic)
+            recommended_topic = next((topic for topic in recommendation_topics if topic.id == weak_topic_id), target_topic)
             reason = f"You scored well overall, but the missed questions point mostly to '{recommended_topic.name}'. Start there briefly, then continue forward."
         else:
             recommended_topic = target_topic
@@ -637,12 +798,12 @@ def summarize_placement(
     else:
         if weak_topics:
             ordered_weak = [
-                topic for topic in prerequisite_topics
+                topic for topic in recommendation_topics
                 if str(topic.id) in {item["topic_id"] for item in weak_topics}
             ]
-            recommended_topic = ordered_weak[0] if ordered_weak else prerequisite_topics[0]
+            recommended_topic = ordered_weak[0] if ordered_weak else recommendation_topics[0]
         else:
-            recommended_topic = prerequisite_topics[0]
+            recommended_topic = recommendation_topics[0]
         reason = "The score shows partial understanding, so the system is placing you at the earliest lesson that needs strengthening."
 
     return {
@@ -690,6 +851,66 @@ async def get_ordered_subject_topics(
     target_index = topics.index(target_topic)
     prerequisite_topics = topics[:target_index]
     return subject_uuid, target_uuid, topics, target_topic, prerequisite_topics
+
+
+async def build_placement_scope(
+    db: AsyncSession,
+    subject_id: uuid.UUID,
+    target_topic: Topic,
+    prerequisite_topics: List[Topic],
+) -> Dict[str, Any]:
+    """Expand revision lessons into the previous-class topics they are meant to revise."""
+    res_subject = await db.execute(select(Subject).filter(Subject.id == subject_id))
+    subject = res_subject.scalars().first()
+    assessment_entries: List[Dict[str, Topic]] = []
+    revision_contexts: Dict[str, Dict[str, Any]] = {}
+
+    for prerequisite_topic in prerequisite_topics:
+        revision_context = (
+            await get_revision_context(db, subject, prerequisite_topic)
+            if subject and is_revision_topic(prerequisite_topic)
+            else None
+        )
+        if revision_context:
+            revision_contexts[str(prerequisite_topic.id)] = revision_context
+            source_topic_ids = {item["id"] for item in revision_context.get("assessment_topics", [])}
+            source_topics = []
+            if source_topic_ids:
+                res_source = await db.execute(
+                    select(Topic)
+                    .filter(Topic.id.in_([uuid.UUID(item) for item in source_topic_ids]))
+                    .order_by(Topic.sort_order.asc(), Topic.name.asc())
+                )
+                source_topics = res_source.scalars().all()
+            for source_topic in source_topics:
+                assessment_entries.append({"assessment_topic": source_topic, "unlock_topic": prerequisite_topic})
+        else:
+            assessment_entries.append({"assessment_topic": prerequisite_topic, "unlock_topic": prerequisite_topic})
+
+    target_revision_context = (
+        await get_revision_context(db, subject, target_topic)
+        if subject and is_revision_topic(target_topic)
+        else None
+    )
+    if target_revision_context and not assessment_entries:
+        revision_contexts[str(target_topic.id)] = target_revision_context
+        source_topic_ids = {item["id"] for item in target_revision_context.get("assessment_topics", [])}
+        if source_topic_ids:
+            res_source = await db.execute(
+                select(Topic)
+                .filter(Topic.id.in_([uuid.UUID(item) for item in source_topic_ids]))
+                .order_by(Topic.sort_order.asc(), Topic.name.asc())
+            )
+            for source_topic in res_source.scalars().all():
+                assessment_entries.append({"assessment_topic": source_topic, "unlock_topic": target_topic})
+
+    recommendation_topics = prerequisite_topics or ([target_topic] if target_revision_context else [])
+    return {
+        "subject": subject,
+        "assessment_entries": assessment_entries,
+        "recommendation_topics": recommendation_topics,
+        "revision_contexts": revision_contexts,
+    }
 
 
 async def ensure_student_subject_access(
@@ -740,9 +961,16 @@ async def start_placement_check(
     )
     await ensure_student_subject_access(db, current_user.id, subject_uuid)
 
+    placement_scope = await build_placement_scope(db, subject_uuid, target_topic, prerequisite_topics)
+    assessment_entries = placement_scope["assessment_entries"]
     questions = [
-        build_placement_question(topic, idx + 1)
-        for idx, topic in enumerate(prerequisite_topics)
+        build_placement_question(
+            entry["assessment_topic"],
+            idx + 1,
+            subject=placement_scope.get("subject"),
+            unlock_topic=entry["unlock_topic"],
+        )
+        for idx, entry in enumerate(assessment_entries)
     ]
 
     response = {
@@ -759,10 +987,11 @@ async def start_placement_check(
             }
             for topic in prerequisite_topics
         ],
+        "revision_contexts": placement_scope["revision_contexts"],
         "questions": questions,
         "message": "Answer this quick placement check so EduNexus can recommend the right lesson to start from.",
     }
-    if not prerequisite_topics:
+    if not assessment_entries:
         response["placement_token"] = make_placement_token(
             current_user.id,
             subject_uuid,
@@ -791,7 +1020,11 @@ async def submit_placement_check(
     )
     await ensure_student_subject_access(db, current_user.id, subject_uuid)
 
-    valid_topic_ids = {str(topic.id) for topic in prerequisite_topics}
+    placement_scope = await build_placement_scope(db, subject_uuid, target_topic, prerequisite_topics)
+    assessment_entries = placement_scope["assessment_entries"]
+    recommendation_topics = placement_scope["recommendation_topics"]
+    valid_topic_ids = {str(entry["assessment_topic"].id) for entry in assessment_entries}
+    entry_by_topic = {str(entry["assessment_topic"].id): entry for entry in assessment_entries}
     answers_by_topic: Dict[str, Dict[str, Any]] = {}
     for answer in data.answers:
         topic_id = str(answer.get("topic_id") or "")
@@ -804,12 +1037,16 @@ async def submit_placement_check(
         if selected_option not in {"A", "B", "C", "D"}:
             raise HTTPException(status_code=400, detail="Invalid placement answer")
 
-        topic = next((item for item in prerequisite_topics if str(item.id) == topic_id), None)
+        entry = entry_by_topic.get(topic_id)
+        topic = entry["assessment_topic"] if entry else None
+        unlock_topic = entry["unlock_topic"] if entry else None
         correct_option = placement_correct_option(topic) if topic else ""
         answers_by_topic[topic_id] = {
             **answer,
             "topic_id": topic_id,
             "topic_name": topic.name if topic else answer.get("topic_name"),
+            "unlock_topic_id": str(unlock_topic.id) if unlock_topic else topic_id,
+            "unlock_topic_name": unlock_topic.name if unlock_topic else answer.get("topic_name"),
             "selected_option": selected_option,
             "is_correct": selected_option == correct_option,
         }
@@ -818,8 +1055,9 @@ async def submit_placement_check(
     if missing_topic_ids:
         raise HTTPException(status_code=400, detail="Answer every prerequisite lesson question")
 
-    answers = [answers_by_topic[str(topic.id)] for topic in prerequisite_topics]
-    summary = summarize_placement(prerequisite_topics, answers, target_topic)
+    answers = [answers_by_topic[str(entry["assessment_topic"].id)] for entry in assessment_entries]
+    summary = summarize_placement(recommendation_topics, answers, target_topic)
+    summary["revision_contexts"] = placement_scope["revision_contexts"]
     summary["placement_token"] = make_placement_token(
         current_user.id,
         subject_uuid,

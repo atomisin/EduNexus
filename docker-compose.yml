@@ -6,13 +6,13 @@ services:
       dockerfile: Dockerfile
       args:
         - VITE_LIVEKIT_URL=${LIVEKIT_URL}
-        - VITE_API_URL=http://127.0.0.1:8000/api/v1
+        - VITE_API_URL=http://localhost:8000/api/v1
     networks:
       - edunexus
     ports:
       - "3000:80"
     environment:
-      - VITE_API_URL=http://127.0.0.1:8000/api/v1
+      - VITE_API_URL=http://localhost:8000/api/v1
       - VITE_LIVEKIT_URL=${LIVEKIT_URL}
     dns:
       - 8.8.8.8
@@ -50,7 +50,7 @@ services:
       - VERIFICATION_ENABLED=true
       - VERIFICATION_BYPASS=true
       - VERIFICATION_TOKEN_EXPIRE_HOURS=24
-      - APP_BASE_URL=http://127.0.0.1:3000
+      - APP_BASE_URL=http://localhost:3000
       # LiveKit Configuration
       - LIVEKIT_URL=${LIVEKIT_URL}
       - LIVEKIT_API_KEY=${LIVEKIT_API_KEY}

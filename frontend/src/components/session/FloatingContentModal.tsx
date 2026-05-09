@@ -12,6 +12,8 @@ import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { CheckCircle2, Send, FileText, Zap, X } from "lucide-react";
 import ReactMarkdown from "react-markdown";
+import MathText from "@/components/MathText";
+import { normalizeAcademicTextForDisplay } from "@/utils/academicText";
 
 interface FloatingContentModalProps {
   content: any;
@@ -100,7 +102,7 @@ export const FloatingContentModal: React.FC<FloatingContentModalProps> = ({
                       </div>
                       <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border-dashed border-2 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 font-medium">
                         <span className="text-xs font-black uppercase block mb-1 opacity-50">Explanation</span>
-                        {detail.explanation}
+                        <MathText>{String(detail.explanation || '')}</MathText>
                       </div>
                     </div>
                   ))}
@@ -169,7 +171,14 @@ export const FloatingContentModal: React.FC<FloatingContentModalProps> = ({
             <div className="space-y-6 py-4 animate-in fade-in duration-500">
               <div className="p-8 bg-slate-50 dark:bg-slate-800/50 rounded-3xl border-2 border-slate-100 dark:border-slate-800">
                 <div className="prose prose-lg dark:prose-invert max-w-none prose-headings:font-black prose-headings:text-primary prose-strong:text-foreground prose-p:font-medium">
-                  <ReactMarkdown>{content.content || content}</ReactMarkdown>
+                  <ReactMarkdown
+                    components={{
+                      p: ({ children }: any) => <p><MathText>{String(children ?? '')}</MathText></p>,
+                      li: ({ children }: any) => <li><MathText>{String(children ?? '')}</MathText></li>,
+                    }}
+                  >
+                    {normalizeAcademicTextForDisplay(String(content.content || content || ''))}
+                  </ReactMarkdown>
                 </div>
               </div>
               <Button onClick={onClose} className="w-full h-14 rounded-2xl text-lg font-bold shadow-xl">Got it, thanks!</Button>

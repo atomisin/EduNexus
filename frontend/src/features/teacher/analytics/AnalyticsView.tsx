@@ -110,7 +110,7 @@ export const AnalyticsView = ({ onNavigate }: AnalyticsViewProps) => {
     switch (type) {
       case 'warning': return <AlertCircle className="w-5 h-5 text-amber-500" />;
       case 'success': return <CheckCircle className="w-5 h-5 text-emerald-500" />;
-      case 'info': return <Brain className="w-5 h-5 text-indigo-500" />;
+      case 'info': return <Brain className="w-5 h-5 text-primary" />;
       default: return <Sparkles className="w-5 h-5 text-teal-500" />;
     }
   };
@@ -124,34 +124,32 @@ export const AnalyticsView = ({ onNavigate }: AnalyticsViewProps) => {
   };
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
+    <div className="space-y-5 animate-in fade-in duration-500">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-3xl font-bold bg-gradient-to-r from-teal-800 to-emerald-600 dark:from-white dark:to-teal-400 bg-clip-text text-transparent">
-            Learning Analytics
-          </h2>
-          <p className="text-slate-500 mt-1">Real-time student performance insights and AI recommendations</p>
+          <h2 className="text-2xl font-semibold tracking-tight">Learning Analytics</h2>
+          <p className="text-sm text-muted-foreground">Student performance insights and AI recommendations.</p>
         </div>
         <Button variant="outline" onClick={loadAnalytics} className="gap-2">
           <Repeat className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> Refresh Data
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         {[
           { label: 'Total Students', value: students.length, icon: Users, color: 'text-teal-600', bg: 'bg-teal-50 dark:bg-teal-950/30' },
           { label: 'Active Students', value: students.filter(s => s.education_level).length, icon: Activity, color: 'text-emerald-500', bg: 'bg-emerald-50 dark:bg-emerald-950/30' },
           { label: 'Avg. Proficiency', value: `${calculateAvgProficiency()}%`, icon: TrendingUp, color: 'text-emerald-600', bg: 'bg-emerald-50 dark:bg-emerald-950/30' },
           { label: 'AI Insights', value: aiInsights.length, icon: Brain, color: 'text-amber-500', bg: 'bg-amber-50 dark:bg-amber-950/30' },
         ].map((stat, i) => (
-          <Card key={i} className="hover-lift border-0 shadow-sm overflow-hidden">
-            <CardContent className="p-6">
+          <Card key={i} className="rounded-lg border border-border shadow-none overflow-hidden">
+            <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-slate-500 mb-1">{stat.label}</p>
                   <p className="text-2xl font-bold">{stat.value}</p>
                 </div>
-                <div className={`p-3 rounded-xl ${stat.bg}`}>
+                <div className={`p-3 rounded-lg ${stat.bg}`}>
                   <stat.icon className={`w-6 h-6 ${stat.color}`} />
                 </div>
               </div>
@@ -162,8 +160,8 @@ export const AnalyticsView = ({ onNavigate }: AnalyticsViewProps) => {
 
       <div className="grid lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-6">
-          <Card className="border-0 shadow-lg overflow-hidden">
-            <CardHeader className="border-b bg-slate-50/50 dark:bg-slate-900/50">
+          <Card className="rounded-lg border border-border shadow-none overflow-hidden">
+            <CardHeader className="border-b bg-muted/30">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-lg">Student Performance Roster</CardTitle>
                 <div className="relative w-48">
@@ -190,13 +188,13 @@ export const AnalyticsView = ({ onNavigate }: AnalyticsViewProps) => {
                     {students.map((student) => (
                       <div
                         key={student.id}
-                        className={`p-4 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer ${selectedStudent?.id === student.id ? 'bg-indigo-50/50 dark:bg-indigo-950/20' : ''}`}
+                        className={`p-4 flex items-center justify-between hover:bg-muted/50 transition-colors cursor-pointer ${selectedStudent?.id === student.id ? 'bg-primary/10' : ''}`}
                         onClick={() => loadStudentDetails(student)}
                       >
                         <div className="flex items-center gap-4">
-                          <Avatar className="h-10 w-10 border border-indigo-100 shadow-sm">
+                          <Avatar className="h-10 w-10 border border-primary/20 shadow-sm">
                             <AvatarImage src={student.avatar_url} alt={student.full_name} />
-                            <AvatarFallback className="bg-gradient-to-br from-indigo-500 to-teal-500 text-white font-bold">
+                            <AvatarFallback className="bg-primary text-primary-foreground font-bold">
                               {student.full_name?.[0] || 'S'}
                             </AvatarFallback>
                           </Avatar>
@@ -227,7 +225,7 @@ export const AnalyticsView = ({ onNavigate }: AnalyticsViewProps) => {
                               })()}
                             </div>
                           </div>
-                          <ChevronRight className={`w-5 h-5 text-slate-300 transition-transform ${selectedStudent?.id === student.id ? 'rotate-90 text-indigo-500' : ''}`} />
+                          <ChevronRight className={`w-5 h-5 text-slate-300 transition-transform ${selectedStudent?.id === student.id ? 'rotate-90 text-primary' : ''}`} />
                         </div>
                       </div>
                     ))}
@@ -239,7 +237,7 @@ export const AnalyticsView = ({ onNavigate }: AnalyticsViewProps) => {
         </div>
 
         <div className="space-y-6">
-          <Card className="border-0 shadow-lg bg-indigo-900 text-white overflow-hidden">
+          <Card className="rounded-lg border border-border shadow-none bg-card overflow-hidden">
             <CardHeader className="pb-2">
               <CardTitle className="text-md flex items-center gap-2">
                 <Brain className="w-5 h-5" />
@@ -248,7 +246,7 @@ export const AnalyticsView = ({ onNavigate }: AnalyticsViewProps) => {
             </CardHeader>
             <CardContent className="space-y-4">
               {aiInsights.map((insight, idx) => (
-                <div key={idx} className={`p-4 rounded-2xl border ${getInsightStyles(insight.type)}`}>
+                <div key={idx} className={`p-4 rounded-lg border ${getInsightStyles(insight.type)}`}>
                   <div className="flex gap-3">
                     <div className="mt-0.5">{getInsightIcon(insight.type)}</div>
                     <div className="flex-1 min-w-0">
@@ -258,7 +256,7 @@ export const AnalyticsView = ({ onNavigate }: AnalyticsViewProps) => {
                         <Button
                           size="sm"
                           variant="ghost"
-                          className="mt-2 h-7 px-2 text-xs text-indigo-600 dark:text-indigo-400 font-bold hover:bg-white/50"
+                          className="mt-2 h-7 px-2 text-xs text-primary font-bold hover:bg-primary/10"
                           onClick={() => insight.handler ? insight.handler() : toast.info('Action pending backend integration')}
                         >
                           {insight.action} →
@@ -272,13 +270,13 @@ export const AnalyticsView = ({ onNavigate }: AnalyticsViewProps) => {
           </Card>
 
           {selectedStudent && (
-            <Card className="border-0 shadow-lg animate-in slide-in-from-bottom-4 duration-500">
+            <Card className="rounded-lg border border-border shadow-none animate-in slide-in-from-bottom-4 duration-500">
               <CardHeader className="pb-2">
                 <CardTitle className="text-md">Personalized Profile: {selectedStudent.full_name}</CardTitle>
               </CardHeader>
               <CardContent>
                 {loadingDetails ? (
-                  <div className="py-12 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-indigo-500" /></div>
+                  <div className="py-12 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>
                 ) : studentAnalytics ? (
                   <div className="space-y-6">
                     <div className="h-[200px] w-full">
@@ -294,8 +292,8 @@ export const AnalyticsView = ({ onNavigate }: AnalyticsViewProps) => {
                           <Radar
                             name="Proficiency"
                             dataKey="A"
-                            stroke="#6366f1"
-                            fill="#6366f1"
+                            stroke="hsl(var(--primary))"
+                            fill="hsl(var(--primary))"
                             fillOpacity={0.6}
                           />
                         </RadarChart>
@@ -305,13 +303,13 @@ export const AnalyticsView = ({ onNavigate }: AnalyticsViewProps) => {
                     <div className="grid grid-cols-2 gap-4">
                       <div className="p-3 bg-slate-50 dark:bg-slate-900/50 rounded-xl">
                         <p className="text-[10px] uppercase text-slate-500 font-bold">Assimilation</p>
-                        <p className={`text-sm font-bold text-${studentAnalytics.assimilation_metrics?.color || 'indigo'}-600`}>
+                        <p className="text-sm font-bold text-primary">
                           {studentAnalytics.assimilation_metrics?.level || 'N/A'}
                         </p>
                       </div>
                       <div className="p-3 bg-slate-50 dark:bg-slate-900/50 rounded-xl">
                         <p className="text-[10px] uppercase text-slate-500 font-bold">Style</p>
-                        <p className="text-sm font-bold text-indigo-600 capitalize">
+                        <p className="text-sm font-bold text-primary capitalize">
                           {studentAnalytics.learning_profile?.learning_style || 'N/A'}
                         </p>
                       </div>

@@ -25,27 +25,27 @@ export const UserCard: React.FC<UserCardProps> = ({ user, variant, onApprove, on
   const avatarClass = variant === 'pending'
     ? 'text-xl bg-primary text-primary-foreground'
     : variant === 'approved'
-    ? 'text-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white'
+    ? 'text-xl bg-emerald-600 text-white'
     : 'text-xl bg-slate-400 text-white';
 
   const nameClass = variant === 'suspended' ? 'font-semibold text-lg text-slate-500' : 'font-semibold text-lg';
   const emailClass = variant === 'suspended' ? 'text-slate-400' : 'text-slate-500';
 
   return (
-    <Card>
-      <CardContent className="p-6">
-        <div className="flex items-start gap-4">
-          <Avatar className={`w-16 h-16${variant === 'suspended' ? ' opacity-50' : ''}`}>
+    <Card className="rounded-lg border-border shadow-none">
+      <CardContent className="p-4">
+        <div className="flex flex-col gap-4 md:flex-row md:items-start">
+          <Avatar className={`w-12 h-12${variant === 'suspended' ? ' opacity-50' : ''}`}>
             <AvatarImage src={user.avatar_url} />
             <AvatarFallback className={avatarClass}>
               {(user.full_name || user.name)?.[0]?.toUpperCase() || 'U'}
             </AvatarFallback>
           </Avatar>
-          <div className="flex-1">
-            <div className="flex items-start justify-between">
-              <div>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+              <div className="min-w-0">
                 <h3 className={nameClass}>{user.full_name || user.name}</h3>
-                <p className={emailClass}>{user.email}</p>
+                <p className={`${emailClass} truncate`}>{user.email}</p>
                 <div className="flex items-center gap-2 mt-2 flex-wrap">
                   <Badge variant="outline" className={`capitalize${variant === 'suspended' ? ' opacity-50' : ''}`}>
                     {user.role}
@@ -66,7 +66,7 @@ export const UserCard: React.FC<UserCardProps> = ({ user, variant, onApprove, on
                   </p>
                 )}
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2 md:justify-end">
                 {variant === 'pending' && (
                   <>
                     <Button onClick={() => onApprove(user.id)} className="bg-emerald-600 hover:bg-emerald-700">

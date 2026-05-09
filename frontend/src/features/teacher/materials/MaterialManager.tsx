@@ -137,12 +137,12 @@ export const MaterialManager = ({ subjectId, subjectName, onClose }: MaterialMan
         ) : (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {materials.map((material) => (
-              <Card key={material.id} className="hover-lift">
+              <Card key={material.id} className="rounded-lg border border-border shadow-none">
                 <CardContent className="p-6">
                   <div className="flex items-start justify-between">
                     <div className="flex items-start gap-3">
-                      <div className="w-12 h-12 rounded-lg bg-indigo-50 dark:bg-indigo-950/30 flex items-center justify-center">
-                        <FileText className="w-6 h-6 text-teal-600" />
+                      <div className="w-12 h-12 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center">
+                        <FileText className="w-6 h-6 text-primary" />
                       </div>
                       <div>
                         <h3 className="font-semibold text-slate-900 dark:text-slate-100">{material.title}</h3>

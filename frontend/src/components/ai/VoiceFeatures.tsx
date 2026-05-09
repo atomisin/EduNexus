@@ -11,13 +11,6 @@ interface VoiceFeaturesProps {
   disabled?: boolean;
 }
 
-declare global {
-  interface Window {
-    SpeechRecognition: any;
-    webkitSpeechRecognition: any;
-  }
-}
-
 export function VoiceFeatures({ sessionId, onTranscriptChange, disabled }: VoiceFeaturesProps) {
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);

@@ -21,9 +21,10 @@ export const TeacherLicensesPanel: React.FC<TeacherLicensesPanelProps> = ({ teac
 
   const handleUpdateTeacherLimits = async () => {
     if (!editingTeacher) return;
+    const safeLimit = Number.isFinite(newLimit) && newLimit > 0 ? newLimit : 1;
     try {
       await adminAPI.updateTeacherLimits(editingTeacher.id, {
-        max_students: newLimit,
+        max_students: safeLimit,
         plan_type: newPlan
       });
       toast.success('Teacher limits updated!');
@@ -37,9 +38,9 @@ export const TeacherLicensesPanel: React.FC<TeacherLicensesPanelProps> = ({ teac
   return (
     <div className="space-y-4">
       {editingTeacher ? (
-        <Card>
+        <Card className="rounded-lg border-border shadow-none">
           <CardHeader>
-            <CardTitle>Edit License: {editingTeacher.full_name}</CardTitle>
+            <CardTitle className="text-lg">Edit License: {editingTeacher.full_name || editingTeacher.email || 'Teacher'}</CardTitle>
             <CardDescription>Manage student limits and plan tier</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -48,7 +49,8 @@ export const TeacherLicensesPanel: React.FC<TeacherLicensesPanelProps> = ({ teac
               <Input
                 type="number"
                 value={newLimit}
-                onChange={(e) => setNewLimit(parseInt(e.target.value))}
+                min={1}
+                onChange={(e) => setNewLimit(parseInt(e.target.value, 10) || 1)}
               />
             </div>
             <div className="space-y-2">
@@ -64,38 +66,38 @@ export const TeacherLicensesPanel: React.FC<TeacherLicensesPanelProps> = ({ teac
               </select>
             </div>
             <div className="flex gap-2">
-              <Button onClick={handleUpdateTeacherLimits}>Save Changes</Button>
-              <Button variant="outline" onClick={() => setEditingTeacher(null)}>Cancel</Button>
+              <Button className="rounded-lg" onClick={handleUpdateTeacherLimits}>Save Changes</Button>
+              <Button className="rounded-lg" variant="outline" onClick={() => setEditingTeacher(null)}>Cancel</Button>
             </div>
           </CardContent>
         </Card>
       ) : null}
 
-      <div className="grid grid-cols-1 gap-4">
+      <div className="grid grid-cols-1 gap-3">
         {teachers.map((teacher) => (
-          <Card key={teacher.id}>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
+          <Card key={teacher.id} className="rounded-lg border-border shadow-none">
+            <CardContent className="p-4">
+              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <div className="min-w-0 flex items-center gap-3">
                   <Avatar>
                     <AvatarFallback className="bg-primary text-primary-foreground">
-                      {teacher.full_name[0]}
+                      {(teacher.full_name || teacher.email || 'T')[0].toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
-                  <div>
-                    <h3 className="font-semibold">{teacher.full_name}</h3>
-                    <p className="text-sm text-slate-500">{teacher.email}</p>
+                  <div className="min-w-0">
+                    <h3 className="font-semibold truncate">{teacher.full_name || 'Unnamed Teacher'}</h3>
+                    <p className="text-sm text-muted-foreground truncate">{teacher.email || 'No email on record'}</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-8">
-                  <div className="text-center">
-                    <p className="text-xs text-slate-500 uppercase">Plan</p>
+                <div className="flex flex-wrap items-center gap-4 md:gap-8">
+                  <div>
+                    <p className="text-xs text-muted-foreground uppercase">Plan</p>
                     <Badge variant="secondary" className="capitalize">
                       {teacher.teacher_profile?.plan_type || 'basic'}
                     </Badge>
                   </div>
-                  <div className="text-center">
-                    <p className="text-xs text-slate-500 uppercase">Usage</p>
+                  <div>
+                    <p className="text-xs text-muted-foreground uppercase">Usage</p>
                     <p className="font-semibold">
                       {teacher.teacher_profile?.current_student_count} / {teacher.teacher_profile?.max_students}
                     </p>
@@ -103,6 +105,7 @@ export const TeacherLicensesPanel: React.FC<TeacherLicensesPanelProps> = ({ teac
                   <Button
                     variant="ghost"
                     size="icon"
+                    className="rounded-lg"
                     onClick={() => {
                       setEditingTeacher(teacher);
                       setNewLimit(teacher.teacher_profile?.max_students || 10);

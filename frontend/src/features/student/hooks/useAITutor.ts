@@ -46,10 +46,17 @@ export type PlacementState =
   | { status: 'result'; targetTopic: any; target_topic: any; prerequisite_topics: any[]; questions: any[]; result: any }
   | { status: 'error'; targetTopic?: any; message: string };
 
+type LockedLessonNotice = {
+  requestedTopic: any;
+  currentTopic: any;
+  message: string;
+} | null;
+
 export const useAITutor = (profile?: any, getFullName?: () => string) => {
   const queryClient = useQueryClient();
   const [messages, setMessages] = useState<Message[]>([]);
   const messagesRef = useRef<Message[]>([]);
+  const videoRequestSeq = useRef(0);
   const [aiState, setAiState] = useState<AIState>({ status: 'idle' });
   const isChattingRef = useRef<boolean>(false);
   const [currentTopic, setCurrentTopic] = useState<any>(null);
@@ -61,6 +68,7 @@ export const useAITutor = (profile?: any, getFullName?: () => string) => {
     lastUiAction: null,
   });
   const [placementState, setPlacementState] = useState<PlacementState>({ status: 'idle' });
+  const [lockedLessonNotice, setLockedLessonNotice] = useState<LockedLessonNotice>(null);
 
   const setMessagesAndRef = useCallback((
     updater: Message[] | ((prev: Message[]) => Message[])
@@ -199,22 +207,36 @@ export const useAITutor = (profile?: any, getFullName?: () => string) => {
     }).catch(e => console.error('Failed to save chat to backend:', e));
   }, [messages, currentSubject?.id, currentTopic?.id, currentTopic?.name, activeSubtopic]);
 
-  const fetchVideoSuggestions = useCallback(async (topic: string) => {
-    console.log('[VIDEO] Fetching videos for topic:', topic);
+  const fetchVideoSuggestions = useCallback(async (topic: string, subjectOverride?: Subject | null) => {
+    const topicLabel = topic?.trim();
+    if (!topicLabel) {
+      setSuggestedVideos([]);
+      setSelectedVideo(null);
+      return;
+    }
+
+    const requestId = videoRequestSeq.current + 1;
+    videoRequestSeq.current = requestId;
+    setSuggestedVideos([]);
+    setSelectedVideo(null);
+
     try {
+      const subjectForRequest = subjectOverride || currentSubject;
       const result = await studentAPI.getSuggestedVideos({
-        topic,
-        subject: currentSubject?.name,
+        topic: topicLabel,
+        subject: subjectForRequest?.name,
         educationLevel: profile?.education_level
       });
-      console.log('[VIDEO] API response:', result);
-      if (result.videos?.length > 0) {
-        console.log('[VIDEO] Setting', result.videos.length, 'videos');
-        setSuggestedVideos(result.videos);
-      } else {
-        console.log('[VIDEO] No videos returned');
+
+      if (requestId !== videoRequestSeq.current) {
+        return;
       }
+      setSuggestedVideos(Array.isArray(result?.videos) ? result.videos : []);
     } catch (e) {
+      if (requestId !== videoRequestSeq.current) {
+        return;
+      }
+      setSuggestedVideos([]);
       console.error('Video fetch failed:', e);
     }
   }, [currentSubject, profile]);
@@ -222,6 +244,8 @@ export const useAITutor = (profile?: any, getFullName?: () => string) => {
   const handleSubjectSelect = useCallback(async (subject: Subject) => {
     setCurrentSubject(subject);
     setCurrentTopic(null);
+    setSuggestedVideos([]);
+    setSelectedVideo(null);
     queryClient.invalidateQueries({
       queryKey: ['topic-progress']
     });
@@ -307,7 +331,7 @@ export const useAITutor = (profile?: any, getFullName?: () => string) => {
 
       // Video suggestions detection
       if (cleanContent.toLowerCase().includes('video') || cleanContent.toLowerCase().includes('watch')) {
-        fetchVideoSuggestions(currentTopic?.name || content);
+        fetchVideoSuggestions(currentTopic?.name || content, currentSubject);
       }
     } catch (err) {
       setMessagesAndRef(prev => [...prev, {
@@ -346,7 +370,7 @@ export const useAITutor = (profile?: any, getFullName?: () => string) => {
 
     const topicLabel = subtopic?.name || subtopic?.title || '';
     if (topicLabel) {
-      fetchVideoSuggestions(topicLabel);
+      fetchVideoSuggestions(topicLabel, currentSubject);
     }
 
     if (currentSubject?.id && (currentTopic?.id || currentTopic?.name)) {
@@ -409,13 +433,43 @@ export const useAITutor = (profile?: any, getFullName?: () => string) => {
     setLessonController(prev => ({ ...prev, stage: 'remediate', masteryReady: false, nextActions: ['review_missed', 'try_practice', 'simplify'] }));
   }, []);
 
+  const findCurrentUnlockedLesson = useCallback(() => {
+    if (!structuredTopics.length) return null;
+    return (
+      structuredTopics.find((topic: any) => topic.status === 'in_progress') ||
+      structuredTopics.find((topic: any) => topic.status === 'unlocked') ||
+      structuredTopics.find((topic: any) => topic.status === 'active') ||
+      structuredTopics.find((topic: any) => topic.status !== 'locked' && topic.status !== 'completed') ||
+      structuredTopics.find((topic: any) => topic.status !== 'locked') ||
+      structuredTopics[0]
+    );
+  }, [structuredTopics]);
+
   const handleTopicSelect = useCallback(async (topic: any, subject?: Subject) => {
     const activeSubject = subject || currentSubject;
     if (!activeSubject) return;
+    if (!topic) return;
+
+    const structuredTopic = structuredTopics.find((item: any) => item.id === topic.id);
+    const resolvedTopic = structuredTopic ? { ...topic, ...structuredTopic } : topic;
+    if (resolvedTopic.status === 'locked') {
+      const currentLesson = findCurrentUnlockedLesson();
+      setShowAIPanel(false);
+      setLockedLessonNotice({
+        requestedTopic: resolvedTopic,
+        currentTopic: currentLesson,
+        message: currentLesson
+          ? `You have not unlocked "${resolvedTopic.name}" yet. Continue from "${currentLesson.name}" first.`
+          : `You have not unlocked "${resolvedTopic.name}" yet. Complete the previous lesson first.`,
+      });
+      setMessagesAndRef([]);
+      return;
+    }
     
     // Clear previous state immediately
     clearMessages();
-    setCurrentTopic(topic);
+    setLockedLessonNotice(null);
+    setCurrentTopic(resolvedTopic);
     setCurrentSubject(activeSubject);
     setLessonController({
       stage: 'intro',
@@ -425,8 +479,16 @@ export const useAITutor = (profile?: any, getFullName?: () => string) => {
     });
 
     // Fetch video recommendations for the dashboard when a topic is selected
-    fetchVideoSuggestions(topic.name);
-  }, [currentSubject, clearMessages, fetchVideoSuggestions]);
+    fetchVideoSuggestions(resolvedTopic.name, activeSubject);
+  }, [currentSubject, structuredTopics, findCurrentUnlockedLesson, setMessagesAndRef, clearMessages, fetchVideoSuggestions]);
+
+  const openCurrentUnlockedLesson = useCallback(async () => {
+    const topicToOpen = lockedLessonNotice?.currentTopic || findCurrentUnlockedLesson();
+    if (topicToOpen) {
+      setLockedLessonNotice(null);
+      await handleTopicSelect(topicToOpen, currentSubject || undefined);
+    }
+  }, [currentSubject, findCurrentUnlockedLesson, handleTopicSelect, lockedLessonNotice]);
 
   const startPlacementCheck = useCallback(async (targetTopic: any) => {
     if (!currentSubject?.id || !targetTopic?.id) return;
@@ -546,6 +608,7 @@ export const useAITutor = (profile?: any, getFullName?: () => string) => {
     aiState,
     lessonController,
     placementState,
+    lockedLessonNotice,
     currentTopic,
     setCurrentTopic,
     currentSubject,
@@ -578,6 +641,7 @@ export const useAITutor = (profile?: any, getFullName?: () => string) => {
     startPlacementCheck,
     submitPlacementCheck,
     acceptPlacementRecommendation,
-    cancelPlacementCheck
+    cancelPlacementCheck,
+    openCurrentUnlockedLesson
   };
 };

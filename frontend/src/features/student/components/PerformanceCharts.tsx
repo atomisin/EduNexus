@@ -22,11 +22,11 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Brain, TrendingUp, Activity, Award } from 'lucide-react';
 
-// Premium Color Palette using HSL to match system theme
+// Chart palette tied to the product theme and neutral semantic colors.
 const COLORS = {
   primary: 'hsl(var(--primary))',
   secondary: '#0d9488', // Teal 600
-  accent: '#8b5cf6',    // Violet 500
+  accent: '#475569',    // Slate 600
   success: '#10b981',   // Emerald 500
   warning: '#f59e0b',   // Amber 500
   muted: '#64748b'      // Slate 500
@@ -41,7 +41,7 @@ interface CustomTooltipProps {
 const CustomTooltip: React.FC<CustomTooltipProps> = ({ active, payload, label }) => {
   if (active && payload && payload.length) {
     return (
-      <div className="bg-white dark:bg-slate-900 p-3 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl backdrop-blur-md bg-opacity-90">
+      <div className="bg-white dark:bg-slate-900 p-3 border border-slate-200 dark:border-slate-800 rounded-xl shadow-none backdrop-blur-md bg-opacity-90">
         <p className="text-xs font-black text-muted-foreground uppercase mb-1">{label}</p>
         <div className="space-y-1">
           {payload.map((entry: any, index: number) => (

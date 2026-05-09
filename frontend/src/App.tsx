@@ -1,5 +1,5 @@
 import React, { useState, useEffect, Suspense } from 'react';
-import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -30,6 +30,8 @@ function App() {
   const [showSmartHelper, setShowSmartHelper] = useState(false);
   const [activeSession, setActiveSession] = useState<{ id: string; title: string; isTeacher: boolean } | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const location = useLocation();
+  const shouldShowSmartHelper = Boolean(user) && !location.pathname.startsWith('/student/learn');
 
   useEffect(() => {
     const savedTheme = localStorage.getItem('theme');
@@ -39,6 +41,12 @@ function App() {
       document.documentElement.classList.remove('dark');
     }
   }, []);
+
+  useEffect(() => {
+    if (!shouldShowSmartHelper) {
+      setShowSmartHelper(false);
+    }
+  }, [shouldShowSmartHelper]);
 
   const navigate = useNavigate();
 
@@ -185,7 +193,7 @@ function App() {
         </Routes>
       </Suspense>
 
-      {user && (
+      {shouldShowSmartHelper && (
         <>
           <SmartHelper
             isOpen={showSmartHelper}

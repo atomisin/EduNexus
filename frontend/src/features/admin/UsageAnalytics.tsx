@@ -41,6 +41,76 @@ interface UsageData {
   top_users: TopUser[];
 }
 
+type RawModelUsage = Partial<ModelUsage> & {
+  model?: string;
+  requests?: number;
+};
+
+type RawTopUser = Partial<TopUser> & {
+  username?: string;
+  tokens?: number;
+  cost?: number;
+};
+
+interface UsageApiResponse {
+  summary?: Partial<UsageData['summary']>;
+  by_model?: RawModelUsage[];
+  daily_trends?: Array<Partial<DailyTrend>>;
+  top_users?: RawTopUser[];
+  total_estimated_cost?: number;
+  usage_by_model?: RawModelUsage[];
+  top_consumers?: RawTopUser[];
+}
+
+const normalizeNumber = (value: unknown) => {
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) ? numberValue : 0;
+};
+
+const normalizeUsageData = (result: UsageApiResponse): UsageData => {
+  const byModel = (result.by_model ?? result.usage_by_model ?? []).map((model) => ({
+    model_name: model.model_name || model.model || 'Unknown model',
+    total_tokens: normalizeNumber(model.total_tokens),
+    request_count: normalizeNumber(model.request_count ?? model.requests),
+    estimated_cost: normalizeNumber(model.estimated_cost),
+  }));
+
+  const dailyTrends = (result.daily_trends ?? []).map((trend) => ({
+    date: trend.date || new Date().toISOString().slice(0, 10),
+    tokens: normalizeNumber(trend.tokens),
+    cost: normalizeNumber(trend.cost),
+  }));
+
+  const topUsers = (result.top_users ?? result.top_consumers ?? []).map((user) => ({
+    user_id: user.user_id || user.email || user.username || 'system',
+    email: user.email || user.username || 'system',
+    full_name: user.full_name || user.username || 'System User',
+    token_count: normalizeNumber(user.token_count ?? user.tokens),
+    estimated_cost: normalizeNumber(user.estimated_cost ?? user.cost),
+  }));
+
+  const totalTokens = normalizeNumber(
+    result.summary?.total_tokens ?? byModel.reduce((sum, model) => sum + model.total_tokens, 0)
+  );
+  const totalRequests = normalizeNumber(
+    result.summary?.total_requests ?? byModel.reduce((sum, model) => sum + model.request_count, 0)
+  );
+  const totalCost = normalizeNumber(
+    result.summary?.total_cost ?? result.total_estimated_cost ?? byModel.reduce((sum, model) => sum + model.estimated_cost, 0)
+  );
+
+  return {
+    summary: {
+      total_tokens: totalTokens,
+      total_requests: totalRequests,
+      total_cost: totalCost,
+    },
+    by_model: byModel,
+    daily_trends: dailyTrends,
+    top_users: topUsers,
+  };
+};
+
 export const UsageAnalytics: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [days, setDays] = useState('30');
@@ -54,7 +124,7 @@ export const UsageAnalytics: React.FC = () => {
     setLoading(true);
     try {
       const result = await adminAPI.getAIUsage({ days: parseInt(days) });
-      setData(result);
+      setData(normalizeUsageData(result));
     } catch (error: any) {
       toast.error('Failed to load usage analytics: ' + error.message);
     } finally {
@@ -73,13 +143,14 @@ export const UsageAnalytics: React.FC = () => {
 
   if (!data) return null;
 
-  const COLORS = ['#6366f1', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6'];
+  const COLORS = ['hsl(var(--primary))', '#f59e0b', '#10b981', '#ef4444', '#64748b'];
+  const totalTokens = Math.max(data.summary.total_tokens, 0);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-5">
+      <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">AI Resource Analytics</h2>
+          <h2 className="text-2xl font-semibold tracking-tight">AI Resource Analytics</h2>
           <p className="text-muted-foreground text-sm">Monitor LLM token consumption and estimated costs across models and users.</p>
         </div>
         <div className="flex items-center gap-2">
@@ -99,7 +170,7 @@ export const UsageAnalytics: React.FC = () => {
 
       {/* Stats Overview */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm border-primary/10 shadow-sm overflow-hidden relative group">
+        <Card className="rounded-lg border-border shadow-none overflow-hidden relative group">
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
             <TrendingUp className="w-12 h-12 text-primary" />
           </div>
@@ -114,7 +185,7 @@ export const UsageAnalytics: React.FC = () => {
           </CardContent>
         </Card>
 
-        <Card className="bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm border-primary/10 shadow-sm overflow-hidden relative group">
+        <Card className="rounded-lg border-border shadow-none overflow-hidden relative group">
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
             <DollarSign className="w-12 h-12 text-amber-500" />
           </div>
@@ -129,7 +200,7 @@ export const UsageAnalytics: React.FC = () => {
           </CardContent>
         </Card>
 
-        <Card className="bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm border-primary/10 shadow-sm overflow-hidden relative group">
+        <Card className="rounded-lg border-border shadow-none overflow-hidden relative group">
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
             <Users className="w-12 h-12 text-green-500" />
           </div>
@@ -147,7 +218,7 @@ export const UsageAnalytics: React.FC = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Daily Trend Chart */}
-        <Card>
+        <Card className="rounded-lg border-border shadow-none">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <TrendingUp className="w-5 h-5 text-primary" />
@@ -160,8 +231,8 @@ export const UsageAnalytics: React.FC = () => {
               <AreaChart data={data.daily_trends}>
                 <defs>
                   <linearGradient id="colorCost" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.8}/>
-                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
+                    <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.8}/>
+                    <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0}/>
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.3} />
@@ -180,16 +251,16 @@ export const UsageAnalytics: React.FC = () => {
                 />
                 <Tooltip 
                   contentStyle={{ backgroundColor: '#1e293b', border: 'none', color: '#fff', borderRadius: '8px' }}
-                  itemStyle={{ color: '#818cf8' }}
+                  itemStyle={{ color: 'hsl(var(--primary))' }}
                 />
-                <Area type="monotone" dataKey="cost" stroke="#6366f1" fillOpacity={1} fill="url(#colorCost)" name="Cost (USD)" />
+                <Area type="monotone" dataKey="cost" stroke="hsl(var(--primary))" fillOpacity={1} fill="url(#colorCost)" name="Cost (USD)" />
               </AreaChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
 
         {/* Tokens Trend Chart */}
-        <Card>
+        <Card className="rounded-lg border-border shadow-none">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Cpu className="w-5 h-5 text-amber-500" />
@@ -227,7 +298,7 @@ export const UsageAnalytics: React.FC = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Usage by Model */}
-        <Card className="lg:col-span-1">
+        <Card className="lg:col-span-1 rounded-lg border-border shadow-none">
           <CardHeader>
             <CardTitle>Model Distribution</CardTitle>
             <CardDescription>Share of tokens by LLM model</CardDescription>
@@ -257,7 +328,7 @@ export const UsageAnalytics: React.FC = () => {
         </Card>
 
         {/* Top Users Table */}
-        <Card className="lg:col-span-2">
+        <Card className="lg:col-span-2 rounded-lg border-border shadow-none">
           <CardHeader>
             <CardTitle>Top AI Consumers</CardTitle>
             <CardDescription>Users with highest token attribution</CardDescription>
@@ -286,11 +357,11 @@ export const UsageAnalytics: React.FC = () => {
                       <td className="p-2 align-middle text-right font-mono">${u.estimated_cost.toFixed(4)}</td>
                       <td className="p-2 align-middle text-right">
                         <div className="flex items-center justify-end gap-2">
-                          <span className="text-xs">{((u.token_count / data.summary.total_tokens) * 100).toFixed(1)}%</span>
+                          <span className="text-xs">{totalTokens > 0 ? ((u.token_count / totalTokens) * 100).toFixed(1) : '0.0'}%</span>
                           <div className="w-16 bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 overflow-hidden">
                             <div 
                               className="bg-primary h-full" 
-                              style={{ width: `${(u.token_count / data.summary.total_tokens) * 100}%` }}
+                              style={{ width: `${totalTokens > 0 ? (u.token_count / totalTokens) * 100 : 0}%` }}
                             />
                           </div>
                         </div>
@@ -311,7 +382,7 @@ export const UsageAnalytics: React.FC = () => {
         </Card>
       </div>
 
-      <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/30 flex gap-4">
+      <div className="p-4 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/30 flex gap-4">
         <AlertCircle className="w-6 h-6 text-amber-600 shrink-0" />
         <div>
           <h4 className="font-semibold text-amber-800 dark:text-amber-400">Financial Accuracy Disclaimer</h4>

@@ -8,6 +8,8 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { aiAPI } from '@/services/api';
 import ReactMarkdown from 'react-markdown';
+import MathText from '@/components/MathText';
+import { normalizeAcademicTextForDisplay, normalizeAcademicTextForSpeech } from '@/utils/academicText';
 
 interface Message {
   id: string;
@@ -220,7 +222,7 @@ export function SmartHelper({ isOpen, onClose, subject, topic }: SmartHelperProp
     }
 
     speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(message.content);
+    const utterance = new SpeechSynthesisUtterance(normalizeAcademicTextForSpeech(message.content));
     utterance.rate = 0.9;
     utterance.onend = () => setSpeakingId(null);
     setSpeakingId(message.id);
@@ -280,7 +282,14 @@ export function SmartHelper({ isOpen, onClose, subject, topic }: SmartHelperProp
                       : 'bg-white dark:bg-slate-800 shadow-sm rounded-bl-md border border-slate-100 dark:border-slate-700'
                       }`}>
                       <div className="text-sm prose dark:prose-invert max-w-none">
-                        <ReactMarkdown>{message.content}</ReactMarkdown>
+                        <ReactMarkdown
+                          components={{
+                            p: ({ children }: any) => <p><MathText>{String(children ?? '')}</MathText></p>,
+                            li: ({ children }: any) => <li><MathText>{String(children ?? '')}</MathText></li>,
+                          }}
+                        >
+                          {normalizeAcademicTextForDisplay(message.content)}
+                        </ReactMarkdown>
                       </div>
                     </div>
                     <div className={`flex items-center gap-1 mt-1 ${message.role === 'user' ? 'justify-end' : ''}`}>

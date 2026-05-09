@@ -50,7 +50,10 @@ export const StudentDashboard = ({
 
   const activeView = activeViewState;
 
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    return window.innerWidth >= 1024;
+  });
   const [searchQuery, setSearchQuery] = useState('');
   const [customCourseName, setCustomCourseName] = useState('');
   const [isGeneratingCourse, setIsGeneratingCourse] = useState(false);
@@ -81,7 +84,8 @@ export const StudentDashboard = ({
     handleSubjectSelect, handleTopicSelect, handleSubtopicClick,
     handleAIContinue, onMasteryTestComplete, startQuiz, dismissQuizConfirm,
     placementState, startPlacementCheck, submitPlacementCheck,
-    acceptPlacementRecommendation, cancelPlacementCheck
+    acceptPlacementRecommendation, cancelPlacementCheck,
+    lockedLessonNotice, openCurrentUnlockedLesson
   } = useAITutor(profile, getFullName);
 
   const isLoading = isDataLoading || aiState.status === 'chatting';
@@ -163,7 +167,6 @@ export const StudentDashboard = ({
       if (topic && subject) {
         handleTopicSelect(topic, subject);
         setActiveView('learn');
-        setShowAIPanel(true);
       }
     }
   }, [isLoading, topics, subjects, selectedTopic, handleTopicSelect]);
@@ -179,6 +182,14 @@ export const StudentDashboard = ({
 
   return (
     <div className="h-screen bg-subtle flex w-full relative overflow-hidden">
+      {sidebarOpen && (
+        <button
+          type="button"
+          aria-label="Close navigation"
+          className="fixed inset-0 z-40 bg-slate-950/50 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
       <StudentSidebar
         activeView={activeView}
         setActiveView={setActiveView}
@@ -186,7 +197,7 @@ export const StudentDashboard = ({
         profile={profile}
       />
 
-      <main className="flex-1 flex flex-col h-full overflow-hidden relative">
+      <main className="min-w-0 flex-1 flex flex-col h-full overflow-hidden relative">
         <StudentHeader
           user={user}
           profile={profile}
@@ -226,7 +237,8 @@ export const StudentDashboard = ({
                    startQuiz={startQuiz} dismissQuizConfirm={dismissQuizConfirm}
                    placementState={placementState} startPlacementCheck={startPlacementCheck}
                    submitPlacementCheck={submitPlacementCheck} acceptPlacementRecommendation={acceptPlacementRecommendation}
-                   cancelPlacementCheck={cancelPlacementCheck}
+                   cancelPlacementCheck={cancelPlacementCheck} lockedLessonNotice={lockedLessonNotice}
+                   openCurrentUnlockedLesson={openCurrentUnlockedLesson}
                    getFullName={getFullName} materials={materials} handleEnroll={handleEnroll} handleDeleteMaterial={handleDeleteMaterial}
                    customCourseName={customCourseName} setCustomCourseName={setCustomCourseName} isGeneratingCourse={isGeneratingCourse}
                    handleGenerateCustomCourse={handleGenerateCustomCourse} isEditingProfile={isEditingProfile}
@@ -237,7 +249,7 @@ export const StudentDashboard = ({
               </div>
             ) : (
               <ScrollArea className="flex-1 h-full">
-                <div className="p-6">
+                <div className="w-full max-w-7xl mx-auto p-4 md:p-6">
                   <StudentViewRouter
                      activeView={activeView} isLoading={isLoading} profile={profile} energy={energy}
                      getLearningStyleLabel={getLearningStyleLabel} setActiveView={setActiveView}
@@ -257,7 +269,8 @@ export const StudentDashboard = ({
                      startQuiz={startQuiz} dismissQuizConfirm={dismissQuizConfirm}
                      placementState={placementState} startPlacementCheck={startPlacementCheck}
                      submitPlacementCheck={submitPlacementCheck} acceptPlacementRecommendation={acceptPlacementRecommendation}
-                     cancelPlacementCheck={cancelPlacementCheck}
+                     cancelPlacementCheck={cancelPlacementCheck} lockedLessonNotice={lockedLessonNotice}
+                     openCurrentUnlockedLesson={openCurrentUnlockedLesson}
                      getFullName={getFullName} materials={materials} handleEnroll={handleEnroll} handleDeleteMaterial={handleDeleteMaterial}
                      customCourseName={customCourseName} setCustomCourseName={setCustomCourseName} isGeneratingCourse={isGeneratingCourse}
                      handleGenerateCustomCourse={handleGenerateCustomCourse} isEditingProfile={isEditingProfile}

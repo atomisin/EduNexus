@@ -31,6 +31,7 @@ BASE_SYSTEM_PROMPT = (
     "- Offer useful next steps such as examples, practice, summaries, videos, or mastery checks in natural language.\n"
     "- If relevant, suggest up to 2 educational videos as normal markdown links.\n"
     "- Never include <thinking> tags or internal reasoning. Keep responses within a reasonable token budget.\n"
+    "- Write maths, science, units, chemistry, accounting formulae, and symbolic notation professionally with LaTeX delimiters so the app can render them with KaTeX; for example use \\(1 \\times 10^{2}\\), \\(CO_{2}\\), \\(m/s^{2}\\), and \\(Assets = Liabilities + Equity\\).\n"
     "- Avoid disallowed content. Do not include UI control markers in student-visible prose."
 )
 
@@ -66,6 +67,10 @@ MASTERY TRIGGER DISCIPLINE:
 
 OUTPUT RULES:
 - Never include <thinking> tags or hidden reasoning.
+- Put mathematical, scientific, accounting, and technical expressions in LaTeX delimiters: inline as \\( ... \\), display as \\[ ... \\]. Use \\times, subscripts, superscripts, units, and professional symbols, e.g. \\(1 \\times 10^{2}\\), \\(H_{2}O\\), \\(CO_{2}\\), \\(m/s^{2}\\), \\(Assets = Liabilities + Equity\\).
+- Use standard academic language. Do not copy awkward scheme wording directly. For example, say "logarithms of numbers greater than 1", not "logarithm numbers greater than 1"; say "characteristic and mantissa" when discussing logarithm-table parts, not "characters of logarithm".
+- For logarithms and standard form, teach the relationship with a number first: if \\(N = a \\times 10^{n}\\), where \\(1 \\le a < 10\\), then \\(\\log_{10}N = n + \\log_{10}a\\). Use examples such as \\(3500 = 3.5 \\times 10^{3}\\), so \\(\\log_{10}3500 = 3 + \\log_{10}3.5\\).
+- Do not ask the learner to "express \\(\\log_{10}10\\) in standard form"; that confuses a logarithm value with the standard form of a number. Ask them to convert a number to standard form or find its logarithm characteristic instead.
 - Never include the marker strings ---NEXT---, ---QUESTION---, ---CTA---, or ---VIDEO--- in the visible response.
 - Keep the language age-appropriate for the persona. Use markdown lightly, only when it improves scanning.
 """
@@ -99,6 +104,27 @@ def build_lesson_control_prompt(lesson_context: Optional[Dict[str, Any]]) -> str
     )
     if active_subtopic:
         prompt += f"\n- Active focus area: {active_subtopic}"
+    revision_context = lesson_context.get("revision_context") or {}
+    if revision_context.get("is_revision"):
+        source_topics = revision_context.get("source_topics") or []
+        topic_names = [item.get("name") for item in source_topics if item.get("name")]
+        if len(topic_names) > 40:
+            topic_names = topic_names[:40] + [f"...and {len(source_topics) - 40} more previous-class topics"]
+        focus = revision_context.get("revision_focus") or []
+        prompt += (
+            "\n\nREVISION LESSON CONTEXT:"
+            f"\n- This lesson revises work from {revision_context.get('source_grade') or 'the previous class'}."
+            "\n- Begin by activating prior knowledge before teaching new content."
+            "\n- Treat the previous-class topics below as the revision map the student may need:"
+            f"\n  {', '.join(topic_names) if topic_names else 'No previous-class topic list available.'}"
+        )
+        if focus:
+            prompt += f"\n- Current revision focus from the scheme: {', '.join(focus)}"
+        prompt += (
+            "\nRULE: Do not assume the learner remembers the previous class. Ask one diagnostic or review question before moving forward."
+            "\nRULE: If the learner struggles, revise the relevant previous-class idea first, then reconnect it to the current lesson."
+            "\nRULE: Rewrite scheme fragments into natural teaching language; do not repeat the lesson objective twice."
+        )
     prompt += (
         "\nRULE: Match this stage exactly. The platform controls lesson progression; your response supplies the teaching language."
         "\nRULE: End with one clear learner action unless the stage is mastery_quiz or completed."
@@ -217,6 +243,55 @@ def strip_thinking_tags(text: str) -> str:
     cleaned = re.sub(r"<thinking>.*?</thinking>", "", text, flags=re.DOTALL)
     # Also strip any orphaned opening tags
     cleaned = re.sub(r"<thinking>.*$", "", cleaned, flags=re.DOTALL)
+    return cleaned.strip()
+
+
+def polish_tutor_response(text: str, subject_name: Optional[str] = None) -> str:
+    """
+    Clean obvious student-facing wording slips that are common in AI output.
+    This is intentionally light; the prompt still owns the teaching substance.
+    """
+    if not text:
+        return text
+
+    cleaned = text
+    if subject_name and "mathematics" in subject_name.strip().lower():
+        cleaned = re.sub(
+            r"\blogarithm numbers\b",
+            "logarithms of numbers",
+            cleaned,
+            flags=re.IGNORECASE,
+        )
+        cleaned = re.sub(
+            r"\bcompare\s+their\s+characters\s+of\s+logarithm\s+with\s+standard\s+form\s+numbers\b",
+            "compare their characteristic and mantissa with numbers in standard form",
+            cleaned,
+            flags=re.IGNORECASE,
+        )
+        cleaned = re.sub(
+            r"\bcharacters of logarithm\b",
+            "characteristic and mantissa of logarithms",
+            cleaned,
+            flags=re.IGNORECASE,
+        )
+        cleaned = re.sub(
+            r"\bTake\s+the\s+logarithm\s+of\s+(?:a\s+)?(?:number|value)(?:\s+greater\s+than\s+1)?\s*,?\s*(?:e\.g\.,?\s*)?log\(([^)]+)\)\.\s*Express\s+this\s+value\s+in\s+standard\s+form\.",
+            lambda match: (
+                rf"Try this: write \({match.group(1).strip()}\) in standard form, "
+                rf"then use that form to state the characteristic of \(\log_{{10}}{match.group(1).strip()}\)."
+            ),
+            cleaned,
+            flags=re.IGNORECASE,
+        )
+        cleaned = re.sub(
+            r"\bExpress\s+log\(([^)]+)\)\s+in\s+standard\s+form\b",
+            lambda match: (
+                rf"Write \({match.group(1).strip()}\) in standard form, "
+                rf"then evaluate or interpret \(\log_{{10}}{match.group(1).strip()}\)"
+            ),
+            cleaned,
+            flags=re.IGNORECASE,
+        )
     return cleaned.strip()
 
 
@@ -987,6 +1062,7 @@ If you have fully taught ALL the required concepts for the current topic or the 
         response = strip_thinking_tags(response)
         should_start_mastery_quiz = "[TRIGGER_MASTERY]" in response
         response = response.replace("[TRIGGER_MASTERY]", "").strip()
+        response = polish_tutor_response(response, subject_name=subject_name)
         lesson_control = infer_lesson_control(
             messages=messages,
             lesson_context=lesson_context,

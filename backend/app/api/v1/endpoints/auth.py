@@ -113,7 +113,7 @@ class Token(BaseModel):
 
 
 class UserResponse(BaseModel):
-    id: str
+    id: uuid.UUID
     email: str
     username: str
     first_name: str

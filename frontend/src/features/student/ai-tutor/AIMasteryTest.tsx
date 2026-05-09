@@ -18,6 +18,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { aiAPI } from '@/services/api';
 import { toast } from "sonner";
+import MathText from '@/components/MathText';
 
 interface Question {
     id: string;
@@ -123,7 +124,7 @@ export const AIMasteryTest: React.FC<AIMasteryTestProps> = ({ topic, topicId, su
 
     if (loading) {
         return (
-            <Card className="w-full max-w-2xl mx-auto border-teal-100 shadow-xl overflow-hidden">
+            <Card className="w-full max-w-2xl mx-auto border-teal-100 shadow-none overflow-hidden">
                 <CardContent className="p-12 flex flex-col items-center justify-center space-y-4">
                     <motion.div
                         animate={{ rotate: 360 }}
@@ -157,7 +158,7 @@ export const AIMasteryTest: React.FC<AIMasteryTestProps> = ({ topic, topicId, su
                     animate={{ opacity: 1, scale: 1 }}
                     className="w-full max-w-2xl mx-auto"
                 >
-                    <Card className="border-teal-200 shadow-2xl overflow-hidden">
+                    <Card className="border-teal-200 shadow-none overflow-hidden">
                         <div className={`h-3 ${isPassed ? 'bg-teal-500' : 'bg-amber-500'}`} />
                         <CardHeader className="text-center pb-2">
                             <div className="flex justify-center mb-4">
@@ -167,7 +168,7 @@ export const AIMasteryTest: React.FC<AIMasteryTestProps> = ({ topic, topicId, su
                                         <motion.div
                                             initial={{ scale: 0 }}
                                             animate={{ scale: 1 }}
-                                            className="absolute -top-2 -right-2 bg-amber-400 p-2 rounded-full shadow-lg"
+                                            className="absolute -top-2 -right-2 bg-amber-400 p-2 rounded-full shadow-none"
                                         >
                                             <Star className="w-5 h-5 text-white" fill="white" />
                                         </motion.div>
@@ -187,19 +188,19 @@ export const AIMasteryTest: React.FC<AIMasteryTestProps> = ({ topic, topicId, su
                         </CardHeader>
                         <CardContent className="p-8">
                             <div className="grid grid-cols-2 gap-6 mb-8 text-center">
-                                <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
+                                <div className="bg-slate-50 p-6 rounded-lg border border-slate-100">
                                     <div className="text-4xl font-black text-slate-900 mb-1">
                                         {evaluation.score}<span className="text-xl text-slate-400">/{evaluation.total}</span>
                                     </div>
                                     <div className="text-sm font-bold text-slate-500 uppercase tracking-widest">Final Score</div>
                                 </div>
-                                <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
+                                <div className="bg-slate-50 p-6 rounded-lg border border-slate-100">
                                     <div className="text-2xl font-bold text-teal-600 mb-1">{evaluation.mastery_level}</div>
                                     <div className="text-sm font-bold text-slate-500 uppercase tracking-widest">Mastery Level</div>
                                 </div>
                             </div>
 
-                            <div className="bg-teal-50/50 p-6 rounded-2xl border border-teal-100 relative mb-8">
+                            <div className="bg-teal-50/50 p-6 rounded-lg border border-teal-100 relative mb-8">
                                 <div className="absolute -top-3 left-6 px-3 bg-white text-teal-700 font-bold text-xs uppercase border border-teal-100 rounded-full">
                                     Teacher's Feedback
                                 </div>
@@ -234,7 +235,7 @@ export const AIMasteryTest: React.FC<AIMasteryTestProps> = ({ topic, topicId, su
                                             const question = questions.find(q => q.id === r.question_id);
                                             return (
                                                 <div key={idx} className={`p-4 rounded-xl border-l-[6px] ${r.is_correct ? 'border-teal-500 bg-teal-50/30' : 'border-amber-500 bg-amber-50/30'}`}>
-                                                    <p className="font-semibold text-slate-800 mt-1">{idx + 1}. {question?.text}</p>
+                                                    <p className="font-semibold text-slate-800 mt-1">{idx + 1}. <MathText>{question?.text || ''}</MathText></p>
                                                     <div className="mt-3 space-y-2 text-sm">
                                                         <div className="flex items-start gap-2">
                                                             <span className="font-bold text-slate-500 w-16">Your Answer:</span>
@@ -249,7 +250,7 @@ export const AIMasteryTest: React.FC<AIMasteryTestProps> = ({ topic, topicId, su
                                                             </div>
                                                         )}
                                                         <div className="bg-white p-3 rounded-lg border border-slate-100 text-slate-600 mt-2 text-sm">
-                                                            <span className="font-bold text-slate-700">Explanation:</span> {question?.explanation}
+                                                            <span className="font-bold text-slate-700">Explanation:</span> <MathText>{question?.explanation || ''}</MathText>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -279,7 +280,7 @@ export const AIMasteryTest: React.FC<AIMasteryTestProps> = ({ topic, topicId, su
     const progress = ((currentIndex + 1) / questions.length) * 100;
 
     return (
-        <Card className="w-full max-w-2xl mx-auto border-teal-100 shadow-2xl overflow-hidden min-h-[500px] flex flex-col">
+        <Card className="w-full max-w-2xl mx-auto border-teal-100 shadow-none overflow-hidden min-h-[500px] flex flex-col">
             <CardHeader className="bg-white border-b border-slate-50 p-4">
                 <div className="flex justify-between items-center mb-4">
                     <div className="flex items-center gap-2">
@@ -319,7 +320,7 @@ export const AIMasteryTest: React.FC<AIMasteryTestProps> = ({ topic, topicId, su
                         </span>
                     </div>
                     <h2 className="text-2xl font-bold text-slate-900 leading-tight">
-                        {currentQuestion.text}
+                        <MathText>{currentQuestion.text}</MathText>
                     </h2>
                 </div>
 
@@ -333,12 +334,12 @@ export const AIMasteryTest: React.FC<AIMasteryTestProps> = ({ topic, topicId, su
                             <RadioGroupItem value={key} id={`opt-${key}`} className="peer sr-only" />
                             <Label
                                 htmlFor={`opt-${key}`}
-                                className="flex items-center p-5 rounded-2xl border-2 border-slate-100 hover:border-primary/30 bg-white hover:bg-slate-50/30 cursor-pointer transition-all duration-200 peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 relative overflow-hidden group shadow-sm"
+                                className="flex items-center p-5 rounded-lg border-2 border-slate-100 hover:border-primary/30 bg-white hover:bg-slate-50/30 cursor-pointer transition-all duration-200 peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 relative overflow-hidden group shadow-sm"
                             >
                                 <div className="w-10 h-10 rounded-xl bg-slate-50 group-hover:bg-primary/10 text-slate-500 group-hover:text-primary peer-data-[state=checked]:bg-primary peer-data-[state=checked]:text-white flex items-center justify-center font-black text-lg mr-4 border border-slate-100 group-hover:border-primary/20 transition-colors">
                                     {key}
                                 </div>
-                                <div className="flex-1 font-semibold text-lg text-slate-800">{value}</div>
+                                <div className="flex-1 font-semibold text-lg text-slate-800"><MathText>{value}</MathText></div>
                                 <div className="flex items-center gap-2">
                                     {selectedOption === key && <CheckCircle2 className="w-5 h-5 text-primary" />}
                                     <div className="w-6 h-6 rounded-full border-2 border-slate-200 peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary flex items-center justify-center transition-all ml-2">
@@ -363,7 +364,7 @@ export const AIMasteryTest: React.FC<AIMasteryTestProps> = ({ topic, topicId, su
                     <Button
                         onClick={handleNext}
                         disabled={!selectedOption || submitting}
-                        className="px-10 bg-teal-600 hover:bg-teal-700 text-white font-bold h-12 rounded-xl shadow-lg shadow-teal-500/20"
+                        className="px-10 bg-teal-600 hover:bg-teal-700 text-white font-bold h-12 rounded-xl shadow-none shadow-teal-500/20"
                     >
                         {submitting ? 'Evaluating...' : currentIndex === questions.length - 1 ? 'Finish Test' : 'Next Question'}
                         <ChevronRight className="ml-1 w-5 h-5" />

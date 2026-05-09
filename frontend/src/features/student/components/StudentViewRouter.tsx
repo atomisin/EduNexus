@@ -57,10 +57,12 @@ interface StudentViewRouterProps {
   startQuiz: (topic?: any, subject?: any) => void;
   dismissQuizConfirm: () => void;
   placementState?: any;
+  lockedLessonNotice?: any;
   startPlacementCheck?: (targetTopic: any) => Promise<void>;
   submitPlacementCheck?: (answersByQuestionId: Record<string, string>) => Promise<void>;
   acceptPlacementRecommendation?: () => Promise<void>;
   cancelPlacementCheck?: () => void;
+  openCurrentUnlockedLesson?: () => Promise<void>;
   getFullName: () => string;
   // Subjects props
   materials: any[];
@@ -94,7 +96,8 @@ export const StudentViewRouter: React.FC<StudentViewRouterProps> = ({
   setProfile, suggestedTopics, weaknessAreas, topics,
   roadmapLoading, structuredTopics, isStructuredLoading, scrollAreaRef, onMasteryTestComplete,
   startQuiz, dismissQuizConfirm, placementState, startPlacementCheck, submitPlacementCheck,
-  acceptPlacementRecommendation, cancelPlacementCheck, getFullName, materials, handleEnroll, handleDeleteMaterial, customCourseName,
+  acceptPlacementRecommendation, cancelPlacementCheck, lockedLessonNotice, openCurrentUnlockedLesson,
+  getFullName, materials, handleEnroll, handleDeleteMaterial, customCourseName,
   setCustomCourseName, isGeneratingCourse, handleGenerateCustomCourse,
   isEditingProfile, setIsEditingProfile, profileFormData, setProfileFormData,
   setAvatarUrl, startAssessment, progress, radarData, searchQuery, setSearchQuery
@@ -162,10 +165,12 @@ export const StudentViewRouter: React.FC<StudentViewRouterProps> = ({
         scrollAreaRef={scrollAreaRef}
         onMasteryTestComplete={onMasteryTestComplete}
         placementState={placementState}
+        lockedLessonNotice={lockedLessonNotice}
         startPlacementCheck={startPlacementCheck}
         submitPlacementCheck={submitPlacementCheck}
         acceptPlacementRecommendation={acceptPlacementRecommendation}
         cancelPlacementCheck={cancelPlacementCheck}
+        openCurrentUnlockedLesson={openCurrentUnlockedLesson}
         getFullName={getFullName}
       />;
       case 'quiz': return <QuizView

@@ -170,11 +170,16 @@ export const authAPI = {
     const targetUrl = `${API_BASE_URL}/auth/login`;
     const MAX_RETRIES = 3;
 
-    // Pre-warm: ensure the server is awake before the first login attempt
-    window.dispatchEvent(new CustomEvent('api:server_waking', {
-      detail: { attempt: 0, maxRetries: MAX_RETRIES, phase: 'warmup' }
-    }));
-    await warmUpServer();
+    // Pre-warm without showing cold-start copy unless the health check is actually slow.
+    const warmupNotice = window.setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('api:server_waking', {
+        detail: { attempt: 0, maxRetries: MAX_RETRIES, phase: 'warmup' }
+      }));
+    }, 1500);
+    await warmUpServer().finally(() => {
+      window.clearTimeout(warmupNotice);
+      window.dispatchEvent(new CustomEvent('api:server_ready'));
+    });
 
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       try {
@@ -189,6 +194,7 @@ export const authAPI = {
 
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({ detail: 'Login failed' }));
+          window.dispatchEvent(new CustomEvent('api:server_ready'));
           // If detail is an object, stringify it so the Error message preserves it
           const message = typeof errorData.detail === 'object' 
             ? JSON.stringify(errorData.detail) 

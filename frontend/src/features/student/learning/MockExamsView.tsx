@@ -129,8 +129,8 @@ const MockExamsView: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-2 gap-4 mb-8">
-            <div className="p-4 bg-blue-50 dark:bg-blue-950/30 rounded-xl border border-blue-100 dark:border-blue-900/50">
-              <p className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase">Time Spent</p>
+            <div className="p-4 bg-primary/10 rounded-xl border border-primary/20">
+              <p className="text-xs font-bold text-primary uppercase">Time Spent</p>
               <p className="text-xl font-bold">{Math.round(lastResults.time_spent_seconds / 60)} mins</p>
             </div>
             <div className="p-4 bg-teal-50 dark:bg-teal-950/30 rounded-xl border border-teal-100 dark:border-teal-900/50">
@@ -244,9 +244,9 @@ const MockExamsView: React.FC = () => {
 
         {series.map((s) => (
           <Card key={s.id} className="group hover:border-primary/50 transition-all duration-300 rounded-2xl overflow-hidden border-slate-200 dark:border-slate-800 shadow-md hover:shadow-xl">
-            <div className={`h-2 bg-gradient-to-r ${
-              s.exam_type === 'JAMB' ? 'from-teal-400 to-teal-600' : 
-              s.exam_type === 'WAEC' ? 'from-blue-400 to-blue-600' : 'from-purple-400 to-purple-600'
+            <div className={`h-2 ${
+              s.exam_type === 'JAMB' ? 'bg-teal-500' :
+              s.exam_type === 'WAEC' ? 'bg-primary' : 'bg-slate-600'
             }`}></div>
             <CardHeader className="pb-3">
               <div className="flex justify-between items-start mb-2">

@@ -152,19 +152,19 @@ export const SubjectManager = () => {
   }));
 
   return (
-    <div className="space-y-8">
-      <div className="flex items-center justify-between">
+    <div className="space-y-5">
+      <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
-          <h2 className="text-3xl font-bold text-slate-900 dark:text-slate-100">Subject Management</h2>
-          <p className="text-slate-500 mt-1">Create and manage subjects across all education levels</p>
+          <h2 className="text-2xl font-semibold tracking-tight">Subject Management</h2>
+          <p className="text-sm text-muted-foreground">Create and manage subjects across education levels.</p>
         </div>
-        <Button onClick={() => setShowCreateDialog(true)} className="btn-primary">
+        <Button onClick={() => setShowCreateDialog(true)} className="w-fit bg-primary hover:bg-primary/90 rounded-lg">
           <Plus className="w-4 h-4 mr-2" /> Add Subject
         </Button>
       </div>
 
-      <div className="space-y-6">
-        <div className="flex items-center gap-3">
+      <div className="space-y-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
           <label
             htmlFor="level-select"
             className="text-sm font-medium text-slate-500 dark:text-slate-400 whitespace-nowrap"
@@ -175,7 +175,7 @@ export const SubjectManager = () => {
             id="level-select"
             value={selectedLevel}
             onChange={(e) => setSelectedLevel(e.target.value)}
-            className="border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500/50 min-w-[200px]"
+            className="border border-border rounded-lg px-3 py-2 text-sm bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 min-w-[200px]"
           >
             <option value="all">All Subjects</option>
             {ALL_LEVELS.map(level => (
@@ -186,7 +186,7 @@ export const SubjectManager = () => {
           </select>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-6">
+        <div className="grid md:grid-cols-2 gap-4">
           {loading ? (
             <div className="col-span-2 flex justify-center py-12">
               <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -195,25 +195,25 @@ export const SubjectManager = () => {
             const eduCategory = subject.education_level?.split('_')[0] || 'secondary';
             const config = educationConfig[eduCategory as keyof typeof educationConfig] || educationConfig.secondary;
             return (
-              <Card key={subject.id} className="group hover-lift overflow-hidden border-0 shadow-lg">
-                <div className={`h-1.5 bg-gradient-to-r ${config.color}`} />
-                <CardContent className="p-6">
+              <Card key={subject.id} className="group overflow-hidden rounded-lg border border-border shadow-none">
+                <div className="h-1.5 bg-primary" />
+                <CardContent className="p-4">
                   <div className="flex items-start justify-between">
-                    <div className="flex items-start gap-4">
-                      <div className={`w-14 h-14 rounded-xl ${config.bg} flex items-center justify-center`}>
-                        <BookOpen className={`w-7 h-7 ${config.text}`} />
+                    <div className="min-w-0 flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
+                        <BookOpen className="w-5 h-5 text-primary" />
                       </div>
-                      <div className="flex-1">
-                        <h3 className="font-semibold text-xl text-slate-900 dark:text-slate-100">{subject.name}</h3>
+                      <div className="min-w-0 flex-1">
+                        <h3 className="font-semibold text-base truncate">{subject.name}</h3>
                         <div className="flex items-center gap-2 mt-1">
                           <Badge variant="outline" className={`text-xs ${config.border} ${config.text}`}>
                             {subject.education_level?.replace('_', ' ').toUpperCase()}
                           </Badge>
                           <span className="text-sm text-slate-500">{subject.curriculum_type}</span>
                         </div>
-                        <p className="text-sm text-slate-600 dark:text-slate-400 mt-3 line-clamp-2">{subject.description || 'No description'}</p>
+                        <p className="text-sm text-muted-foreground mt-3 line-clamp-2">{subject.description || 'No description'}</p>
 
-                        <div className="flex items-center gap-4 mt-6">
+                        <div className="flex flex-wrap items-center gap-2 mt-4">
                           <Button
                             variant="outline"
                             size="sm"
@@ -242,7 +242,7 @@ export const SubjectManager = () => {
             );
           })}
           {((selectedLevel === 'all' ? subjects : subjects.filter((s: any) => s.education_level === selectedLevel)).length === 0) && !loading && (
-            <div className="col-span-2 text-center py-12 bg-white dark:bg-slate-900/50 rounded-2xl border border-dashed">
+            <div className="col-span-2 text-center py-12 bg-card rounded-lg border border-dashed">
               <BookOpen className="w-12 h-12 text-slate-300 mx-auto mb-4" />
               <p className="text-slate-500">No subjects found for {ALL_LEVELS.find(l => l.id === selectedLevel)?.label || 'All Subjects'}</p>
             </div>

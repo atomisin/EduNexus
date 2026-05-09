@@ -12,7 +12,8 @@ from app.api.v1.endpoints.auth import get_current_user
 from app.models.user import User
 from app.models.student import StudentProfile
 from app.models.student_progress import StudentSubjectProgress
-from app.models.subject import Subject
+from app.models.subject import Subject, Topic
+from app.models.junction_tables import StudentTopicProgress
 from app.services.llm_service import llm_service
 from app.services.ai_service import tts_service, stt_service
 from app.utils.validators import sanitize_user_input
@@ -21,6 +22,7 @@ from slowapi.util import get_remote_address
 from jose import jwt, JWTError
 from app.core.config import settings
 from app.services.ai_coordinator import ai_coordinator
+from app.services.revision_context import get_revision_context, get_subject_and_topic
 import logging
 
 logger = logging.getLogger(__name__)
@@ -53,6 +55,64 @@ def handle_api_error(
 
 
 router = APIRouter()
+
+
+async def ensure_ai_topic_unlocked(
+    db: AsyncSession,
+    student_id: uuid.UUID,
+    subject_id: Any,
+    topic_id: Any,
+) -> None:
+    """Prevent direct AI tutoring on lessons that are still locked."""
+    try:
+        subject_uuid = uuid.UUID(str(subject_id))
+        topic_uuid = uuid.UUID(str(topic_id))
+    except (TypeError, ValueError):
+        return
+
+    res_topics = await db.execute(
+        select(Topic)
+        .filter(Topic.subject_id == subject_uuid)
+        .order_by(Topic.sort_order.asc(), Topic.name.asc())
+    )
+    topics = res_topics.scalars().all()
+    if not topics or topic_uuid not in {topic.id for topic in topics}:
+        return
+
+    topic_ids = [topic.id for topic in topics]
+    res_progress = await db.execute(
+        select(StudentTopicProgress).filter(
+            StudentTopicProgress.student_id == student_id,
+            StudentTopicProgress.topic_id.in_(topic_ids),
+        )
+    )
+    progress_by_topic = {record.topic_id: record for record in res_progress.scalars().all()}
+    min_sort_order = min(getattr(topic, "sort_order", 999) for topic in topics)
+    statuses: Dict[uuid.UUID, str] = {}
+    for topic in topics:
+        progress = progress_by_topic.get(topic.id)
+        if progress:
+            statuses[topic.id] = progress.status
+        elif getattr(topic, "sort_order", 0) == min_sort_order:
+            statuses[topic.id] = "in_progress"
+        else:
+            statuses[topic.id] = "locked"
+
+    if statuses.get(topic_uuid) != "locked":
+        return
+
+    current_topic = next(
+        (
+            topic for topic in topics
+            if statuses.get(topic.id) in {"in_progress", "unlocked", "active"}
+        ),
+        None,
+    ) or next((topic for topic in topics if statuses.get(topic.id) != "locked"), None) or topics[0]
+
+    raise HTTPException(
+        status_code=403,
+        detail=f"This lesson is locked. Continue from '{current_topic.name}' first.",
+    )
 
 
 def build_fallback_mastery_questions(topic: str, subject: str) -> List[Dict[str, Any]]:
@@ -340,6 +400,21 @@ async def chat(
         raise_brain_power_depleted()
 
     try:
+        lesson_context = chat_req.context or {}
+        subject_id = lesson_context.get("subject_id")
+        topic_id = lesson_context.get("topic_id")
+        if subject_id and topic_id:
+            await ensure_ai_topic_unlocked(db, current_user.id, subject_id, topic_id)
+        if subject_id and topic_id and not lesson_context.get("revision_context"):
+            subject, topic = await get_subject_and_topic(db, subject_id, topic_id)
+            if subject and topic:
+                revision_context = await get_revision_context(db, subject, topic)
+                if revision_context:
+                    lesson_context = {
+                        **lesson_context,
+                        "revision_context": revision_context,
+                    }
+
         # Refactored for Batch 10: Use AI Coordinator for persona-based response
         result = await ai_coordinator.get_chat_response(
             messages=chat_req.messages,
@@ -351,7 +426,7 @@ async def chat(
             subject_name=chat_req.subject_name,
             topic_name=chat_req.topic_name,
             user_id=current_user.id,
-            lesson_context=chat_req.context,
+            lesson_context=lesson_context,
         )
         # Add student_context for frontend compatibility
         result["student_context"] = student_context

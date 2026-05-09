@@ -21,21 +21,21 @@ const connections = [
 
 export const KnowledgeGraphView = () => {
   return (
-    <div className="space-y-8">
+    <div className="space-y-5">
       <div>
-        <h2 className="text-3xl font-bold text-slate-900 dark:text-slate-100">Knowledge Graph</h2>
-        <p className="text-slate-500 mt-1">Visualize your learning journey and discover concept connections</p>
+        <h2 className="text-2xl font-semibold tracking-tight">Knowledge Graph</h2>
+        <p className="text-sm text-muted-foreground">Visualize learning paths and concept connections.</p>
       </div>
 
-      <Card className="overflow-hidden border-0 shadow-2xl shadow-slate-200/50 dark:shadow-none">
+      <Card className="overflow-hidden rounded-lg border border-border shadow-none">
         <CardContent className="p-0">
-          <div className="relative h-[500px] bg-gradient-to-br from-slate-50 via-indigo-50/30 to-indigo-50/30 dark:from-slate-900 dark:via-indigo-950/20 dark:to-indigo-950/20">
+          <div className="relative h-[500px] bg-muted/30">
             {/* SVG Connections */}
             <svg className="absolute inset-0 w-full h-full">
               <defs>
                 <linearGradient id="lineGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                  <stop offset="0%" stopColor="#6366f1" stopOpacity="0.4" />
-                  <stop offset="100%" stopColor="#a855f7" stopOpacity="0.4" />
+                  <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity="0.4" />
+                  <stop offset="100%" stopColor="#0d9488" stopOpacity="0.4" />
                 </linearGradient>
               </defs>
               {connections.map((conn, i) => {
@@ -62,7 +62,7 @@ export const KnowledgeGraphView = () => {
                 key={concept.id}
                 className={`absolute transform -translate-x-1/2 -translate-y-1/2 cursor-pointer transition-all duration-300 hover:scale-110 ${concept.mastered
                   ? 'bg-gradient-to-br from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-500/30'
-                  : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-2 border-indigo-200 dark:border-indigo-800 shadow-lg'
+                  : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-2 border-primary/20 shadow-lg'
                   }`}
                 style={{ left: `${concept.x}%`, top: `${concept.y}%` }}
               >
@@ -76,8 +76,8 @@ export const KnowledgeGraphView = () => {
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-3 gap-6">
-        <Card className="border-0 shadow-lg">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card className="rounded-lg border border-border shadow-none">
           <CardContent className="p-6 text-center text-foreground">
             <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center mx-auto mb-4 shadow-lg shadow-emerald-500/30">
               <CheckCircle className="w-7 h-7 text-white" />
@@ -86,7 +86,7 @@ export const KnowledgeGraphView = () => {
             <p className="text-sm text-slate-500 mt-1">Mastered Concepts</p>
           </CardContent>
         </Card>
-        <Card className="border-0 shadow-lg">
+        <Card className="rounded-lg border border-border shadow-none">
           <CardContent className="p-6 text-center text-foreground">
             <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-teal-400 to-teal-500 flex items-center justify-center mx-auto mb-4 shadow-lg shadow-teal-500/30">
               <Brain className="w-7 h-7 text-white" />
@@ -95,7 +95,7 @@ export const KnowledgeGraphView = () => {
             <p className="text-sm text-slate-500 mt-1">Learning Now</p>
           </CardContent>
         </Card>
-        <Card className="border-0 shadow-lg">
+        <Card className="rounded-lg border border-border shadow-none">
           <CardContent className="p-6 text-center text-foreground">
             <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center mx-auto mb-4 shadow-lg shadow-amber-500/30">
               <Network className="w-7 h-7 text-white" />

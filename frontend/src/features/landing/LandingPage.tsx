@@ -57,10 +57,10 @@ export const LandingPage = ({
   }, [authMode, onGoDashboard, user]);
 
   const features = [
-    { icon: Brain, title: 'AI Tutor, Always Available', desc: 'Get instant explanations, worked examples, and practice questions tailored to your level, any time, any subject.', color: 'text-primary' },
-    { icon: Video, title: 'Live Sessions with Real Teachers', desc: 'Book one-on-one or group sessions with verified Nigerian teachers. Learn in real time, ask questions, get answers.', color: 'text-primary' },
-    { icon: BookOpen, title: 'Curriculum-Aligned Materials', desc: 'Every topic mapped to the Nigerian curriculum, from Basic Science in Primary 1 to Further Mathematics in SS3.', color: 'text-primary' },
-    { icon: Trophy, title: 'Track Your Progress', desc: 'Brain Power points, streaks, and detailed progress reports keep students motivated and parents informed.', color: 'text-primary' },
+    { icon: Brain, title: 'Structured AI tutoring', desc: 'Students learn through guided explanations, worked examples, quick checks, and mastery quizzes that respond to their level of understanding.', color: 'text-primary' },
+    { icon: Video, title: 'Live learning with teachers', desc: 'Teachers can run real-time classes, share notes, launch quizzes, and keep students engaged inside one connected classroom workspace.', color: 'text-primary' },
+    { icon: BookOpen, title: 'Curriculum-aware pathways', desc: 'Lessons, revision checks, placement tests, and recommendations stay aligned with the learner’s class, subject, term, and unlocked progress.', color: 'text-primary' },
+    { icon: Trophy, title: 'Measurable progress', desc: 'Dashboards turn activity, mastery, scores, and weak areas into clear next steps for students, teachers, and school leaders.', color: 'text-primary' },
   ];
 
   return (
@@ -75,7 +75,6 @@ export const LandingPage = ({
             <div className="hidden md:flex items-center gap-8">
               <a href="#features" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Platform</a>
               <a href="#about" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Organization</a>
-              <a href="#contact" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Contact</a>
               <div className="h-6 w-px bg-border mx-2"></div>
               <ThemeToggle />
               <div className="h-6 w-px bg-border mx-2"></div>
@@ -119,7 +118,6 @@ export const LandingPage = ({
                   <div className="mt-10 flex min-w-0 flex-col gap-2">
                     <a href="#features" className="rounded-lg px-1 py-3 text-base font-semibold hover:text-primary transition-colors">Platform</a>
                     <a href="#about" className="rounded-lg px-1 py-3 text-base font-semibold hover:text-primary transition-colors">Organization</a>
-                    <a href="#contact" className="rounded-lg px-1 py-3 text-base font-semibold hover:text-primary transition-colors">Contact</a>
                     <Separator className="my-5" />
                     {user && onGoDashboard ? (
                       <Button onClick={onGoDashboard} className="w-full h-12 bg-primary text-primary-foreground font-semibold rounded-lg">
@@ -154,21 +152,20 @@ export const LandingPage = ({
         <div className="relative max-w-7xl mx-auto px-6 pt-32 pb-16 min-h-[92vh] flex items-end">
             <div className="max-w-3xl space-y-8 animate-fade-in text-white">
               <Badge variant="secondary" className="px-3 py-1 font-medium bg-secondary text-secondary-foreground rounded-full">
-                Built for Nigerian Students
+                Built for serious learning
               </Badge>
 
               <h1 className="text-5xl lg:text-7xl font-bold leading-tight tracking-tight font-display">
-                Unlock Your Full <br />
-                Academic Potential
+                EduNexus
               </h1>
 
               <p className="text-xl text-white/80 leading-relaxed max-w-2xl">
-                EduNexus combines AI-powered tutoring, live sessions, and curriculum-aligned materials to help students from Pre-Primary through SS3 and beyond achieve more.
+                A modern learning platform for students, teachers, and schools. EduNexus combines structured AI tutoring, live classroom tools, curriculum pathways, and progress intelligence in one academic workspace.
               </p>
 
               <div className="flex flex-wrap gap-4 pt-4">
                 <Button size="lg" className="bg-primary text-primary-foreground rounded-lg px-8 font-semibold" onClick={() => setAuthMode('register')}>
-                  Start Learning Free
+                  Start Learning
                 </Button>
                 <Button
                   size="lg"
@@ -176,7 +173,7 @@ export const LandingPage = ({
                   className="px-8 border-white/40 text-white bg-white/10 hover:bg-white/20 rounded-lg"
                   onClick={() => document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })}
                 >
-                  See How It Works
+                  Explore the Platform
                 </Button>
                 {onJoinSession && (
                   <Button
@@ -192,13 +189,13 @@ export const LandingPage = ({
 
               <div className="flex flex-wrap items-center gap-6 pt-6 text-sm font-medium text-white/75 border-t border-white/20">
                 <div className="flex items-center gap-2">
-                  <CheckCircle className="w-4 h-4 text-emerald-600" /> Nigerian Curriculum Aligned
+                  <CheckCircle className="w-4 h-4 text-emerald-600" /> Curriculum-aware lessons
                 </div>
                 <div className="flex items-center gap-2">
-                  <CheckCircle className="w-4 h-4 text-emerald-600" /> JSS & SS Coverage
+                  <CheckCircle className="w-4 h-4 text-emerald-600" /> Placement-based lesson unlocking
                 </div>
                 <div className="flex items-center gap-2">
-                  <CheckCircle className="w-4 h-4 text-emerald-600" /> Live 1-on-1 Tutoring
+                  <CheckCircle className="w-4 h-4 text-emerald-600" /> AI and teacher-led learning
                 </div>
               </div>
             </div>
@@ -211,10 +208,10 @@ export const LandingPage = ({
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-20">
             <h2 className="text-4xl lg:text-5xl font-bold text-foreground mb-6 tracking-tight">
-              Amazing Features
+              A Complete Academic Workspace
             </h2>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-              Everything you need to succeed in your studies.
+              EduNexus is designed for the full learning cycle: prepare, teach, practise, assess, revise, and progress with evidence.
             </p>
           </div>
 
@@ -248,6 +245,34 @@ export const LandingPage = ({
         </div>
       </section>
 
+      <section id="about" className="py-28 px-6 bg-background border-t border-border">
+        <div className="max-w-7xl mx-auto grid gap-12 lg:grid-cols-[0.9fr_1.1fr] items-start">
+          <div className="space-y-5">
+            <Badge variant="outline" className="rounded-lg border-primary/30 text-primary">Platform model</Badge>
+            <h2 className="text-4xl lg:text-5xl font-bold tracking-tight text-foreground">
+              Built around understanding, not just access.
+            </h2>
+            <p className="text-lg text-muted-foreground leading-relaxed">
+              EduNexus helps learners move with confidence by checking readiness before advanced lessons, revising prerequisite work when needed, and keeping every learning decision tied to evidence.
+            </p>
+          </div>
+
+          <div className="grid sm:grid-cols-2 gap-4">
+            {[
+              { title: 'For students', text: 'A focused learning workspace with AI tutoring, voice support, practice, recommended videos, reading materials, and mastery checks.' },
+              { title: 'For teachers', text: 'Classroom tools for live sessions, lesson preparation, shared content, mid-class quizzes, assignments, and student insight.' },
+              { title: 'For schools', text: 'Operational dashboards, user approvals, curriculum materials, cost visibility, and progress reporting across learners.' },
+              { title: 'For professional learners', text: 'Custom courses, technical explanations, applied questions, and learning paths beyond the standard school curriculum.' },
+            ].map((item) => (
+              <div key={item.title} className="rounded-lg border border-border bg-subtle/50 p-6">
+                <h3 className="font-bold text-lg text-foreground mb-2">{item.title}</h3>
+                <p className="text-sm leading-relaxed text-muted-foreground">{item.text}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* CTA Section */}
       <section className="py-32 px-6 bg-foreground text-background">
         <div className="max-w-4xl mx-auto text-center space-y-8">
@@ -255,14 +280,14 @@ export const LandingPage = ({
             Start Learning Today
           </h2>
           <p className="text-xl text-muted max-w-2xl mx-auto leading-relaxed opacity-90">
-            Join EduNexus and take control of your education.
+            Create a learning path that knows what the student understands, what they missed, and what they should study next.
           </p>
           <div className="flex flex-wrap justify-center gap-6 pt-8">
             <Button size="lg" className="bg-background text-foreground hover:bg-background/90 font-semibold px-10 rounded-lg" onClick={() => setAuthMode('register')}>
               Get Started
             </Button>
-            <Button size="lg" variant="outline" className="border-background text-background hover:bg-background/10 font-semibold px-10 rounded-lg bg-transparent">
-              Learn More
+            <Button size="lg" variant="outline" className="border-background text-background hover:bg-background/10 font-semibold px-10 rounded-lg bg-transparent" onClick={() => document.getElementById('about')?.scrollIntoView({ behavior: 'smooth' })}>
+              See Platform Model
             </Button>
           </div>
         </div>
@@ -272,10 +297,10 @@ export const LandingPage = ({
       <section className="bg-primary py-16">
         <div className="max-w-6xl mx-auto px-6 grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
           {[
-            { value: "17", label: "Education Levels" },
-            { value: "JSS-SS3", label: "Full Coverage" },
-            { value: "AI + Live", label: "Dual Learning" },
-            { value: "NG", label: "Nigerian Curriculum" }
+            { value: "17", label: "Learning Levels" },
+            { value: "AI + Live", label: "Tutor Modes" },
+            { value: "85%", label: "Unlock Benchmark" },
+            { value: "360°", label: "Progress View" }
           ].map(stat => (
             <div key={stat.label} className="text-primary-foreground">
               <div className="text-3xl font-display font-bold text-accent mb-2">
@@ -299,38 +324,40 @@ export const LandingPage = ({
                 <span className="font-display font-bold text-xl text-foreground">EduNexus</span>
               </div>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                Empowering Nigerian learners with precision educational tools for modern academic environments.
+                A structured academic platform for AI tutoring, live teaching, curriculum pathways, and measurable progress.
               </p>
             </div>
             <div>
               <h4 className="font-semibold text-foreground mb-6 text-sm uppercase tracking-widest">Platform</h4>
               <ul className="space-y-4 text-sm text-muted-foreground">
-                <li className="hover:text-primary cursor-pointer transition-colors">Architecture</li>
-                <li className="hover:text-primary cursor-pointer transition-colors">Organizations</li>
-                <li className="hover:text-primary cursor-pointer transition-colors">Individuals</li>
-                <li className="hover:text-primary cursor-pointer transition-colors">Metrics</li>
+                <li className="hover:text-primary cursor-pointer transition-colors">AI Tutor</li>
+                <li className="hover:text-primary cursor-pointer transition-colors">Live Classroom</li>
+                <li className="hover:text-primary cursor-pointer transition-colors">Progress Analytics</li>
+                <li className="hover:text-primary cursor-pointer transition-colors">Mastery Checks</li>
               </ul>
             </div>
             <div>
-              <h4 className="font-semibold text-foreground mb-6 text-sm uppercase tracking-widest">Enterprise</h4>
+              <h4 className="font-semibold text-foreground mb-6 text-sm uppercase tracking-widest">Learners</h4>
               <ul className="space-y-4 text-sm text-muted-foreground">
-                <li className="hover:text-primary cursor-pointer transition-colors">About</li>
-                <li className="hover:text-primary cursor-pointer transition-colors">Contact</li>
-                <li className="hover:text-primary cursor-pointer transition-colors">Careers</li>
+                <li className="hover:text-primary cursor-pointer transition-colors">Primary</li>
+                <li className="hover:text-primary cursor-pointer transition-colors">Junior Secondary</li>
+                <li className="hover:text-primary cursor-pointer transition-colors">Senior Secondary</li>
+                <li className="hover:text-primary cursor-pointer transition-colors">Professional</li>
               </ul>
             </div>
             <div>
-              <h4 className="font-semibold text-foreground mb-6 text-sm uppercase tracking-widest">Legal</h4>
+              <h4 className="font-semibold text-foreground mb-6 text-sm uppercase tracking-widest">Organization</h4>
               <ul className="space-y-4 text-sm text-muted-foreground">
-                <li className="hover:text-primary cursor-pointer transition-colors">Privacy</li>
-                <li className="hover:text-primary cursor-pointer transition-colors">Terms</li>
-                <li className="hover:text-primary cursor-pointer transition-colors">Compliance</li>
+                <li className="hover:text-primary cursor-pointer transition-colors">Teacher tools</li>
+                <li className="hover:text-primary cursor-pointer transition-colors">Admin dashboard</li>
+                <li className="hover:text-primary cursor-pointer transition-colors">Curriculum materials</li>
+                <li className="hover:text-primary cursor-pointer transition-colors">Reports</li>
               </ul>
             </div>
           </div>
           <Separator className="bg-border/60" />
           <div className="flex flex-col flex-col-reverse md:flex-row items-center justify-between pt-8 gap-6 text-sm text-muted-foreground">
-            <p className="font-medium tracking-wide">© 2025 EduNexus. Empowering Nigerian learners.</p>
+            <p className="font-medium tracking-wide">© 2026 EduNexus. Structured learning for measurable progress.</p>
           </div>
         </div>
       </footer>

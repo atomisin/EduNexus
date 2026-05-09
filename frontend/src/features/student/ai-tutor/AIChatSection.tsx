@@ -18,10 +18,24 @@ import { useSpeechRecognition } from '@/features/student/hooks/useSpeechRecognit
 import { getPersonaEmoji, getPersonaName } from '@/features/student/utils/personaUtils';
 import React, { useCallback, useEffect, useState } from 'react';
 
+const renderRichText = (value: string) => {
+  const parts = value.split(/(\+\+[^+]+\+\+)/g);
+  return parts.map((part, index) => {
+    if (part.startsWith('++') && part.endsWith('++')) {
+      return (
+        <span key={`${part}-${index}`} className="underline decoration-primary/70 decoration-2 underline-offset-4 font-semibold">
+          <MathText>{part.slice(2, -2)}</MathText>
+        </span>
+      );
+    }
+    return <MathText key={`${part}-${index}`}>{part}</MathText>;
+  });
+};
+
 const renderMathChildren = (children: React.ReactNode): React.ReactNode =>
   React.Children.map(children, (child) => {
     if (typeof child === 'string' || typeof child === 'number') {
-      return <MathText>{String(child)}</MathText>;
+      return renderRichText(String(child));
     }
     if (React.isValidElement(child)) {
       const element = child as React.ReactElement<{ children?: React.ReactNode }>;
@@ -33,10 +47,17 @@ const renderMathChildren = (children: React.ReactNode): React.ReactNode =>
   });
 
 const mathMarkdownComponents = {
-  p: ({ children }: any) => <p>{renderMathChildren(children)}</p>,
-  li: ({ children }: any) => <li>{renderMathChildren(children)}</li>,
-  strong: ({ children }: any) => <strong>{renderMathChildren(children)}</strong>,
-  em: ({ children }: any) => <em>{renderMathChildren(children)}</em>,
+  h1: ({ children }: any) => <h3 className="mb-3 text-lg font-black tracking-normal text-slate-950 dark:text-white">{renderMathChildren(children)}</h3>,
+  h2: ({ children }: any) => <h3 className="mb-3 text-lg font-black tracking-normal text-slate-950 dark:text-white">{renderMathChildren(children)}</h3>,
+  h3: ({ children }: any) => <h4 className="mb-2 text-base font-black tracking-normal text-slate-900 dark:text-slate-100">{renderMathChildren(children)}</h4>,
+  p: ({ children }: any) => <p className="mb-3 last:mb-0">{renderMathChildren(children)}</p>,
+  ul: ({ children }: any) => <ul className="my-3 ml-5 list-disc space-y-1.5 marker:text-primary">{children}</ul>,
+  ol: ({ children }: any) => <ol className="my-3 ml-5 list-decimal space-y-1.5 marker:text-primary marker:font-bold">{children}</ol>,
+  li: ({ children }: any) => <li className="pl-1">{renderMathChildren(children)}</li>,
+  strong: ({ children }: any) => <strong className="font-black text-slate-950 dark:text-white">{renderMathChildren(children)}</strong>,
+  em: ({ children }: any) => <em className="italic text-slate-700 dark:text-slate-200">{renderMathChildren(children)}</em>,
+  code: ({ children }: any) => <code className="rounded bg-slate-100 px-1.5 py-0.5 text-sm font-semibold text-slate-800 dark:bg-slate-900 dark:text-slate-100">{children}</code>,
+  blockquote: ({ children }: any) => <blockquote className="my-3 border-l-4 border-primary/50 pl-4 text-slate-600 dark:text-slate-300">{children}</blockquote>,
 };
 
 interface AIChatSectionProps {

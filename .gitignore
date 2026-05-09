@@ -19,10 +19,20 @@ build/
 .venv/
 venv/
 *.egg
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+coverage.xml
+htmlcov/
 
 # Node
 node_modules/
 frontend/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 
 # IDE
 .vscode/
@@ -39,13 +49,50 @@ Thumbs.db
 *.log
 api_logs.txt
 gorse*.log
+logs/
 
 # Docker volumes
 database/
+postgres_data/
+redis_data/
+pgdata/
 
 # Compiled output
 frontend/dist/
+frontend/.vite/
+frontend/.vercel/
 
-# AI agent
-C:\Users\Tommie-YV\edunexus\everything-claude-code
-C:\Users\Tommie-YV\edunexus\AGENTS.md
+# Local AI/agent/tooling workspaces
+.agent/
+.opencode/
+.codex/
+.claude/
+everything-claude-code/
+AGENTS.md
+HANDOFF.md
+
+# Local-only backend scratch files
+backend/HANDOFF.md
+backend/test_*.py
+backend/temp_*.py
+backend/pytest_*.txt
+backend/pytest_*.ini
+backend/remediate_subjects.py
+backend/manual_heal.py
+backend/hash.txt
+backend/*.log
+backend/sdk_output.txt
+
+# Local-only generated artifacts and scratch data
+*.tmp
+*.bak
+*.orig
+*.pid
+*.seed
+tmp/
+temp/
+uploads/tmp/
+reports/tmp/
+screenshots/
+playwright-report/
+test-results/

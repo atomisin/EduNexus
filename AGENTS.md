@@ -1,5 +1,5 @@
 # EduNexus 2.0 — Agent Context
-Last updated: 2026-05-09 (Placement Unlock Hardening)
+Last updated: 2026-05-09 (Production Gitignore Hygiene)
 
 ## Project
 Nigerian EdTech platform. Creche through SS3 + professional.
@@ -50,6 +50,7 @@ Exam Student: deleted per user request (2026-04-07)
 - NEVER unlock later lessons on request without a prerequisite placement check because progression overrides must prove understanding and recommend the safest starting lesson first (discovered 2026-05-09)
 - NEVER ask tutor personas to emit `<thinking>` tags because student-facing math should show clear visible steps without leaking hidden reasoning or conflicting with response sanitization (discovered 2026-05-09)
 - NEVER trust client-supplied placement recommendations or partial placement answers because lesson unlocks must be derived, signed, and verified server-side before progress is mutated (discovered 2026-05-09)
+- NEVER add machine-specific absolute paths to `.gitignore` because ignore rules must work across every developer and deployment environment (discovered 2026-05-09)
 
 ## Architecture
 Backend:  backend/app/api/v1/endpoints/
@@ -179,6 +180,7 @@ See HANDOFF.md for full details on remaining bugs.
 - ✅ FIXED 2026-05-09: Added placement-based locked lesson unlocks with prerequisite checks, score-based start recommendations, learner acceptance, and topic unlock updates from the recommended lesson.
 - ✅ FIXED 2026-05-09: Tightened AI Tutor prompts with a stage-specific teaching contract, one-action-per-turn lesson flow, stronger mastery trigger discipline, and persona math rules that avoid hidden reasoning tags.
 - ✅ FIXED 2026-05-09: Hardened placement unlocks by requiring enrolled-subject access, full prerequisite answer coverage, server-derived signed placement tokens, and stricter mastery readiness gating.
+- ✅ FIXED 2026-05-09: Normalized `.gitignore` with portable production hygiene rules for local agent workspaces, caches, logs, temporary files, reports, and generated build artifacts.
 
 ## Self-update instructions for agents
 

@@ -77,16 +77,27 @@ export interface RegisterData {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const normalizeRole = (value?: string | null): User['role'] => {
+  const role = String(value || 'student').toLowerCase().split('.').pop();
+  if (role === 'admin' || role === 'teacher' || role === 'student' || role === 'parent') {
+    return role;
+  }
+  return 'student';
+};
+
 const dashboardPathForRole = (role?: string | null) => {
-  if (role === 'admin') return '/admin';
-  if (role === 'teacher') return '/teacher';
+  const normalizedRole = normalizeRole(role);
+  if (normalizedRole === 'admin') return '/admin';
+  if (normalizedRole === 'teacher') return '/teacher';
   return '/student';
 };
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(() => {
     const saved = localStorage.getItem('edunexus_user');
-    return saved ? JSON.parse(saved) : null;
+    if (!saved) return null;
+    const parsed = JSON.parse(saved);
+    return { ...parsed, role: normalizeRole(parsed.role) };
   });
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(!!localStorage.getItem('edunexus_user'));
   const [mustChangePassword, setMustChangePassword] = useState<boolean>(false);
@@ -108,7 +119,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             last_name: freshUser.last_name,
             full_name: freshUser.full_name,
             email: freshUser.email,
-            role: (freshUser.role || 'student').toLowerCase() as any,
+            role: normalizeRole(freshUser.role),
             avatar: freshUser.avatar_url,
             avatar_url: freshUser.avatar_url,
             gamification: freshUser.gamification || {},
@@ -161,7 +172,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (response && response.user_id) {
         // C-05: Tokens are in httpOnly cookies.
         
-        const userRole = (response.role || 'student').toLowerCase();
+        const userRole = normalizeRole(response.role);
         const loggedInUser: User = {
           id: response.user_id,
           name: response.first_name || response.full_name?.split(' ')[0] || 'User',
@@ -169,7 +180,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           last_name: response.last_name,
           full_name: response.full_name,
           email: email,
-          role: userRole as any,
+          role: userRole,
           avatar: response.avatar_url,
           avatar_url: response.avatar_url,
           status: (response.status?.toLowerCase() === 'active' || response.status?.toLowerCase() === 'approved') ? 'approved' : 'pending',
@@ -438,4 +449,3 @@ export const useAuth = () => {
   }
   return context;
 };
-

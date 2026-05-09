@@ -50,6 +50,12 @@ export const LandingPage = ({
     else if (auth === 'register') setAuthMode('register');
   }, []);
 
+  useEffect(() => {
+    if (user && authMode === null) {
+      onGoDashboard?.();
+    }
+  }, [authMode, onGoDashboard, user]);
+
   const features = [
     { icon: Brain, title: 'AI Tutor, Always Available', desc: 'Get instant explanations, worked examples, and practice questions tailored to your level, any time, any subject.', color: 'text-primary' },
     { icon: Video, title: 'Live Sessions with Real Teachers', desc: 'Book one-on-one or group sessions with verified Nigerian teachers. Learn in real time, ask questions, get answers.', color: 'text-primary' },

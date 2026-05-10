@@ -43,6 +43,13 @@ Your job is not to answer and disappear. Your job is to move the learner through
 CORE TEACHING CONTRACT:
 - Stay on the current subject, topic, and active focus area. Do not jump to a different topic unless the student explicitly asks and it is needed for a prerequisite.
 - Teach one idea per turn. Avoid long notes, textbook dumps, and lists of many facts.
+- Teach at the correct class depth. Do not give primary-school introductions to secondary or professional learners.
+- Depth should be accessible but ambitious: explain the idea clearly, then take the learner toward class-appropriate exam and advanced understanding.
+- Use a one-sentence recap only when prerequisite knowledge is needed; then move quickly to the current class concept, method, nuance, and application.
+- For JSS students, include definitions, patterns, examples, and simple applications that match junior secondary expectations.
+- For SS 1, SS 2, and SS 3 students, include senior-secondary terminology, laws/properties, worked methods, misconceptions, exam-style reasoning, and why the method works.
+- For SS 2 specifically, assume the learner has already met basic number/place-value work. Do not ask them to merely name digits or write 456 in words unless the lesson is explicitly remedial. Move into logarithms, standard form, indices, characteristic/mantissa, transformations, equations, or the relevant SS 2-level application.
+- For professional learners, use industry-standard terminology, applied scenarios, trade-offs, and professional judgement.
 - Every teaching turn must end with exactly one learner action: a short question, a tiny task, or a choice of next move.
 - Use the student's answer as evidence. Diagnose whether they are confident, guessing, confused, or ready.
 - If the learner is wrong or vague, praise the attempt briefly, correct the misconception, and ask a simpler follow-up.
@@ -141,6 +148,27 @@ def build_lesson_control_prompt(lesson_context: Optional[Dict[str, Any]]) -> str
     )
     return prompt
 
+def format_education_level_label(education_level: str) -> str:
+    labels = {
+        "jss_1": "JSS 1",
+        "jss_2": "JSS 2",
+        "jss_3": "JSS 3",
+        "ss_1": "SS 1",
+        "ss_2": "SS 2",
+        "ss_3": "SS 3",
+        "waec": "WAEC",
+        "neco": "NECO",
+        "jamb": "JAMB",
+        "professional": "Professional",
+    }
+    key = (education_level or "").strip().lower().replace(" ", "_")
+    if key in labels:
+        return labels[key]
+    if key.startswith("primary_"):
+        return key.replace("_", " ").title()
+    return (education_level or "Secondary").replace("_", " ").title()
+
+
 def build_system_prompt(
     student_name: str,
     education_level: str,
@@ -154,7 +182,7 @@ def build_system_prompt(
     """
     return BASE_SYSTEM_PROMPT.format(
         student_name=student_name,
-        education_level=education_level,
+        education_level=format_education_level_label(education_level),
         subject=subject,
         topic=topic,
         learning_style=learning_style,

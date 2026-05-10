@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { EDUCATION_LEVELS } from '@/constants/educationLevels';
 import { studentAPI } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
+import { formatCurriculumLabel, formatEducationLevel } from '@/utils/educationDisplay';
 
 interface ProfileFormData {
   education_level: string;
@@ -173,7 +174,7 @@ export const ProfileView = ({
                     <p className="text-[10px] text-amber-600 font-medium">Locked: Promotion is system-controlled based on performance.</p>
                   </div>
                 ) : (
-                  <p className="font-medium capitalize">{(profile?.education_level || 'Not set').replace('_', ' ')}</p>
+                  <p className="font-medium">{formatEducationLevel(profile?.education_level)}</p>
                 )}
               </div>
               <div>
@@ -236,7 +237,7 @@ export const ProfileView = ({
                     </SelectContent>
                   </Select>
                 ) : (
-                  <p className="font-medium">{profile?.curriculum_type || 'Not set'}</p>
+                  <p className="font-medium">{formatCurriculumLabel(profile?.curriculum_type)}</p>
                 )}
               </div>
 

@@ -6,10 +6,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Loader2, User as UserIcon, GraduationCap, Users, Clock, TrendingUp, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 import { 
   EDUCATION_CATEGORIES, 
   EDUCATION_LEVELS, 
@@ -22,7 +21,25 @@ import {
 import VerificationSuccess from './VerificationSuccess';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
+
+const months = [
+  { value: '01', label: 'January' },
+  { value: '02', label: 'February' },
+  { value: '03', label: 'March' },
+  { value: '04', label: 'April' },
+  { value: '05', label: 'May' },
+  { value: '06', label: 'June' },
+  { value: '07', label: 'July' },
+  { value: '08', label: 'August' },
+  { value: '09', label: 'September' },
+  { value: '10', label: 'October' },
+  { value: '11', label: 'November' },
+  { value: '12', label: 'December' },
+];
+
+const currentYear = new Date().getFullYear();
+const birthYears = Array.from({ length: 85 }, (_, index) => String(currentYear - 2 - index));
+const birthDays = Array.from({ length: 31 }, (_, index) => String(index + 1).padStart(2, '0'));
 
 interface RegistrationFormProps {
   onSuccess?: () => void;
@@ -42,6 +59,7 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSuccess, o
   const [registeredEmail, setRegisteredEmail] = useState('');
   const [verificationToken, setVerificationToken] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
+  const [birthDateParts, setBirthDateParts] = useState({ day: '', month: '', year: '' });
 
   // Form fields
   const [formData, setFormData] = useState({
@@ -69,6 +87,14 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSuccess, o
   const handleInputChange = (field: string, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     setFormError(null);
+  };
+
+  const handleBirthDateChange = (part: 'day' | 'month' | 'year', value: string) => {
+    setBirthDateParts(prev => {
+      const next = { ...prev, [part]: value };
+      handleInputChange('dateOfBirth', next.year && next.month && next.day ? `${next.year}-${next.month}-${next.day}` : '');
+      return next;
+    });
   };
 
   const validateForm = (): boolean => {
@@ -181,34 +207,65 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSuccess, o
   }
 
   return (
-    <div className="min-h-screen bg-subtle flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-primary/5 pointer-events-none" />
-
-      <Card className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto border border-border shadow-xl">
+    <div className="min-h-0 bg-subtle flex items-center justify-center p-1 sm:p-4">
+      <Card className="relative w-full max-w-4xl max-h-[92vh] overflow-y-auto rounded-lg border border-border shadow-xl">
         <div className="h-1 bg-primary" />
-        <CardHeader className="pb-6 text-center">
-          <div className="mx-auto mb-4">
-            <img src="/edunexus-logo.png" alt="EduNexus" className="h-16 w-auto mx-auto" />
+        <CardHeader className="border-b bg-background px-4 py-5 sm:px-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3 text-left">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-primary/20 bg-primary/10">
+                <img src="/edunexus-logo.png" alt="EduNexus" className="h-10 w-auto" />
+              </div>
+              <div className="min-w-0">
+                <CardTitle className="text-2xl leading-tight">Create Your Account</CardTitle>
+                <CardDescription className="text-sm">
+                  Verify your email, then wait for admin approval.
+                </CardDescription>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 rounded-lg border border-border bg-muted p-1 text-sm font-semibold sm:min-w-72">
+              <button
+                type="button"
+                onClick={() => setIsTeacherMode(false)}
+                className={cn(
+                  "rounded-md px-3 py-2 text-left transition-colors",
+                  !isTeacherMode ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <span className="block">Student</span>
+                <span className="block text-[11px] font-medium opacity-75">Learn and track progress</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsTeacherMode(true)}
+                className={cn(
+                  "rounded-md px-3 py-2 text-left transition-colors",
+                  isTeacherMode ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <span className="block">Teacher</span>
+                <span className="block text-[11px] font-medium opacity-75">Manage classes</span>
+              </button>
+            </div>
           </div>
-          <CardTitle className="text-3xl">Create Your Account</CardTitle>
-          <CardDescription className="text-lg">
-            Join EduNexus and start your learning journey
-          </CardDescription>
         </CardHeader>
-        <CardContent className="pb-8">
+        <CardContent className="px-4 py-6 sm:px-6">
           <div className="w-full">
             <form onSubmit={handleSubmit} className="space-y-5">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider">
-                  {isTeacherMode ? 'Teacher Registration' : 'Student Registration'}
-                </h3>
-                <button
-                  type="button"
-                  onClick={() => setIsTeacherMode(!isTeacherMode)}
-                  className="text-xs font-bold text-primary hover:underline transition-all"
-                >
-                  {isTeacherMode ? 'Back to Student' : 'Are you a Teacher? Click here'}
-                </button>
+              <div className="rounded-lg border border-border bg-muted/50 px-4 py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider">
+                    {isTeacherMode ? 'Teacher Registration' : 'Student Registration'}
+                  </h3>
+                  <span className="shrink-0 text-xs font-medium text-muted-foreground">
+                    {isTeacherMode ? 'Educator access' : 'Learner access'}
+                  </span>
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {isTeacherMode
+                    ? 'Use your school email where possible so administrators can verify your teaching profile.'
+                    : 'Choose the correct class level so EduNexus can show the right subjects, lessons, and reports.'}
+                </p>
               </div>
               {(formError || error) && (
                 <Alert variant="destructive">
@@ -284,7 +341,7 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSuccess, o
               </div>
 
               {activeTab === 'student' && (
-                <div className="space-y-4">
+                <div className="space-y-4 rounded-lg border border-border bg-subtle/60 p-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="gender">Gender</Label>
@@ -299,14 +356,33 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSuccess, o
                       </Select>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="dateOfBirth">Date of Birth</Label>
-                      <Input
-                        id="dateOfBirth"
-                        type="date"
-                        value={formData.dateOfBirth}
-                        onChange={(e) => handleInputChange('dateOfBirth', e.target.value)}
-                        className="h-12"
-                      />
+                      <Label>Date of Birth</Label>
+                      <div className="grid grid-cols-[1fr_1.2fr_1fr] gap-2">
+                        <Select value={birthDateParts.day} onValueChange={(value) => handleBirthDateChange('day', value)}>
+                          <SelectTrigger className="h-12">
+                            <SelectValue placeholder="Day" />
+                          </SelectTrigger>
+                          <SelectContent className="max-h-72">
+                            {birthDays.map((day) => <SelectItem key={day} value={day}>{day}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                        <Select value={birthDateParts.month} onValueChange={(value) => handleBirthDateChange('month', value)}>
+                          <SelectTrigger className="h-12">
+                            <SelectValue placeholder="Month" />
+                          </SelectTrigger>
+                          <SelectContent className="max-h-72">
+                            {months.map((month) => <SelectItem key={month.value} value={month.value}>{month.label}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                        <Select value={birthDateParts.year} onValueChange={(value) => handleBirthDateChange('year', value)}>
+                          <SelectTrigger className="h-12">
+                            <SelectValue placeholder="Year" />
+                          </SelectTrigger>
+                          <SelectContent className="max-h-72">
+                            {birthYears.map((year) => <SelectItem key={year} value={year}>{year}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -392,7 +468,7 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSuccess, o
 
                   {/* Subject Picker for Secondary/Exam */}
                   {formData.department && ['ss_1', 'ss_2', 'ss_3', 'waec', 'neco', 'jamb'].includes(formData.educationLevel) && (
-                    <div className="space-y-3 p-4 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-800 animate-in fade-in duration-500">
+                    <div className="space-y-3 p-4 bg-subtle rounded-lg border border-border animate-in fade-in duration-500">
                       <div className="flex justify-between items-center mb-2">
                         <Label className="text-sm font-bold flex items-center gap-2">
                           <CheckCircle2 className="w-4 h-4 text-primary" />
@@ -408,14 +484,14 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSuccess, o
                         </Badge>
                       </div>
 
-                      <div className="max-h-[350px] overflow-y-auto pr-2 space-y-2 border rounded-xl p-3 bg-slate-100/30 dark:bg-slate-900/40">
+                      <div className="max-h-[350px] overflow-y-auto pr-2 space-y-2 border rounded-lg p-3 bg-background">
                         <div className="grid grid-cols-1 gap-2">
                           {/* Base/Mandatory Subjects */}
                           {(Array.isArray(BASE_EXAM_SUBJECTS?.[formData.educationLevel as keyof typeof BASE_EXAM_SUBJECTS]) 
                             ? (BASE_EXAM_SUBJECTS?.[formData.educationLevel as keyof typeof BASE_EXAM_SUBJECTS] as any) 
                             : []
                           ).map((subject: string) => (
-                             <div key={`base-row-${subject}`} className="flex items-center space-x-3 p-3 bg-white/60 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                             <div key={`base-row-${subject}`} className="flex items-center space-x-3 p-3 bg-background rounded-lg border border-border">
                                <div className="w-5 h-5 rounded-full bg-primary flex items-center justify-center shrink-0">
                                  <CheckCircle2 className="w-3.5 h-3.5 text-white" />
                                </div>
@@ -445,7 +521,7 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSuccess, o
                                <div 
                                  key={`opt-row-${subject}`} 
                                  className={cn(
-                                   "flex items-center space-x-3 p-3 rounded-xl border transition-all duration-200 shadow-sm",
+                                   "flex items-center space-x-3 p-3 rounded-lg border transition-all duration-200",
                                    isSelected 
                                      ? "bg-primary text-primary-foreground border-primary" 
                                      : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-primary/50"
@@ -504,12 +580,13 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSuccess, o
                         required
                         className="h-12 border-teal-300 focus:border-teal-500"
                       />
-                      <p className="text-xs text-teal-600 font-medium">✨ We will generate a comprehensive curriculum based on this course.</p>
+                      <p className="text-xs font-medium text-primary">We will generate a comprehensive curriculum based on this course.</p>
                     </div>
                   )}
 
-                  <div className="pt-4 mt-2 border-t border-slate-100">
-                    <h3 className="text-sm font-bold text-slate-700 mb-4">Parent / Guardian Details</h3>
+                  <div className="rounded-lg border border-border bg-background p-4">
+                    <h3 className="text-sm font-bold text-slate-700 mb-1">Parent / Guardian Details</h3>
+                    <p className="mb-4 text-xs text-muted-foreground">Used for parent reports and school follow-up.</p>
                     <div className="grid grid-cols-1 gap-4">
                       <div className="space-y-2">
                         <Label htmlFor="guardianName">Guardian Full Name</Label>
@@ -551,7 +628,7 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSuccess, o
               )}
 
               {activeTab === 'teacher' && (
-                <div className="space-y-4">
+                <div className="space-y-4 rounded-lg border border-border bg-subtle/60 p-4">
                   <div className="space-y-2">
                     <Label htmlFor="specialization">Specialization *</Label>
                     <Input
@@ -601,7 +678,7 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSuccess, o
             </form>
           </div>
 
-          <div className="text-center mt-8 pt-6 border-t">
+          <div className="text-center mt-6 pt-5 border-t">
             <p className="text-sm text-slate-500">
               Already have an account?{' '}
               <button

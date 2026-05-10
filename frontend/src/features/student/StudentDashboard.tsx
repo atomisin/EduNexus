@@ -226,7 +226,7 @@ export const StudentDashboard = ({
             </div>
           ) : (
             activeView === 'learn' ? (
-              <div className="flex-1 h-full overflow-hidden flex flex-col">
+              <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
                 <StudentViewRouter
                    activeView={activeView} isLoading={isLoading} profile={profile} energy={energy}
                    getLearningStyleLabel={getLearningStyleLabel} setActiveView={setActiveView}

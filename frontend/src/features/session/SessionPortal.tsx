@@ -98,14 +98,14 @@ export const SessionPortal = ({
   return (
     <div className={`fixed inset-0 z-50 bg-slate-100 dark:bg-slate-950 flex flex-col overflow-hidden transition-all duration-300 ${isTheaterMode || stage === 'live' ? 'p-0' : 'p-2 md:p-4'}`}>
       <div className={`w-full mx-auto flex-1 flex flex-col min-h-0 transition-all duration-300 ${isTheaterMode ? 'max-w-none' : 'max-w-[1400px]'}`}>
-        {stage === 'pre-quiz' && sessionData?.session?.pre_session_quiz && (
+        {stage === 'pre-quiz' && sessionData?.pre_session_quiz && (
           <div className="flex-1 flex items-center justify-center py-8">
             <div className="max-w-2xl w-full">
               <h2 className="text-2xl font-bold text-center mb-8 text-slate-900 dark:text-slate-100 italic">
                 Wait! Let's refresh some concepts before we start...
               </h2>
               <QuizView
-                quiz={sessionData.session.pre_session_quiz}
+                quiz={sessionData.pre_session_quiz}
                 onComplete={handleQuizComplete}
                 isLoading={quizLoading}
                 results={quizResults}
@@ -135,14 +135,14 @@ export const SessionPortal = ({
           />
         )}
 
-        {stage === 'post-quiz' && sessionData?.session?.post_session_quiz && (
+        {stage === 'post-quiz' && sessionData?.post_session_quiz && (
           <div className="flex-1 flex items-center justify-center py-8">
             <div className="max-w-2xl w-full">
               <h2 className="text-2xl font-bold text-center mb-8 text-slate-900 dark:text-slate-100 italic">
                 Session Complete! Let's see what you've learned...
               </h2>
               <QuizView
-                quiz={sessionData.session.post_session_quiz}
+                quiz={sessionData.post_session_quiz}
                 onComplete={handleQuizComplete}
                 isLoading={quizLoading}
                 results={quizResults}
@@ -166,12 +166,12 @@ export const SessionPortal = ({
         )}
 
         {/* Fallback if quiz is missing but stage is quiz */}
-        {(stage === 'pre-quiz' && !sessionData?.session?.pre_session_quiz) && (
+        {(stage === 'pre-quiz' && !sessionData?.pre_session_quiz) && (
           <div className="flex-1 flex items-center justify-center">
             <Button onClick={() => setStage('live')} className="btn-primary rounded-xl">Skip Intro & Start Session</Button>
           </div>
         )}
-        {(stage === 'post-quiz' && !sessionData?.session?.post_session_quiz) && (
+        {(stage === 'post-quiz' && !sessionData?.post_session_quiz) && (
           <div className="flex-1 flex items-center justify-center">
             <Button onClick={() => setStage('completed')} className="btn-primary rounded-xl">Finish Session</Button>
           </div>

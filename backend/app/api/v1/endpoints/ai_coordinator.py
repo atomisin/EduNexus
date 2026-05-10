@@ -15,7 +15,7 @@ from fastapi import (
     Query,
 )
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Optional, List
+from typing import Optional, List, Any
 import logging
 
 from app.db.database import get_async_db
@@ -34,6 +34,24 @@ class SessionExplanationRequest(BaseModel):
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/ai", tags=["ai-coordinator"])
+
+
+def _assignment_to_markdown(assignment: Any) -> str:
+    if not assignment:
+        return "- Complete the review questions shared by your teacher."
+    if isinstance(assignment, str):
+        return f"- {assignment.strip()}"
+    if isinstance(assignment, dict):
+        title = assignment.get("title") or "Take-home assignment"
+        instructions = assignment.get("instructions") or ""
+        tasks = assignment.get("tasks") or assignment.get("questions") or []
+        task_lines = (
+            "\n".join(f"{idx + 1}. {task}" for idx, task in enumerate(tasks))
+            if isinstance(tasks, list)
+            else f"- {tasks}"
+        )
+        return f"**{title}**\n\n{instructions}\n\n{task_lines}".strip()
+    return f"- {str(assignment)}"
 
 
 @router.post("/sessions/{session_id}/process-speech")
@@ -575,13 +593,42 @@ Create structured class notes with:
 
 Keep it concise and student-friendly. These notes are for the teacher to review before sharing with students."""
 
-        notes = await llm_service.generate(prompt=prompt, max_tokens=600, user_id=current_user.id)
+        notes = await llm_service.generate(prompt=prompt, max_tokens=900, user_id=current_user.id)
+
+        assignment = session.take_home_assignment
+        if not assignment:
+            end_content = await manager._generate_end_session_content(session)
+            assignment = end_content.get("assignment")
+            session.take_home_assignment = assignment
+
+        notes_package = f"""# {subject}: {topic}
+
+## Class notes
+{notes.strip()}
+
+## Take-home assignment
+{_assignment_to_markdown(assignment)}
+
+## How to use this note
+- Review the key ideas before the next class.
+- Complete the take-home assignment and be ready to discuss your working.
+"""
 
         session.context = session.context or {}
-        session.context["generated_notes"] = notes
+        session.context["generated_notes"] = notes_package
+        session.context["active_notes"] = {
+            "title": f"Class Notes: {topic}",
+            "content": notes_package,
+            "assignment": assignment,
+        }
+        session.class_notes = {
+            "title": f"Class Notes: {topic}",
+            "content": notes_package,
+            "assignment": assignment,
+        }
         await db.commit()
 
-        return {"success": True, "notes": notes}
+        return {"success": True, "notes": notes_package, "assignment": assignment}
 
     except HTTPException:
         raise

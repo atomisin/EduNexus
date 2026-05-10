@@ -612,6 +612,12 @@ async def get_subject(
     )
     topics = res_exec.scalars().all()
 
+    placeholder_topic_names = {"CLASS", "SUBJECT", "TERM", "TOPIC", "TOPICS"}
+    visible_topics = [
+        t for t in topics
+        if (t.name or "").strip().upper() not in placeholder_topic_names
+    ]
+
     return {
         "id": str(subject.id),
         "name": subject.name,
@@ -631,7 +637,7 @@ async def get_subject(
                 "lesson_count": len(t.lessons),
                 "term": getattr(t, "term", None),
             }
-            for t in topics
+            for t in visible_topics
         ],
     }
 
@@ -656,6 +662,12 @@ async def get_topics(
     )
     topics = res_exec.scalars().all()
 
+    placeholder_topic_names = {"CLASS", "SUBJECT", "TERM", "TOPIC", "TOPICS"}
+    visible_topics = [
+        t for t in topics
+        if (t.name or "").strip().upper() not in placeholder_topic_names
+    ]
+
     return {
         "topics": [
             {
@@ -666,7 +678,7 @@ async def get_topics(
                 "is_active": t.is_active,
                 "term": getattr(t, "term", None),
             }
-            for t in topics
+            for t in visible_topics
         ]
     }
 

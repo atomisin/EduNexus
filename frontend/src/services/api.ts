@@ -647,8 +647,8 @@ export const sessionAPI = {
     }),
     
   // Smart Classroom Additions
-  prepareSmartLesson: (studentId: string, subjectId: string) =>
-    fetchWithAuth(`/sessions/prepare-lesson/${studentId}/${subjectId}`),
+  prepareSmartLesson: (studentId: string, subjectId: string, topicId?: string) =>
+    fetchWithAuth(`/sessions/prepare-lesson/${studentId}/${subjectId}${topicId ? `?topic_id=${encodeURIComponent(topicId)}` : ''}`),
 
   submitLiveQuiz: (sessionId: string, answers: any) =>
     fetchWithAuth(`/sessions/${sessionId}/submit-quiz`, {
@@ -664,6 +664,9 @@ export const sessionAPI = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+
+  getSharedContent: (sessionId: string) =>
+    fetchWithAuth(`/sessions/${sessionId}/shared-content`),
 
   // DESIGN DECISION: These endpoints are intentionally unauthenticated to allow 
   // guest student session joining via code. See C-11 in the security audit.

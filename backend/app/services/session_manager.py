@@ -53,7 +53,7 @@ class SessionManager:
             stmt = select(SessionStudent).filter(
                 SessionStudent.session_id == uuid.UUID(session_id),
                 SessionStudent.student_id == uuid.UUID(student_id),
-                SessionStudent.status.in_(["invited", "enrolled", "active"]),
+                SessionStudent.status.in_(["invited", "enrolled", "active", "joined"]),
             )
             result = await self.db.execute(stmt)
             enrollment = result.scalars().first()
@@ -91,12 +91,31 @@ class SessionManager:
         """
         logger.info(f"Creating session for teacher {teacher_id}")
 
+        students_to_enroll = request.student_ids if request.student_ids else []
+
+        # If no specific students provided, auto-enroll teacher's linked students before building lesson context.
+        # This lets the session resolve the current lesson from student progress.
+        if not students_to_enroll:
+            logger.info(
+                "No students specified for session, auto-enrolling teacher's linked students"
+            )
+
+            from app.models.user import TeacherStudent
+
+            stmt = select(TeacherStudent.student_id).filter(
+                TeacherStudent.teacher_id == uuid.UUID(teacher_id),
+                TeacherStudent.status == "active",
+            )
+            result = await self.db.execute(stmt)
+            students_to_enroll = [str(row[0]) for row in result.fetchall()]
+            logger.info(f"Auto-enrolled {len(students_to_enroll)} students for session")
+
         # Build session context
         context = await self._build_context(
             teacher_id=teacher_id,
             subject_id=request.subject_id,
             topic_id=request.topic_id,
-            student_ids=request.student_ids,
+            student_ids=students_to_enroll,
             previous_session_id=request.previous_session_id,
         )
 
@@ -135,25 +154,6 @@ class SessionManager:
         # Generate pre-session quiz
         pre_quiz = await self._generate_pre_session_quiz(session)
         session.pre_session_quiz = pre_quiz
-
-        # Ensure we have students to enroll
-        students_to_enroll = request.student_ids if request.student_ids else []
-
-        # If no specific students provided, auto-enroll teacher's linked students
-        if not students_to_enroll:
-            logger.info(
-                f"No students specified for session, auto-enrolling teacher's linked students"
-            )
-
-            from app.models.user import TeacherStudent
-
-            stmt = select(TeacherStudent.student_id).filter(
-                TeacherStudent.teacher_id == uuid.UUID(teacher_id),
-                TeacherStudent.status == "active",
-            )
-            result = await self.db.execute(stmt)
-            students_to_enroll = [str(row[0]) for row in result.fetchall()]
-            logger.info(f"Auto-enrolled {len(students_to_enroll)} students for session")
 
         # Generate student access code if students are assigned
         if students_to_enroll and len(students_to_enroll) > 0:
@@ -245,7 +245,10 @@ class SessionManager:
                     
                     # Merge data into context dictionary
                     updated_context = dict(session.context)
-                    updated_context["active_pop_quiz"] = prep_data.get("pop_quiz")
+                    updated_context["active_pop_quiz"] = {
+                        "title": f"Quick Quiz: {session.context.get('topic', 'Lesson')}",
+                        "questions": prep_data.get("pop_quiz") or [],
+                    }
                     updated_context["active_notes"] = prep_data.get("lesson_outline")
                     updated_context["active_assignments"] = prep_data.get("assignments")
                     
@@ -489,7 +492,7 @@ class SessionManager:
         return session
 
     async def prepare_smart_lesson(
-        self, teacher_id: str, student_id: str, subject_id: str
+        self, teacher_id: str, student_id: str, subject_id: str, topic_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Prepare lesson materials based on student's current progress.
@@ -516,10 +519,11 @@ class SessionManager:
         if not student or not subject:
             raise ValueError("Student or Subject not found")
 
-        # 3. Determine current topic
+        # 3. Determine current topic. Prefer the session-selected topic, then the student's progression.
         current_topic_name = "Introduction"
-        if progress and progress.current_topic_id:
-            topic_stmt = select(Topic).filter(Topic.id == progress.current_topic_id)
+        topic_lookup_id = topic_id or (str(progress.current_topic_id) if progress and progress.current_topic_id else None)
+        if topic_lookup_id:
+            topic_stmt = select(Topic).filter(Topic.id == uuid.UUID(topic_lookup_id))
             topic_res = await self.db.execute(topic_stmt)
             topic = topic_res.scalars().first()
             if topic:
@@ -538,6 +542,7 @@ class SessionManager:
             "success": True,
             "student_id": student_id,
             "subject_id": subject_id,
+            "topic_id": topic_lookup_id,
             "topic": current_topic_name,
             "materials": prep_data
         }
@@ -557,7 +562,7 @@ class SessionManager:
         if not quiz:
             raise ValueError("No active pop quiz found for this session")
 
-        questions = quiz.get("questions", [])
+        questions = quiz if isinstance(quiz, list) else quiz.get("questions", [])
         total = len(questions)
         correct = 0
         details = []
@@ -1106,7 +1111,7 @@ class SessionManager:
 
         session.quiz_results[str(student_id)][quiz_type]["feedback"] = feedback
 
-        self.db.commit()
+        await self.db.commit()
 
         return {
             "score": score,

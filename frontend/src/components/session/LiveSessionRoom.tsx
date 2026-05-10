@@ -373,20 +373,22 @@ export const LiveSessionRoom = ({
             setAiLoading(true);
             toast('AI Helper is preparing your lesson materials...', { icon: '🤖', style: { color: '#fff', background: 'hsl(var(--primary))', fontWeight: '600' } });
             
-            // In a real multi-student session, we might pick one or use average proficiency
-            // For now, we'll use a placeholder or the first student from sessionData
-            const studentId = sessionData?.student_presence ? Object.keys(sessionData.student_presence)[0] : null;
+            const studentId =
+                (sessionData?.student_presence ? Object.keys(sessionData.student_presence)[0] : null) ||
+                sessionData?.context?.enrolled_students?.[0] ||
+                sessionData?.students?.[0]?.id ||
+                sessionData?.enrolled_students?.[0]?.id;
             if (!studentId) {
-                toast.error("No students connected Yet!");
+                toast.error("No students are assigned or connected yet.");
                 return;
             }
 
-            const response = await sessionAPI.prepareSmartLesson(studentId, sessionData.subject_id);
+            const response = await sessionAPI.prepareSmartLesson(studentId, sessionData.subject_id, sessionData.topic_id || sessionData.context?.topic_id);
             if (response.success && response.materials) {
                 const materials = response.materials;
                 const contentData = {
                     title: `🤖 Smart Prep: ${response.topic}`,
-                    content: `## Lesson Outline\n${materials.outline.map((p: string) => `- ${p}`).join('\n')}\n\n## Take-Home Assignment\n${materials.assignment}`,
+                    content: `# ${response.topic}\n\n## Lesson outline\n${materials.outline.map((p: string) => `- ${p}`).join('\n')}\n\n## Take-home assignment\n${materials.assignment}\n\n## Student instructions\n- Review the lesson outline before the next class.\n- Complete the take-home task and be ready to explain your working.`,
                     pop_quiz: materials.pop_quiz,
                     assignment: materials.assignment
                 };
@@ -702,7 +704,14 @@ export const LiveSessionRoom = ({
                                                 try {
                                                     await sessionAPI.pushContent(sessionId, {
                                                         content_type: 'pop_quiz',
-                                                        content: aiContent.pop_quiz
+                                                        content: {
+                                                            title: `Quick Quiz: ${title}`,
+                                                            questions: aiContent.pop_quiz
+                                                        }
+                                                    });
+                                                    await sessionAPI.pushContent(sessionId, {
+                                                        content_type: 'notes',
+                                                        content: aiContent
                                                     });
                                                 } catch (e) {
                                                     console.warn("Failed to push to inbox:", e);
@@ -712,6 +721,14 @@ export const LiveSessionRoom = ({
                                             } else {
                                                 const data = encoder.encode(JSON.stringify({ type: 'AI_CONTENT', data: aiContent }));
                                                 room.localParticipant.publishData(data, { reliable: true });
+                                                try {
+                                                    await sessionAPI.pushContent(sessionId, {
+                                                        content_type: 'notes',
+                                                        content: aiContent
+                                                    });
+                                                } catch (e) {
+                                                    console.warn("Failed to push notes to inbox:", e);
+                                                }
                                                 toast.success("Content shared with all students!");
                                             }
                                         }

@@ -9,8 +9,10 @@ import {
     DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
-import { notificationsAPI } from '@/services/api';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { notificationsAPI, sessionAPI } from '@/services/api';
 import { toast } from 'sonner';
+import ReactMarkdown from 'react-markdown';
 
 interface Notification {
     id: string;
@@ -19,11 +21,14 @@ interface Notification {
     created_at: string;
     is_read: boolean;
     type: string;
+    link?: string;
 }
 
 export const NotificationBell = () => {
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [unreadCount, setUnreadCount] = useState(0);
+    const [sharedContent, setSharedContent] = useState<any>(null);
+    const [contentDialogOpen, setContentDialogOpen] = useState(false);
 
     const loadNotifications = async () => {
         try {
@@ -60,6 +65,31 @@ export const NotificationBell = () => {
             toast.error('Failed to mark all as read');
         }
     };
+
+    const handleNotificationOpen = async (notification: Notification) => {
+        if (!notification.is_read) {
+            await handleMarkAsRead(notification.id);
+        }
+
+        const match = notification.link?.match(/\/session-content\/([^/?#]+)/);
+        if (!match) return;
+
+        try {
+            const data = await sessionAPI.getSharedContent(match[1]);
+            setSharedContent(data);
+            setContentDialogOpen(true);
+        } catch (error) {
+            toast.error('Could not open shared session content');
+        }
+    };
+
+    const noteContent = typeof sharedContent?.notes === 'string'
+        ? sharedContent.notes
+        : sharedContent?.notes?.content;
+
+    const assignmentContent = typeof sharedContent?.assignment === 'string'
+        ? sharedContent.assignment
+        : sharedContent?.assignment?.instructions || sharedContent?.assignment?.title;
 
     return (
         <DropdownMenu>
@@ -99,7 +129,8 @@ export const NotificationBell = () => {
                         notifications.map((n) => (
                             <div
                                 key={n.id}
-                                className={`p-4 border-b last:border-0 dark:border-slate-800 transition-colors ${n.is_read ? 'bg-transparent' : 'bg-teal-50/30 dark:bg-teal-900/10'}`}
+                                onClick={() => handleNotificationOpen(n)}
+                                className={`cursor-pointer p-4 border-b last:border-0 dark:border-slate-800 transition-colors hover:bg-slate-50 dark:hover:bg-slate-900 ${n.is_read ? 'bg-transparent' : 'bg-teal-50/30 dark:bg-teal-900/10'}`}
                             >
                                 <div className="flex justify-between items-start mb-1">
                                     <h5 className={`text-sm font-semibold ${n.is_read ? 'text-slate-600 dark:text-slate-300' : 'text-indigo-900 dark:text-teal-100'}`}>
@@ -107,7 +138,10 @@ export const NotificationBell = () => {
                                     </h5>
                                     {!n.is_read && (
                                         <button
-                                            onClick={() => handleMarkAsRead(n.id)}
+                                            onClick={(event) => {
+                                                event.stopPropagation();
+                                                handleMarkAsRead(n.id);
+                                            }}
                                             className="text-teal-600 hover:text-teal-800 p-0.5 rounded-full hover:bg-teal-50"
                                             title="Mark as read"
                                         >
@@ -133,6 +167,29 @@ export const NotificationBell = () => {
                     </div>
                 )}
             </DropdownMenuContent>
+            <Dialog open={contentDialogOpen} onOpenChange={setContentDialogOpen}>
+                <DialogContent className="max-w-3xl max-h-[86vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle>{sharedContent?.notes?.title || sharedContent?.title || 'Shared Session Content'}</DialogTitle>
+                        <DialogDescription>
+                            {sharedContent?.subject || 'Live session'}{sharedContent?.topic ? ` - ${sharedContent.topic}` : ''}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="prose prose-sm max-w-none dark:prose-invert">
+                        {noteContent ? (
+                            <ReactMarkdown>{noteContent}</ReactMarkdown>
+                        ) : (
+                            <p>No shared note is available yet.</p>
+                        )}
+                        {!noteContent && assignmentContent && (
+                            <>
+                                <h2>Take-home assignment</h2>
+                                <ReactMarkdown>{assignmentContent}</ReactMarkdown>
+                            </>
+                        )}
+                    </div>
+                </DialogContent>
+            </Dialog>
         </DropdownMenu>
     );
 };

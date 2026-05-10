@@ -60,6 +60,26 @@ const mathMarkdownComponents = {
   blockquote: ({ children }: any) => <blockquote className="my-3 border-l-4 border-primary/50 pl-4 text-slate-600 dark:text-slate-300">{children}</blockquote>,
 };
 
+const PLACEHOLDER_TOPIC_NAMES = new Set(['CLASS', 'SUBJECT', 'TERM', 'TOPIC', 'TOPICS']);
+
+const isRealLearningTopic = (topic: any) => {
+  const name = String(topic?.name || '').trim();
+  return Boolean(name) && !PLACEHOLDER_TOPIC_NAMES.has(name.toUpperCase());
+};
+
+const openTutorFromSelection = (
+  selectedTopic: any,
+  setShowAIPanel: (val: boolean) => void,
+  handleAIContinue: (message: string) => Promise<void>,
+  aiChatMessages: any[],
+) => {
+  if (!selectedTopic) return;
+  setShowAIPanel(true);
+  if (aiChatMessages.length === 0) {
+    void handleAIContinue(`Start tutoring me on ${selectedTopic.name}. Give me the goal, the core idea, and one quick check question.`);
+  }
+};
+
 interface AIChatSectionProps {
   tutorGender: 'male' | 'female';
   setTutorGender: (val: 'male' | 'female') => void;
@@ -181,8 +201,9 @@ export const AIChatSection = ({
   } = useSpeechRecognition({ onTranscript: appendVoiceTranscript });
 
   const topicsForCurrentSubject = structuredTopics.filter(
-    (t: any) => !selectedSubject || !t.subject_id || t.subject_id === selectedSubject.id
+    (t: any) => isRealLearningTopic(t) && (!selectedSubject || !t.subject_id || t.subject_id === selectedSubject.id)
   );
+  const visibleTopics = topics.filter(isRealLearningTopic);
 
   const isCurrentTopicCompleted = topicsForCurrentSubject.find((st: any) => st.id === selectedTopic?.id)?.status === 'completed';
   const focusTopicLabel = (typeof viewingSubtopic === 'object' ? (viewingSubtopic as any)?.name : viewingSubtopic) || activeSubtopic || selectedTopic?.name || 'this topic';
@@ -243,9 +264,12 @@ export const AIChatSection = ({
                 Male
               </button>
             </div>
-            {!showAIPanel && (
-              <Button onClick={() => setShowAIPanel(true)} className="gap-2 bg-primary hover:bg-primary/90 shadow-none">
-                <Sparkles className="w-4 h-4" /> Open AI Tutor
+            {selectedTopic && !showAIPanel && (
+              <Button
+                onClick={() => openTutorFromSelection(selectedTopic, setShowAIPanel, handleAIContinue, aiChatMessages)}
+                className="gap-2 bg-primary hover:bg-primary/90 shadow-none"
+              >
+                <Sparkles className="w-4 h-4" /> Start Tutoring
               </Button>
             )}
           </div>
@@ -896,7 +920,7 @@ export const AIChatSection = ({
           </div>
         </Card>
       ) : (
-        <div className="grid xl:grid-cols-[minmax(0,1fr)_320px] gap-4 flex-1 min-h-0 overflow-y-auto no-scrollbar pb-6 px-4">
+        <div className="grid xl:grid-cols-[minmax(0,1fr)_320px] gap-4 flex-1 min-h-0 overflow-y-auto overscroll-contain pb-8 px-4">
           <div className="min-w-0 space-y-4">
             <Card className="rounded-lg border-border shadow-none bg-card">
               <CardHeader className="flex flex-row items-center justify-between py-4">
@@ -1019,7 +1043,7 @@ export const AIChatSection = ({
                     <div className="flex justify-center py-10"><Loader2 className="w-8 h-8 animate-spin text-teal-500" /></div>
                   ) : (
                     <div className="space-y-6">
-                      {Array.from(new Set(topics.map(t => t.term || 'Other'))).sort((a, b) => {
+                      {Array.from(new Set(visibleTopics.map(t => t.term || 'Other'))).sort((a, b) => {
                         const order: Record<string, number> = { 'First Term': 1, 'Second Term': 2, 'Third Term': 3, 'Other': 4 };
                         return (order[a as string] || 5) - (order[b as string] || 5);
                       }).map((termGroup) => (
@@ -1029,7 +1053,7 @@ export const AIChatSection = ({
                             {termGroup as string}
                           </h4>
                           <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
-                            {topics.filter(t => (t.term || 'Other') === termGroup).map(topic => {
+                            {visibleTopics.filter(t => (t.term || 'Other') === termGroup).map(topic => {
                               const tp = getTopicProgress(topic.id);
                               const structuredTopic = topicsForCurrentSubject.find((st: any) => st.id === topic.id);
                               const isLocked = structuredTopic?.status === 'locked';
@@ -1066,7 +1090,7 @@ export const AIChatSection = ({
                       ))}
                     </div>
                   )}
-                  {topics.length === 0 && !loading && (
+                  {visibleTopics.length === 0 && !loading && (
                     <div className="py-10 text-center">
                       <p className="text-muted-foreground italic">No topics found for this subject yet.</p>
                     </div>
@@ -1113,7 +1137,7 @@ export const AIChatSection = ({
                       <p className="text-teal-50 mb-6 max-w-lg">I'm ready to teach you about {selectedTopic.name}. We can start with a basic explanation or dive straight into practice.</p>
 
                       <div className="flex flex-wrap gap-3 justify-center md:justify-start">
-                        <Button className="bg-white text-teal-700 hover:bg-teal-50 rounded-xl px-6 gap-2" onClick={() => setShowAIPanel(true)}>
+                        <Button className="bg-white text-teal-700 hover:bg-teal-50 rounded-xl px-6 gap-2" onClick={() => openTutorFromSelection(selectedTopic, setShowAIPanel, handleAIContinue, aiChatMessages)}>
                           <Sparkles className="w-4 h-4" /> Start Tutoring
                         </Button>
                         <Button variant="outline" className="border-white/40 text-white hover:bg-white/10 rounded-xl px-6 gap-2" onClick={() => setActiveView('quiz')}>

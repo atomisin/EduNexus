@@ -535,6 +535,7 @@ async def get_last_session_history(
 async def prepare_smart_lesson(
     student_id: str,
     subject_id: str,
+    topic_id: Optional[str] = Query(default=None),
     db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_teacher),
 ):
@@ -547,7 +548,8 @@ async def prepare_smart_lesson(
         result = await manager.prepare_smart_lesson(
             teacher_id=str(current_user.id),
             student_id=student_id,
-            subject_id=subject_id
+            subject_id=subject_id,
+            topic_id=topic_id,
         )
         return result
     except ValueError as e:
@@ -581,6 +583,7 @@ async def push_session_content(
             msg_type = MessageType.CONTENT_SHARED  # We'll map this in Task 3
         else:
             session.context["active_notes"] = request.content
+            session.class_notes = request.content if isinstance(request.content, dict) else {"content": request.content}
             msg_type = MessageType.CONTENT_SHARED
 
         # Force context update
@@ -627,17 +630,64 @@ async def push_session_content(
                 user_id=sid,
                 type="content_shared",
                 title=f"New {content_label} Shared",
-                message=f"Your teacher has shared a new {content_label} with you from the live session.",
-                link=f"/student", # Route to dashboard
+                message=f"Your teacher has shared a new {content_label} with you from the live session. Open this notification to review it.",
+                link=f"/session-content/{session_id}",
                 created_at=datetime.now(timezone.utc)
             )
             db.add(notif)
+
+        teacher_copy = Notification(
+            user_id=current_user.id,
+            type="content_shared",
+            title=f"Teacher Copy: {content_label}",
+            message=f"Your copy of the shared {content_label} is saved with this live session.",
+            link=f"/session-content/{session_id}",
+            created_at=datetime.now(timezone.utc),
+        )
+        db.add(teacher_copy)
             
         await db.commit()
 
         return {"success": True, "detail": f"Content {request.content_type} pushed successfully"}
     except Exception as e:
         logger.error(f"Error pushing content: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{session_id}/shared-content", response_model=dict)
+async def get_shared_session_content(
+    session_id: str,
+    db: AsyncSession = Depends(get_async_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return shared notes, assignments, and active quiz content for an authorized session user."""
+    try:
+        manager = SessionManager(db)
+        session = await manager._get_session(session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        is_teacher = str(session.teacher_id) == str(current_user.id)
+        if not is_teacher:
+            is_enrolled, _ = await manager.is_student_enrolled(session_id, str(current_user.id))
+            if not is_enrolled:
+                raise HTTPException(status_code=403, detail="Access denied")
+
+        context = session.context or {}
+        return {
+            "success": True,
+            "session_id": session_id,
+            "title": session.title,
+            "subject": context.get("subject"),
+            "topic": context.get("topic"),
+            "notes": context.get("active_notes") or session.class_notes,
+            "assignment": context.get("active_assignments") or session.take_home_assignment,
+            "pop_quiz": context.get("active_pop_quiz"),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error loading shared content: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

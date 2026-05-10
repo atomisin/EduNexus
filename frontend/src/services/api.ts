@@ -1030,9 +1030,11 @@ export const studentAPI = {
     topic: string;
     subject?: string;
     educationLevel?: string;
+    limit?: number;
   }) => {
     const query = new URLSearchParams({
       topic: params.topic,
+      limit: String(params.limit ?? 6),
       ...(params.subject && { subject: params.subject }),
       ...(params.educationLevel && { education_level: params.educationLevel }),
     });

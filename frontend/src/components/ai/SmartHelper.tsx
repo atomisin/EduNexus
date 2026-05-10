@@ -236,8 +236,8 @@ export function SmartHelper({ isOpen, onClose, subject, topic }: SmartHelperProp
   };
 
   return (
-    <div className={`fixed inset-x-3 bottom-[calc(1rem+env(safe-area-inset-bottom))] z-50 w-auto transition-all duration-300 transform sm:inset-x-auto sm:right-4 sm:w-96 sm:max-w-[calc(100vw-2rem)] ${isOpen ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0 pointer-events-none'}`}>
-      <Card className="shadow-2xl border-0 bg-gradient-to-br from-teal-50/50 to-slate-50/50 dark:from-slate-900/50 dark:to-slate-900/50 border-t-4 border-t-teal-600">
+    <div className={`fixed inset-x-3 bottom-[calc(1rem+env(safe-area-inset-bottom))] z-50 w-auto max-w-[calc(100vw-1.5rem)] min-w-0 transition-all duration-300 transform sm:inset-x-auto sm:right-4 sm:w-96 sm:max-w-[calc(100vw-2rem)] ${isOpen ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0 pointer-events-none'}`}>
+      <Card className="min-w-0 overflow-hidden shadow-2xl border-0 bg-gradient-to-br from-teal-50/50 to-slate-50/50 dark:from-slate-900/50 dark:to-slate-900/50 border-t-4 border-t-teal-600">
         <CardHeader className="pb-3 border-b bg-white/50 dark:bg-slate-900/50 rounded-t-lg">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -260,11 +260,11 @@ export function SmartHelper({ isOpen, onClose, subject, topic }: SmartHelperProp
 
         <CardContent className="p-0">
           <ScrollArea className="h-[min(60vh,400px)] p-3 sm:p-4">
-            <div className="space-y-4">
+            <div className="min-w-0 space-y-4 overflow-hidden">
               {messages.map((message) => (
                 <div
                   key={message.id}
-                  className={`flex gap-3 ${message.role === 'user' ? 'flex-row-reverse' : ''}`}
+                  className={`flex min-w-0 gap-3 ${message.role === 'user' ? 'flex-row-reverse' : ''}`}
                 >
                   <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden ${message.role === 'assistant'
                     ? 'border border-teal-100 dark:border-teal-900'
@@ -276,12 +276,12 @@ export function SmartHelper({ isOpen, onClose, subject, topic }: SmartHelperProp
                       <User className="w-4 h-4 text-slate-600 dark:text-slate-300" />
                     )}
                   </div>
-                  <div className={`flex-1 max-w-[80%] ${message.role === 'user' ? 'text-right' : ''}`}>
-                    <div className={`inline-block p-3 rounded-2xl ${message.role === 'user'
+                  <div className={`min-w-0 max-w-[80%] flex-1 ${message.role === 'user' ? 'text-right' : ''}`}>
+                    <div className={`inline-block max-w-full break-words p-3 rounded-2xl text-left [overflow-wrap:anywhere] ${message.role === 'user'
                       ? 'bg-teal-600 text-white rounded-br-md shadow-md shadow-teal-200/50 dark:shadow-none'
                       : 'bg-white dark:bg-slate-800 shadow-sm rounded-bl-md border border-slate-100 dark:border-slate-700'
                       }`}>
-                      <div className="text-sm prose dark:prose-invert max-w-none">
+                      <div className="min-w-0 max-w-full overflow-hidden break-words text-sm [overflow-wrap:anywhere] prose dark:prose-invert prose-p:max-w-full">
                         <ReactMarkdown
                           components={{
                             p: ({ children }: any) => <p><MathText>{String(children ?? '')}</MathText></p>,

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, text
 from pydantic import BaseModel
@@ -1153,6 +1153,7 @@ async def suggest_videos_for_topic(
     topic: str,
     subject: Optional[str] = None,
     education_level: Optional[str] = None,
+    limit: int = Query(6, ge=1, le=12),
     current_user: User = Depends(get_current_user),
 ):
     """
@@ -1164,7 +1165,7 @@ async def suggest_videos_for_topic(
 
         # Build query focused on Nigeria as per instructions
         videos = await search_educational_videos(
-            query=topic, subject=subject, level=education_level, limit=3
+            query=topic, subject=subject, level=education_level, limit=limit
         )
 
         return {"videos": videos, "topic": topic}

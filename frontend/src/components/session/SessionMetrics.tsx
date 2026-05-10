@@ -62,38 +62,38 @@ export const SessionMetrics: React.FC<SessionMetricsProps> = ({
     }, [studentPresence]);
 
     return (
-        <div className={`space-y-4 ${className}`}>
+        <div className={`min-w-0 space-y-4 ${className}`}>
             {/* Quick Stats */}
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid min-w-0 grid-cols-3 gap-2">
                 <Card className="bg-slate-900/50 border-slate-800">
-                    <CardContent className="p-3 flex flex-col gap-2">
+                    <CardContent className="p-2.5 sm:p-3 flex min-w-0 flex-col gap-2">
                         <div className="w-8 h-8 rounded-lg bg-teal-500/15 flex items-center justify-center">
                             <Users className="w-4 h-4 text-teal-300" />
                         </div>
                         <div>
-                            <p className="text-[10px] uppercase tracking-wide text-slate-400">Attendance</p>
+                            <p className="truncate text-[9px] uppercase tracking-wide text-slate-400 sm:text-[10px]">Attendance</p>
                             <p className="text-lg font-bold">{stats.activeStudents}/{stats.totalStudents}</p>
                         </div>
                     </CardContent>
                 </Card>
                 <Card className="bg-slate-900/50 border-slate-800">
-                    <CardContent className="p-3 flex flex-col gap-2">
+                    <CardContent className="p-2.5 sm:p-3 flex min-w-0 flex-col gap-2">
                         <div className="w-8 h-8 rounded-lg bg-emerald-500/15 flex items-center justify-center">
                             <Activity className="w-4 h-4 text-emerald-300" />
                         </div>
                         <div>
-                            <p className="text-[10px] uppercase tracking-wide text-slate-400">Attention</p>
+                            <p className="truncate text-[9px] uppercase tracking-wide text-slate-400 sm:text-[10px]">Attention</p>
                             <p className="text-lg font-bold">{stats.avgAttention}%</p>
                         </div>
                     </CardContent>
                 </Card>
                 <Card className="bg-slate-900/50 border-slate-800">
-                    <CardContent className="p-3 flex flex-col gap-2">
+                    <CardContent className="p-2.5 sm:p-3 flex min-w-0 flex-col gap-2">
                         <div className="w-8 h-8 rounded-lg bg-amber-500/15 flex items-center justify-center">
                             <Sparkles className="w-4 h-4 text-amber-300" />
                         </div>
                         <div>
-                            <p className="text-[10px] uppercase tracking-wide text-slate-400">Quiz</p>
+                            <p className="truncate text-[9px] uppercase tracking-wide text-slate-400 sm:text-[10px]">Quiz</p>
                             <p className="text-lg font-bold truncate">
                                 {quizResults ? `${quizResults.correct}/${quizResults.total}` : 'No Quiz'}
                             </p>
@@ -123,7 +123,7 @@ export const SessionMetrics: React.FC<SessionMetricsProps> = ({
                 </Card>
             )}
 
-            <div className="grid lg:grid-cols-2 gap-6">
+            <div className="grid min-w-0 gap-4 lg:grid-cols-2 lg:gap-6">
                 {/* Attention Timeline */}
                 <Card className="bg-slate-900/50 border-slate-800">
                     <CardHeader className="pb-2">

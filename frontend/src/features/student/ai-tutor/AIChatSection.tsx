@@ -243,7 +243,7 @@ export const AIChatSection = ({
   }, [placementState?.status, placementState?.target_topic?.id]);
 
   return (
-    <div className="flex-1 flex flex-col h-full overflow-hidden">
+    <div className="flex-1 flex min-w-0 max-w-full flex-col h-full overflow-hidden">
       {!showAIPanel && (
         <div className="flex min-w-0 items-center justify-between gap-2 px-3 py-2 sm:px-6 shrink-0">
           <h2 className="min-w-0 flex items-center gap-2 text-base font-semibold tracking-tight sm:text-2xl">
@@ -281,7 +281,7 @@ export const AIChatSection = ({
       )}
 
       {showAIPanel ? (
-        <Card className="flex-1 flex flex-col shadow-none border-0 overflow-hidden bg-white dark:bg-slate-900 min-h-0">
+        <Card className="flex-1 flex min-w-0 max-w-full flex-col shadow-none border-0 overflow-hidden bg-white dark:bg-slate-900 min-h-0">
           <CardHeader className="min-h-14 h-auto py-2 px-3 sm:px-6 border-b bg-white dark:bg-slate-900 z-10 shrink-0 flex items-center justify-center">
             <div className="flex items-center justify-between w-full gap-2">
               <div className="min-w-0 flex items-center gap-2 sm:gap-3">
@@ -328,7 +328,7 @@ export const AIChatSection = ({
             </div>
           </CardHeader>
 
-          <div className="flex-1 flex flex-row min-h-0 overflow-hidden relative">
+          <div className="flex-1 flex min-w-0 max-w-full flex-row min-h-0 overflow-hidden relative">
             {/* Sidebar - Learning Path / Roadmap */}
             {(roadmap || (topicsForCurrentSubject && topicsForCurrentSubject.length > 0)) && (
               <div className="w-80 min-w-[280px] min-h-0 border-r border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 hidden md:flex flex-col shrink-0">
@@ -636,7 +636,7 @@ export const AIChatSection = ({
                     <div className="min-w-0 space-y-8 pb-10">
                       {aiChatMessages.map((msg, idx) => (
                         <div key={idx} className={`flex w-full min-w-0 ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-4 duration-500`}>
-                          <div className={`flex min-w-0 gap-2.5 sm:gap-4 ${msg.role === 'user' ? 'w-auto max-w-[92%] flex-row-reverse sm:max-w-[84%] lg:max-w-[76%]' : 'w-full max-w-full sm:max-w-[90%] lg:max-w-[80%]'}`}>
+                          <div className={`flex min-w-0 max-w-full gap-2.5 sm:gap-4 ${msg.role === 'user' ? 'ml-auto w-[92%] flex-row-reverse sm:w-[84%] lg:w-[76%]' : 'w-full sm:max-w-[90%] lg:max-w-[80%]'}`}>
                             <Avatar className="w-8 h-8 sm:w-10 sm:h-10 flex-shrink-0 shadow-none border-2 border-white dark:border-slate-800">
                               {msg.role === 'ai' ? (
                                 <AvatarImage src={`/avatars/ai_tutor_${tutorGender}.png`} className="object-cover" />
@@ -647,12 +647,12 @@ export const AIChatSection = ({
                                 {msg.role === 'ai' ? <Brain className="w-5 h-5" /> : (getFullName()[0] || 'U')}
                               </AvatarFallback>
                             </Avatar>
-                            <div className="flex min-w-0 max-w-full flex-col gap-3">
-                              <div className={`min-w-0 max-w-full overflow-hidden p-3 sm:p-5 rounded-lg shadow-none ${msg.role === 'user'
+                            <div className="flex min-w-0 flex-1 flex-col gap-3 overflow-hidden">
+                              <div className={`w-full min-w-0 max-w-full overflow-hidden p-3 sm:p-5 rounded-lg shadow-none ${msg.role === 'user'
                                 ? 'bg-primary text-primary-foreground rounded-tr-none'
                                 : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-100 dark:border-slate-700 rounded-tl-none ring-1 ring-black/5 dark:ring-white/5'
                                 }`}>
-                                <div className={`${isYoungLearner && msg.role === 'ai' ? 'text-base font-bold font-display sm:text-xl' : 'text-sm sm:text-base'} min-w-0 max-w-full overflow-hidden break-words leading-relaxed [overflow-wrap:anywhere] prose dark:prose-invert prose-pre:max-w-full prose-pre:overflow-x-auto prose-table:block prose-table:max-w-full prose-table:overflow-x-auto`}>
+                                <div className={`${isYoungLearner && msg.role === 'ai' ? 'text-base font-bold font-display sm:text-xl' : 'text-sm sm:text-base'} min-w-0 max-w-full overflow-hidden break-words leading-relaxed [overflow-wrap:anywhere] prose dark:prose-invert prose-p:max-w-full prose-pre:max-w-full prose-pre:overflow-x-auto prose-table:block prose-table:max-w-full prose-table:overflow-x-auto`}>
                                   {msg.role === 'ai' ? (
                                     <ReactMarkdown components={mathMarkdownComponents}>{normalizeAcademicTextForDisplay(msg.content)}</ReactMarkdown>
                                   ) : (
@@ -664,7 +664,7 @@ export const AIChatSection = ({
 
                               {/* Video Suggestions for current message (if relevant) */}
                               {msg.role === 'ai' && idx === aiChatMessages.length - 1 && suggestedVideos.length > 0 && (
-                                <div className="mt-4 space-y-4">
+                                <div className="mt-4 min-w-0 max-w-full space-y-4 overflow-hidden">
                                   <p className="text-sm font-bold text-slate-500 flex items-center gap-2">
                                     <Video className="w-4 h-4" /> Watch these to understand better:
                                   </p>
@@ -687,9 +687,9 @@ export const AIChatSection = ({
                                       </button>
                                     </div>
                                   )}
-                                  <div className="flex gap-4 overflow-x-auto pb-2 no-scrollbar">
+                                  <div className="grid min-w-0 grid-cols-1 gap-3 pb-2 sm:grid-cols-2">
                                     {suggestedVideos.map((video, vIdx) => (
-                                      <Card key={vIdx} className="min-w-[200px] max-w-[200px] shrink-0 overflow-hidden cursor-pointer hover:border-teal-400 transition-all shadow-none group" onClick={() => { setSelectedVideo(video); setActiveVideo(video.id); }}>
+                                      <Card key={vIdx} className="min-w-0 overflow-hidden cursor-pointer hover:border-teal-400 transition-all shadow-none group" onClick={() => { setSelectedVideo(video); setActiveVideo(video.id); }}>
                                         <div className="relative aspect-video">
                                           <img src={video.thumbnail} alt={video.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform" />
                                           <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
@@ -1011,10 +1011,9 @@ export const AIChatSection = ({
                       </button>
                     </div>
                   )}
-                  <ScrollArea className="w-full">
-                    <div className="flex gap-4 pb-4 w-max">
+                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                       {suggestedVideos.map((video, idx) => (
-                        <Card key={idx} className="min-w-[280px] max-w-[280px] group cursor-pointer border-slate-100 dark:border-slate-800 hover:border-teal-400 transition-all overflow-hidden" onClick={() => {
+                        <Card key={idx} className="group min-w-0 cursor-pointer overflow-hidden border-slate-100 transition-all hover:border-teal-400 dark:border-slate-800" onClick={() => {
                           setSelectedVideo(video);
                           setEnergy((prev: number) => Math.min(100, prev + 25));
                           setActiveVideo(video.id);
@@ -1031,9 +1030,7 @@ export const AIChatSection = ({
                           </CardContent>
                         </Card>
                       ))}
-                    </div>
-                    <ScrollBar orientation="horizontal" className="h-2.5" />
-                  </ScrollArea>
+                  </div>
                 </CardContent>
               </Card>
             )}
@@ -1270,10 +1267,9 @@ function BrainPowerCardsSection({ topicName, subjectName, onJumpIn }: { topicNam
             <p className="text-xs">No reading materials yet. Ask your teacher to upload curriculum PDFs!</p>
           </div>
         ) : (
-          <ScrollArea className="w-full">
-            <div className="flex gap-4 pb-4 w-max">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               {cards.map((card) => (
-                <Card key={card.id} className="min-w-[280px] max-w-[280px] group cursor-pointer border-slate-100 dark:border-slate-800 hover:border-teal-400 transition-all overflow-hidden">
+                <Card key={card.id} className="group min-w-0 cursor-pointer overflow-hidden border-slate-100 transition-all hover:border-teal-400 dark:border-slate-800">
                   <CardContent className="p-4">
                     <div className="flex items-center gap-2 mb-2">
                       <div className="p-1.5 rounded-lg bg-teal-100 dark:bg-teal-900/50">
@@ -1304,9 +1300,7 @@ function BrainPowerCardsSection({ topicName, subjectName, onJumpIn }: { topicNam
                   </CardContent>
                 </Card>
               ))}
-            </div>
-            <ScrollBar orientation="horizontal" className="h-2.5" />
-          </ScrollArea>
+          </div>
         )}
       </CardContent>
     </Card>

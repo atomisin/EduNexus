@@ -225,7 +225,8 @@ export const useAITutor = (profile?: any, getFullName?: () => string) => {
       const result = await studentAPI.getSuggestedVideos({
         topic: topicLabel,
         subject: subjectForRequest?.name,
-        educationLevel: profile?.education_level
+        educationLevel: profile?.education_level,
+        limit: 6,
       });
 
       if (requestId !== videoRequestSeq.current) {

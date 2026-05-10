@@ -154,12 +154,12 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, onRegisterClick
           </Button>
 
           <div className="text-center pt-6">
-            <p className="text-base text-slate-500">
+            <p className="text-base text-slate-500 dark:text-slate-300">
               Don't have an account?{' '}
               <button
                 type="button"
                 onClick={onRegisterClick}
-                className="text-slate-900 hover:underline font-bold"
+                className="font-bold text-primary underline-offset-4 hover:underline dark:text-teal-300 dark:hover:text-teal-200"
               >
                 Create Account
               </button>

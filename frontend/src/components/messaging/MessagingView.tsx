@@ -260,9 +260,9 @@ export const MessagingView = ({ currentUser }: { currentUser: any }) => {
                                                         </div>
                                                     </div>
                                                 )}
-                                                <div className={`flex ${isMe ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-${isMe ? 'right' : 'left'}-4 duration-300`}>
-                                                    <div className={`max-w-[70%] group`}>
-                                                        <div className={`p-4 rounded-3xl shadow-sm text-sm leading-relaxed ${isMe
+                                                <div className={`flex w-full min-w-0 ${isMe ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-${isMe ? 'right' : 'left'}-4 duration-300`}>
+                                                    <div className="group min-w-0 max-w-[86%] sm:max-w-[70%]">
+                                                        <div className={`break-words p-4 rounded-3xl shadow-sm text-sm leading-relaxed [overflow-wrap:anywhere] ${isMe
                                                             ? 'bg-teal-600 text-white rounded-tr-none'
                                                             : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-tl-none border border-slate-100 dark:border-slate-700'
                                                             }`}>

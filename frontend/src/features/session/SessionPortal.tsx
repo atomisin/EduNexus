@@ -97,11 +97,11 @@ export const SessionPortal = ({
 
   return (
     <div className={`fixed inset-0 z-50 bg-slate-100 dark:bg-slate-950 flex flex-col overflow-hidden transition-all duration-300 ${isTheaterMode || stage === 'live' ? 'p-0' : 'p-2 md:p-4'}`}>
-      <div className={`w-full mx-auto flex-1 flex flex-col min-h-0 transition-all duration-300 ${isTheaterMode ? 'max-w-none' : 'max-w-[1400px]'}`}>
+      <div className={`w-full min-w-0 mx-auto flex-1 flex flex-col min-h-0 transition-all duration-300 ${isTheaterMode ? 'max-w-none' : 'max-w-[1400px]'}`}>
         {stage === 'pre-quiz' && sessionData?.pre_session_quiz && (
-          <div className="flex-1 flex items-center justify-center py-8">
-            <div className="max-w-2xl w-full">
-              <h2 className="text-2xl font-bold text-center mb-8 text-slate-900 dark:text-slate-100 italic">
+          <div className="flex-1 flex min-w-0 items-center justify-center px-3 py-6 sm:py-8">
+            <div className="max-w-2xl w-full min-w-0">
+              <h2 className="text-lg sm:text-2xl font-bold text-center mb-5 sm:mb-8 text-slate-900 dark:text-slate-100 italic">
                 Wait! Let's refresh some concepts before we start...
               </h2>
               <QuizView
@@ -136,9 +136,9 @@ export const SessionPortal = ({
         )}
 
         {stage === 'post-quiz' && sessionData?.post_session_quiz && (
-          <div className="flex-1 flex items-center justify-center py-8">
-            <div className="max-w-2xl w-full">
-              <h2 className="text-2xl font-bold text-center mb-8 text-slate-900 dark:text-slate-100 italic">
+          <div className="flex-1 flex min-w-0 items-center justify-center px-3 py-6 sm:py-8">
+            <div className="max-w-2xl w-full min-w-0">
+              <h2 className="text-lg sm:text-2xl font-bold text-center mb-5 sm:mb-8 text-slate-900 dark:text-slate-100 italic">
                 Session Complete! Let's see what you've learned...
               </h2>
               <QuizView
@@ -153,12 +153,12 @@ export const SessionPortal = ({
         )}
 
         {stage === 'completed' && (
-          <div className="flex-1 flex items-center justify-center">
-            <Card className="max-w-md w-full p-12 text-center shadow-2xl border-0">
+          <div className="flex-1 flex items-center justify-center px-3">
+            <Card className="max-w-md w-full p-6 sm:p-12 text-center shadow-2xl border-0">
               <div className="w-20 h-20 rounded-full bg-emerald-100 dark:bg-emerald-950/30 flex items-center justify-center mx-auto mb-6">
                 <CheckCircle className="w-10 h-10 text-emerald-600" />
               </div>
-              <h2 className="text-2xl font-bold mb-2">Session Finished</h2>
+              <h2 className="text-xl sm:text-2xl font-bold mb-2">Session Finished</h2>
               <p className="text-slate-500 mb-8 text-balance">The session has ended. Your performance and notes will be available in your dashboard shortly.</p>
               <Button onClick={onClose} className="w-full btn-primary rounded-xl">Back to Dashboard</Button>
             </Card>

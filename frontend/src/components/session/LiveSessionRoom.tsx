@@ -232,9 +232,9 @@ const SessionContent = ({
             </div>
 
             {/* Interaction Bar */}
-            <div className="absolute bottom-28 sm:bottom-36 left-1/2 -translate-x-1/2 flex max-w-[calc(100%-1rem)] items-center gap-2 bg-slate-900/85 backdrop-blur-md p-2 rounded-lg border border-slate-700/50 shadow-2xl z-40">
+            <div className="absolute bottom-24 sm:bottom-36 left-1/2 -translate-x-1/2 flex w-[calc(100%-1rem)] max-w-xl items-center justify-center gap-2 overflow-x-auto bg-slate-900/85 backdrop-blur-md p-2 rounded-lg border border-slate-700/50 shadow-2xl z-40 sm:w-auto">
                 {!isTeacher && (
-                    <div className="flex items-center gap-1 pr-2 border-r border-slate-700 overflow-x-auto">
+                    <div className="flex min-w-0 items-center gap-1 pr-2 border-r border-slate-700 overflow-x-auto">
                         {['👍', '❤️', '👏', '😮', '🤔', '🔥'].map(emoji => (
                             <button
                                 key={emoji}
@@ -251,7 +251,7 @@ const SessionContent = ({
                         size="sm"
                         variant="ghost"
                         onClick={triggerPopQuiz}
-                        className="rounded-lg gap-2 text-teal-300 hover:bg-teal-500/10"
+                        className="shrink-0 rounded-lg gap-2 text-teal-300 hover:bg-teal-500/10"
                     >
                         <Sparkles className="w-4 h-4" />
                         Trigger Pop Quiz
@@ -433,14 +433,14 @@ export const LiveSessionRoom = ({
     };
 
     return (
-        <div className={`flex flex-col flex-1 min-h-0 bg-slate-950 text-white overflow-hidden transition-all duration-300 relative ${isTheaterMode ? 'rounded-none border-0' : 'rounded-lg border border-slate-800 shadow-2xl'}`}>
+        <div className={`flex min-w-0 max-w-full flex-col flex-1 min-h-0 bg-slate-950 text-white overflow-hidden transition-all duration-300 relative ${isTheaterMode ? 'rounded-none border-0' : 'rounded-lg border border-slate-800 shadow-2xl'}`}>
             {/* Session Header */}
-            <div className="bg-slate-900 border-b border-slate-800 px-3 py-2 sm:px-4 flex items-center justify-between gap-3 z-20">
-                <div className="min-w-0 flex items-center gap-3">
+            <div className="bg-slate-900 border-b border-slate-800 px-2.5 py-2 sm:px-4 flex items-center justify-between gap-2 sm:gap-3 z-20">
+                <div className="min-w-0 flex items-center gap-2 sm:gap-3">
                     <div className="w-9 h-9 rounded-lg bg-teal-500/20 flex items-center justify-center border border-teal-500/30 shrink-0">
                         <Video className="w-5 h-5 text-teal-400" />
                     </div>
-                    <div className="min-w-0">
+                    <div className="min-w-0 max-w-[42vw] sm:max-w-none">
                         <h2 className="text-sm sm:text-lg font-bold flex items-center gap-2 truncate">
                             <span className="truncate">{title}</span>
                             <Badge variant="secondary" className="shrink-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/20">
@@ -450,7 +450,7 @@ export const LiveSessionRoom = ({
                         <p className="hidden sm:block text-xs text-slate-400 truncate">Room: {roomName}</p>
                     </div>
                 </div>
-                <div className="shrink-0 flex items-center gap-1.5 sm:gap-2 overflow-x-auto">
+                <div className="shrink-0 flex max-w-[52vw] items-center gap-1 overflow-x-auto sm:max-w-none sm:gap-2">
                     <Button
                         variant="ghost"
                         size="sm"
@@ -572,9 +572,9 @@ export const LiveSessionRoom = ({
             </div>
 
             {/* Main Content Area */}
-            <div className="flex-1 flex min-h-0 overflow-hidden relative">
+            <div className="flex-1 flex min-w-0 max-w-full min-h-0 overflow-hidden relative">
                 {/* Video Area */}
-                <div className={`relative bg-black min-h-0 ${showWhiteboard ? 'hidden md:block md:w-1/2' : 'flex-1'}`}>
+                <div className={`relative min-w-0 bg-black min-h-0 ${showWhiteboard ? 'hidden md:block md:w-1/2' : 'flex-1'}`}>
                     <VideoErrorBoundary>
                         <LiveKitRoom
                             video={true}
@@ -614,18 +614,18 @@ export const LiveSessionRoom = ({
                             <RoomAudioRenderer />
                             {/* Audio gate overlay — shown until user clicks 'Join with Audio' */}
                             {!isAudioEnabled && (
-                                <div className="absolute inset-0 z-[100] bg-slate-950/85 backdrop-blur-md flex flex-col items-center justify-center p-8 text-center animate-in fade-in duration-500">
-                                    <div className="w-20 h-20 rounded-full bg-teal-500/20 flex items-center justify-center mb-6 border border-teal-500/30 animate-pulse">
-                                        <Volume2 className="w-10 h-10 text-teal-400" />
+                                <div className="absolute inset-0 z-[100] bg-slate-950/85 backdrop-blur-md flex flex-col items-center justify-center p-4 text-center animate-in fade-in duration-500 sm:p-8">
+                                    <div className="w-16 h-16 rounded-full bg-teal-500/20 flex items-center justify-center mb-5 border border-teal-500/30 animate-pulse sm:w-20 sm:h-20 sm:mb-6">
+                                        <Volume2 className="w-8 h-8 text-teal-400 sm:w-10 sm:h-10" />
                                     </div>
-                                    <h3 className="text-2xl font-bold mb-2">Enable Audio to Join</h3>
+                                    <h3 className="text-xl font-bold mb-2 sm:text-2xl">Enable Audio to Join</h3>
                                     <p className="text-slate-400 max-w-md mb-2">Your browser requires a click to enable audio.</p>
-                                    <p className="text-slate-500 text-sm max-w-md mb-8">
+                                    <p className="text-slate-500 text-sm max-w-md mb-6 sm:mb-8">
                                         If you see a mic timeout warning in the console, it will clear once audio is enabled here.
                                     </p>
                                     <Button
                                         size="lg"
-                                        className="rounded-2xl px-12 py-7 text-lg font-bold bg-teal-600 hover:bg-teal-500 shadow-xl shadow-teal-500/20 group transition-all"
+                                        className="rounded-xl px-6 py-5 text-base font-bold bg-teal-600 hover:bg-teal-500 shadow-xl shadow-teal-500/20 group transition-all sm:rounded-2xl sm:px-12 sm:py-7 sm:text-lg"
                                         onClick={() => setIsAudioEnabled(true)}
                                     >
                                         <Mic className="w-5 h-5 mr-3 group-hover:scale-110 transition-transform" />
@@ -644,18 +644,18 @@ export const LiveSessionRoom = ({
 
                 {/* AI Explanations / Notes Panel */}
                 {showAiContent && aiContent && (
-                    <div className="absolute inset-y-0 right-0 w-full sm:w-96 bg-slate-900 border-l border-slate-700 flex flex-col z-[60] animate-in slide-in-from-right duration-300 shadow-2xl overflow-hidden">
-                        <div className="p-4 border-b border-slate-700 flex items-center justify-between bg-slate-800">
-                            <div className="flex items-center gap-2">
+                    <div className="absolute inset-y-0 right-0 w-full min-w-0 sm:w-96 bg-slate-900 border-l border-slate-700 flex flex-col z-[60] animate-in slide-in-from-right duration-300 shadow-2xl overflow-hidden">
+                        <div className="p-3 sm:p-4 border-b border-slate-700 flex items-center justify-between bg-slate-800 gap-2">
+                            <div className="flex min-w-0 items-center gap-2">
                                 <Sparkles className="w-4 h-4 text-amber-400" />
-                                <h3 className="font-semibold text-sm text-white">{aiContent.title}</h3>
+                                <h3 className="min-w-0 truncate font-semibold text-sm text-white">{aiContent.title}</h3>
                             </div>
                             <Button variant="ghost" size="icon" onClick={() => setShowAiContent(false)} className="h-8 w-8 text-slate-400 hover:text-white">
                                 <X className="w-4 h-4" />
                             </Button>
                         </div>
                         <ScrollArea className="flex-1 overflow-y-auto">
-                            <div className="p-5 prose prose-invert prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: (() => {
+                            <div className="min-w-0 max-w-full break-words p-3 [overflow-wrap:anywhere] prose prose-invert prose-sm prose-p:max-w-full sm:p-5" dangerouslySetInnerHTML={{ __html: (() => {
                                 // Lightweight markdown-to-HTML for AI content
                                 const md = aiContent.content || '';
                                 return md
@@ -745,7 +745,7 @@ export const LiveSessionRoom = ({
 
                 {/* Metrics Sidebar (Teacher Only) */}
                 {isTeacher && showMetrics && (
-                    <div className="absolute inset-y-0 right-0 w-full sm:relative sm:w-96 border-l border-slate-800 bg-slate-900/95 backdrop-blur-md flex flex-col animate-in slide-in-from-right duration-300 z-10">
+                    <div className="absolute inset-y-0 right-0 w-full min-w-0 sm:relative sm:w-96 border-l border-slate-800 bg-slate-900/95 backdrop-blur-md flex flex-col animate-in slide-in-from-right duration-300 z-10">
                         <div className="p-4 border-b border-slate-800 flex items-center justify-between">
                             <div className="flex items-center gap-2">
                                 <Sparkles className="w-4 h-4 text-teal-400" />
@@ -772,7 +772,7 @@ export const LiveSessionRoom = ({
 
                 {/* Sidebar Chat */}
                 {showChat && (
-                    <div className="absolute inset-y-0 right-0 w-full sm:relative sm:w-80 border-l border-slate-800 bg-slate-900 flex flex-col animate-in slide-in-from-right duration-300 z-10">
+                    <div className="absolute inset-y-0 right-0 w-full min-w-0 sm:relative sm:w-80 border-l border-slate-800 bg-slate-900 flex flex-col animate-in slide-in-from-right duration-300 z-10">
                         <div className="p-4 border-b border-slate-800 flex items-center justify-between">
                             <h3 className="font-semibold text-sm">Session Chat</h3>
                             <Button variant="ghost" size="icon" onClick={() => setShowChat(false)} className="h-8 w-8 text-slate-500">

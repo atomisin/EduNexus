@@ -249,7 +249,7 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSuccess, o
                     type="email"
                     value={formData.email}
                     onChange={(e) => handleInputChange('email', e.target.value)}
-                    placeholder="email@school.edu.ng"
+                    placeholder="Email address"
                     required
                     className="h-12"
                   />
@@ -529,7 +529,7 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSuccess, o
                             type="email"
                             value={formData.guardianEmail}
                             onChange={(e) => handleInputChange('guardianEmail', e.target.value)}
-                            placeholder="guardian@school.edu.ng"
+                            placeholder="Guardian email address"
                             className="h-12"
                           />
                         </div>

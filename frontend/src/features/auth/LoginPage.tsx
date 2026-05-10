@@ -77,7 +77,7 @@ export const LoginPage = ({ onBack, onSuccess }: LoginPageProps) => {
               <Input
                 id="email"
                 type="email"
-                placeholder="email@school.edu.ng"
+                placeholder="Email address"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 disabled={isLoading}

@@ -128,12 +128,27 @@ export const ProfileView = ({
                   className="hidden"
                   onChange={async (event) => {
                     const file = event.target.files?.[0];
+                    event.target.value = '';
                     if (!file) return;
+                    if (!file.type.startsWith('image/')) {
+                      toast.error('Please choose an image file.');
+                      return;
+                    }
+                    if (file.size > 5 * 1024 * 1024) {
+                      toast.error('Profile image must be 5MB or smaller.');
+                      return;
+                    }
                     setUploadingAvatar(true);
                     try {
                       const result = await studentAPI.uploadAvatar(file);
                       setAvatarUrl(result.avatar_url);
-                      if (user) setUser({ ...user, avatar: result.avatar_url });
+                      if (user) {
+                        setUser({
+                          ...user,
+                          avatar: result.avatar_url,
+                          avatar_url: result.avatar_url,
+                        });
+                      }
                       toast.success('Profile picture updated!');
                     } catch (err: any) {
                       toast.error(err.message || 'Failed to upload photo');

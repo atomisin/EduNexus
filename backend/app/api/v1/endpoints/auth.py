@@ -228,6 +228,8 @@ async def register(user_data: UserCreate, db: AsyncSession = Depends(get_async_d
         "user_id": str(db_user.id),
         "email": db_user.email,
         "role": user_data.role,
+        "verification_required": settings.VERIFICATION_ENABLED
+        and not settings.VERIFICATION_BYPASS,
         "verification_sent": email_sent,
     }
 
@@ -333,6 +335,8 @@ async def register_teacher(
         "email": db_user.email,
         "role": "teacher",
         "verification_status": "pending",
+        "verification_required": settings.VERIFICATION_ENABLED
+        and not settings.VERIFICATION_BYPASS,
         "verification_sent": email_sent,
         "email_verification_sent": email_sent,
     }
@@ -503,6 +507,8 @@ async def register_student(
         "user_id": str(db_user.id),
         "email": db_user.email,
         "role": "student",
+        "verification_required": settings.VERIFICATION_ENABLED
+        and not settings.VERIFICATION_BYPASS,
         "verification_sent": email_sent,
     }
 
@@ -845,6 +851,15 @@ class ChangePasswordRequest(BaseModel):
     new_password: str = Field(..., min_length=8)
 
 
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str = Field(..., min_length=10)
+    new_password: str = Field(..., min_length=8)
+
+
 @router.get("/me", response_model=UserResponse)
 async def get_me(user: User = Depends(get_current_user_allow_password_change)):
     """Get current user data (C-04, C-10: Allow me while password change required)"""
@@ -864,6 +879,90 @@ async def change_password(
     user.force_password_change = False
     await db.commit()
     return {"success": True, "detail": "Password updated"}
+
+
+@router.post("/forgot-password", response_model=dict)
+async def forgot_password(
+    request: ForgotPasswordRequest, db: AsyncSession = Depends(get_async_db)
+):
+    """Send a signed password reset link if the account exists."""
+    result = await db.execute(select(User).filter(User.email == request.email))
+    user = result.scalars().first()
+
+    if user:
+        from jose import jwt
+
+        expires_at = datetime.now(timezone.utc) + timedelta(
+            hours=settings.VERIFICATION_TOKEN_EXPIRE_HOURS
+        )
+        reset_token = jwt.encode(
+            {
+                "sub": str(user.id),
+                "type": "password_reset",
+                "exp": expires_at,
+            },
+            settings.SECRET_KEY,
+            algorithm=settings.ALGORITHM,
+        )
+        email_service.send_password_reset_email(user, reset_token)
+
+    return {
+        "success": True,
+        "detail": "If an account exists with this email, a password reset link has been sent.",
+    }
+
+
+@router.post("/reset-password", response_model=dict)
+async def reset_password(
+    request: ResetPasswordRequest, db: AsyncSession = Depends(get_async_db)
+):
+    """Reset a password with a signed password reset token."""
+    is_pwd_valid, pwd_error = validate_password(request.new_password)
+    if not is_pwd_valid:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=pwd_error)
+
+    from jose import jwt, JWTError
+    from app.core.security import pwd_context
+
+    try:
+        payload = jwt.decode(
+            request.token,
+            settings.SECRET_KEY,
+            algorithms=[settings.ALGORITHM],
+        )
+    except JWTError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This password reset link is invalid or has expired.",
+        )
+
+    if payload.get("type") != "password_reset" or not payload.get("sub"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This password reset link is invalid or has expired.",
+        )
+
+    try:
+        user_id = uuid.UUID(payload["sub"])
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This password reset link is invalid or has expired.",
+        )
+
+    result = await db.execute(select(User).filter(User.id == user_id))
+    user = result.scalars().first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This password reset link is invalid or has expired.",
+        )
+
+    user.hashed_password = pwd_context.hash(request.new_password)
+    user.force_password_change = False
+    await db.commit()
+
+    return {"success": True, "detail": "Password reset successfully"}
 
 
 @router.post("/verify-email", response_model=dict)

@@ -39,6 +39,15 @@ export const useProfileAssessment = (profile?: any, setProfile?: (p: any) => voi
   const closeAssessment = useCallback(() => setIsAssessmentOpen(false), []);
 
   const handleAvatarUpload = useCallback(async (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please choose an image file.');
+      return false;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Profile image must be 5MB or smaller.');
+      return false;
+    }
+
     try {
       const result = await studentAPI.uploadAvatar(file);
       setAvatarUrl(result.avatar_url);

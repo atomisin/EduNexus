@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { User, Camera, Edit2, Save, X, Mail, Phone, MapPin, Calendar, Award, Briefcase, GraduationCap } from 'lucide-react';
+import { User, Camera, Edit2, Save, X, Mail, Phone, MapPin, Calendar, Award, Briefcase, GraduationCap, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { userAPI } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
@@ -22,7 +22,8 @@ interface ProfileProps {
 export const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
   const { setUser } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
-  const [avatarPreview, setAvatarPreview] = useState<string | null>(user.avatar || null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(user.avatar_url || user.avatar || null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [createdAt, setCreatedAt] = useState<string | null>(user.createdAt || null);
   const [formData, setFormData] = useState({
     firstName: user.first_name || user.name?.split(' ')[0] || '',
@@ -73,14 +74,43 @@ export const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setAvatarPreview(reader.result as string);
+    e.target.value = '';
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please choose an image file.');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Profile image must be 5MB or smaller.');
+      return;
+    }
+
+    const localPreview = URL.createObjectURL(file);
+    setAvatarPreview(localPreview);
+    setUploadingAvatar(true);
+
+    try {
+      const result = await userAPI.uploadAvatar(file);
+      const updatedUser = {
+        ...user,
+        avatar: result.avatar_url,
+        avatar_url: result.avatar_url,
       };
-      reader.readAsDataURL(file);
+      setAvatarPreview(result.avatar_url);
+      localStorage.setItem('edunexus_user', JSON.stringify(updatedUser));
+      onUserUpdate?.(updatedUser);
+      setUser(updatedUser);
+      toast.success('Profile picture updated successfully.');
+    } catch (error: any) {
+      setAvatarPreview(user.avatar_url || user.avatar || null);
+      toast.error(error.message || 'Failed to upload profile picture.');
+    } finally {
+      URL.revokeObjectURL(localPreview);
+      setUploadingAvatar(false);
     }
   };
 
@@ -114,7 +144,6 @@ export const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
         gamification: freshUser.gamification || user.gamification,
       };
 
-      console.log('Profile: Setting updated user:', updatedUser);
       localStorage.setItem('edunexus_user', JSON.stringify(updatedUser));
       onUserUpdate?.(updatedUser);
       setUser(updatedUser);
@@ -141,7 +170,7 @@ export const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
       schoolName: user.profile?.school_name || user.schoolName || '',
       gradeLevel: user.profile?.grade_level || user.gradeLevel || '',
     });
-    setAvatarPreview(user.avatar || null);
+    setAvatarPreview(user.avatar_url || user.avatar || null);
     setIsEditing(false);
   };
 
@@ -209,12 +238,17 @@ export const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
                 <div className="absolute -bottom-2 -right-2">
                   <label className="cursor-pointer">
                     <div className="w-10 h-10 bg-teal-600 rounded-full flex items-center justify-center shadow-lg hover:bg-teal-700 transition-colors">
-                      <Camera className="w-5 h-5 text-white" />
+                      {uploadingAvatar ? (
+                        <Loader2 className="w-5 h-5 animate-spin text-white" />
+                      ) : (
+                        <Camera className="w-5 h-5 text-white" />
+                      )}
                     </div>
                     <Input
                       type="file"
                       accept="image/*"
                       onChange={handleAvatarChange}
+                      disabled={uploadingAvatar}
                       className="hidden"
                     />
                   </label>

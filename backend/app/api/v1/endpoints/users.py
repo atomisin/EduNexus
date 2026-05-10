@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pydantic import BaseModel
@@ -14,6 +14,14 @@ from app.models.user import User, TeacherProfile
 from app.services.storage_service import storage_service
 
 router = APIRouter()
+
+ALLOWED_AVATAR_TYPES = {
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "image/webp": "webp",
+    "image/gif": "gif",
+}
+MAX_AVATAR_BYTES = 5 * 1024 * 1024
 
 
 class UserUpdate(BaseModel):
@@ -206,3 +214,49 @@ async def update_current_user(
 
     # Return the full updated user info, identical to what get_me returns
     return await get_current_user_info(current_user, db)
+
+
+@router.post("/avatar")
+async def upload_current_user_avatar(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """Upload and save a profile avatar for the authenticated user."""
+    if not file:
+        raise HTTPException(status_code=400, detail="No file provided")
+
+    ext = ALLOWED_AVATAR_TYPES.get(file.content_type or "")
+    if not ext:
+        raise HTTPException(status_code=400, detail="Only JPG, PNG, WEBP, or GIF images are allowed")
+
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="The selected image is empty")
+    if len(content) > MAX_AVATAR_BYTES:
+        raise HTTPException(status_code=400, detail="Profile image must be 5MB or smaller")
+
+    object_name = f"avatars/{current_user.role}_{current_user.id}_{uuid.uuid4().hex[:8]}.{ext}"
+    avatar_url = storage_service.upload_file(
+        io.BytesIO(content),
+        object_name,
+        content_type=file.content_type,
+    )
+
+    current_user.avatar_url = avatar_url
+
+    if current_user.role == "student":
+        res_prof = await db.execute(
+            select(StudentProfile).filter(StudentProfile.user_id == current_user.id)
+        )
+        student_profile = res_prof.scalars().first()
+        if student_profile:
+            student_profile.avatar_url = avatar_url
+
+    await db.commit()
+    await db.refresh(current_user)
+
+    return {
+        "avatar_url": storage_service.resolve_url(avatar_url) if avatar_url else None,
+        "message": "Profile picture updated successfully",
+    }

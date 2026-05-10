@@ -19,6 +19,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { toast } from 'sonner';
+import { LegalDocument, legalDocuments } from '@/components/legal/LegalDocuments';
 
 // Lazy load heavy auth components
 const LoginForm = React.lazy(() => import('@/components/auth/LoginForm').then(m => ({ default: m.LoginForm })));
@@ -42,6 +43,7 @@ export const LandingPage = ({
   onGoDashboard
 }: LandingPageProps) => {
   const [authMode, setAuthMode] = useState<'login' | 'register' | null>(null);
+  const [legalDocument, setLegalDocument] = useState<'terms' | 'privacy' | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -356,11 +358,47 @@ export const LandingPage = ({
             </div>
           </div>
           <Separator className="bg-border/60" />
+          <div className="flex flex-wrap items-center justify-center gap-4 pt-6 text-sm">
+            <button
+              type="button"
+              onClick={() => setLegalDocument('terms')}
+              className="font-semibold text-muted-foreground underline-offset-4 transition-colors hover:text-primary hover:underline"
+            >
+              Terms of Service
+            </button>
+            <button
+              type="button"
+              onClick={() => setLegalDocument('privacy')}
+              className="font-semibold text-muted-foreground underline-offset-4 transition-colors hover:text-primary hover:underline"
+            >
+              Privacy Policy
+            </button>
+          </div>
           <div className="flex flex-col flex-col-reverse md:flex-row items-center justify-between pt-8 gap-6 text-sm text-muted-foreground">
             <p className="font-medium tracking-wide">© 2026 EduNexus. Structured learning for measurable progress.</p>
           </div>
         </div>
       </footer>
+
+      <Dialog open={legalDocument !== null} onOpenChange={(open) => !open && setLegalDocument(null)}>
+        <DialogContent className="max-h-[88vh] w-[calc(100vw-1rem)] max-w-2xl overflow-hidden p-0">
+          {legalDocument && (
+            <>
+              <div className="border-b px-5 py-4 text-left">
+                <DialogTitle className="pr-8 text-xl leading-tight">
+                  {legalDocuments[legalDocument].title}
+                </DialogTitle>
+                <DialogDescription className="mt-2">
+                  EduNexus account, learning, safety, and data commitments.
+                </DialogDescription>
+              </div>
+              <div className="max-h-[68vh] overflow-y-auto overflow-x-hidden px-5 py-4">
+                <LegalDocument type={legalDocument} />
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Floating Auth Overlays */}
       <Dialog open={authMode !== null} onOpenChange={(open) => !open && setAuthMode(null)}>

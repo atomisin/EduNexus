@@ -4,8 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ChevronLeft, Eye, EyeOff, Loader2 } from 'lucide-react';
-import { warmUpServer } from '@/services/api';
+import { AlertCircle, CheckCircle2, ChevronLeft, Eye, EyeOff, Loader2, Mail } from 'lucide-react';
+import { authAPI, warmUpServer } from '@/services/api';
 
 const COLD_START_MESSAGE = 'Please wait...';
 
@@ -21,6 +21,11 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, onRegisterClick
   const [showPassword, setShowPassword] = useState(false);
   const [serverWaking, setServerWaking] = useState(false);
   const [serverReady, setServerReady] = useState(false);
+  const [forgotMode, setForgotMode] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetStatus, setResetStatus] = useState<'idle' | 'sent' | 'error'>('idle');
+  const [resetMessage, setResetMessage] = useState('');
+  const [resetLoading, setResetLoading] = useState(false);
 
   // Pre-warm the backend the moment this form mounts
   // The server starts waking up while the user types credentials
@@ -58,6 +63,30 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, onRegisterClick
     }
   };
 
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setResetStatus('idle');
+    setResetMessage('');
+
+    if (!resetEmail.includes('@')) {
+      setResetStatus('error');
+      setResetMessage('Please enter the email address on your EduNexus account.');
+      return;
+    }
+
+    setResetLoading(true);
+    try {
+      await authAPI.forgotPassword({ email: resetEmail });
+      setResetStatus('sent');
+      setResetMessage('If this email is registered, a password reset link has been sent.');
+    } catch (err: any) {
+      setResetStatus('error');
+      setResetMessage(err.message || 'Could not request password reset. Please try again.');
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
   // Determine the button label
   const getButtonLabel = () => {
     if (!isLoading) return 'Sign In';
@@ -81,12 +110,75 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, onRegisterClick
         <div className="mx-auto mb-6">
           <img src="/edunexus-logo.png" alt="EduNexus" className="h-24 w-auto mx-auto" />
         </div>
-        <CardTitle className="text-3xl font-bold tracking-tight mb-2 text-slate-900 dark:text-white">Welcome Back</CardTitle>
+        <CardTitle className="text-3xl font-bold tracking-tight mb-2 text-slate-900 dark:text-white">
+          {forgotMode ? 'Reset Password' : 'Welcome Back'}
+        </CardTitle>
         <CardDescription className="text-lg text-slate-500">
-          Sign in to your EduNexus account
+          {forgotMode ? 'Enter your account email and we will send a secure reset link.' : 'Sign in to your EduNexus account'}
         </CardDescription>
       </CardHeader>
       <CardContent className="pt-2 pb-10 px-8">
+        {forgotMode ? (
+          <form onSubmit={handleForgotPassword} className="space-y-6">
+            {resetMessage && (
+              <div className={`flex items-start gap-3 rounded-lg border p-4 text-sm ${
+                resetStatus === 'sent'
+                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                  : 'border-red-100 bg-red-50 text-red-600'
+              }`}>
+                {resetStatus === 'sent' ? (
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+                ) : (
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                )}
+                <span>{resetMessage}</span>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label htmlFor="resetEmail" className="text-sm font-semibold text-slate-700">Email</Label>
+              <div className="relative">
+                <Input
+                  id="resetEmail"
+                  type="email"
+                  placeholder="Email address"
+                  value={resetEmail}
+                  onChange={(e) => setResetEmail(e.target.value)}
+                  required
+                  className="h-14 rounded-lg bg-slate-50/50 border-slate-100 pl-12 focus:border-primary/30 focus:ring-primary/10 text-base"
+                />
+                <Mail className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+              </div>
+            </div>
+
+            <Button
+              type="submit"
+              className="w-full min-h-14 h-auto rounded-lg bg-primary hover:bg-primary/90 text-white text-base font-bold shadow-none transition-all active:scale-[0.98] px-4 py-3"
+              disabled={resetLoading}
+            >
+              {resetLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin shrink-0" />
+                  Sending reset link...
+                </>
+              ) : (
+                'Send Reset Link'
+              )}
+            </Button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setForgotMode(false);
+                setResetStatus('idle');
+                setResetMessage('');
+              }}
+              className="mx-auto block text-sm font-semibold text-primary underline-offset-4 hover:underline"
+            >
+              Back to sign in
+            </button>
+          </form>
+        ) : (
         <form onSubmit={handleSubmit} className="space-y-6">
           {error && (
             <div className="p-4 rounded-xl bg-red-50 text-red-600 text-sm border border-red-100 animate-in fade-in slide-in-from-top-1">
@@ -136,6 +228,18 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, onRegisterClick
                 </button>
               </div>
             </div>
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  setForgotMode(true);
+                  setResetEmail(email);
+                }}
+                className="text-sm font-semibold text-primary underline-offset-4 hover:underline"
+              >
+                Forgot password?
+              </button>
+            </div>
           </div>
 
           <Button
@@ -166,6 +270,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, onRegisterClick
             </p>
           </div>
         </form>
+        )}
       </CardContent>
     </Card>
   );

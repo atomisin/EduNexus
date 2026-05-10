@@ -6,7 +6,10 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Loader2, CheckCircle, User, GraduationCap } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Loader2, User, GraduationCap } from 'lucide-react';
+import { LegalDocument, legalDocuments } from '@/components/legal/LegalDocuments';
+import VerificationSuccess from './VerificationSuccess';
 
 interface SimpleRegistrationFormProps {
   onSuccess?: () => void;
@@ -20,7 +23,10 @@ export const SimpleRegistrationForm: React.FC<SimpleRegistrationFormProps> = ({
   const { register, error, isLoading } = useAuth();
   const [role, setRole] = useState<'teacher' | 'student'>('student');
   const [registrationComplete, setRegistrationComplete] = useState(false);
+  const [registeredEmail, setRegisteredEmail] = useState('');
+  const [verificationEmailSent, setVerificationEmailSent] = useState(true);
   const [formError, setFormError] = useState<string | null>(null);
+  const [legalDocument, setLegalDocument] = useState<'terms' | 'privacy' | null>(null);
 
   // Form fields
   const [formData, setFormData] = useState({
@@ -103,7 +109,7 @@ export const SimpleRegistrationForm: React.FC<SimpleRegistrationFormProps> = ({
     if (!validateForm()) return;
 
     try {
-      await register({
+      const result = await register({
         firstName: formData.firstName,
         lastName: formData.lastName,
         email: formData.email,
@@ -123,7 +129,13 @@ export const SimpleRegistrationForm: React.FC<SimpleRegistrationFormProps> = ({
         phoneNumber: formData.phoneNumber,
       });
 
-      setRegistrationComplete(true);
+      if (result.verificationRequired !== false) {
+        setRegisteredEmail(result.email || formData.email);
+        setVerificationEmailSent(result.verificationSent !== false);
+        setRegistrationComplete(true);
+        return;
+      }
+
       setTimeout(() => {
         onSuccess?.();
       }, 2000);
@@ -134,15 +146,12 @@ export const SimpleRegistrationForm: React.FC<SimpleRegistrationFormProps> = ({
 
   if (registrationComplete) {
     return (
-      <Card className="w-full max-w-md">
-        <CardContent className="pt-6 text-center">
-          <CheckCircle className="mx-auto h-16 w-16 text-green-500 mb-4" />
-          <CardTitle className="mb-2">Registration Successful!</CardTitle>
-          <CardDescription>
-            Your {role} account has been created. Redirecting to login...
-          </CardDescription>
-        </CardContent>
-      </Card>
+      <VerificationSuccess
+        email={registeredEmail}
+        verificationToken="code-verification"
+        verificationSent={verificationEmailSent}
+        onContinue={() => onSuccess?.()}
+      />
     );
   }
 
@@ -391,22 +400,34 @@ export const SimpleRegistrationForm: React.FC<SimpleRegistrationFormProps> = ({
             />
           </div>
 
-          <div className="flex items-start space-x-2 pt-4">
+          <div className="flex min-w-0 items-start gap-3 pt-4">
             <Checkbox
               id="terms"
               checked={agreedToTerms}
               onCheckedChange={(checked) => setAgreedToTerms(checked as boolean)}
+              className="mt-0.5 shrink-0"
             />
-            <Label htmlFor="terms" className="text-sm cursor-pointer leading-tight">
-              I agree to the{' '}
-              <a href="#" className="text-primary hover:underline">
+            <div className="min-w-0 text-sm leading-relaxed text-muted-foreground">
+              <Label htmlFor="terms" className="cursor-pointer text-sm leading-relaxed">
+                I agree to the
+              </Label>{' '}
+              <button
+                type="button"
+                onClick={() => setLegalDocument('terms')}
+                className="font-semibold text-primary underline-offset-4 hover:underline focus:outline-none focus:ring-2 focus:ring-primary/30"
+              >
                 Terms of Service
-              </a>{' '}
+              </button>{' '}
               and{' '}
-              <a href="#" className="text-primary hover:underline">
+              <button
+                type="button"
+                onClick={() => setLegalDocument('privacy')}
+                className="font-semibold text-primary underline-offset-4 hover:underline focus:outline-none focus:ring-2 focus:ring-primary/30"
+              >
                 Privacy Policy
-              </a>
-            </Label>
+              </button>
+              .
+            </div>
           </div>
 
           <Button
@@ -436,6 +457,25 @@ export const SimpleRegistrationForm: React.FC<SimpleRegistrationFormProps> = ({
           </div>
         </form>
       </CardContent>
+      <Dialog open={legalDocument !== null} onOpenChange={(open) => !open && setLegalDocument(null)}>
+        <DialogContent className="max-h-[88vh] w-[calc(100vw-1rem)] max-w-2xl overflow-hidden p-0">
+          {legalDocument && (
+            <>
+              <DialogHeader className="border-b px-5 py-4 text-left">
+                <DialogTitle className="pr-8 text-xl leading-tight">
+                  {legalDocuments[legalDocument].title}
+                </DialogTitle>
+                <DialogDescription>
+                  Please read this before creating your EduNexus account.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="max-h-[68vh] overflow-y-auto overflow-x-hidden px-5 py-4">
+                <LegalDocument type={legalDocument} />
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 };

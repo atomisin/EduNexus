@@ -14,6 +14,7 @@ import { SmartHelper } from '@/components/ai/SmartHelper';
 const LandingPage = React.lazy(() => import('./features/landing/LandingPage').then(m => ({ default: m.LandingPage })));
 const StudentJoinPage = React.lazy(() => import('./features/auth/StudentJoinPage').then(m => ({ default: m.StudentJoinPage })));
 const ChangePasswordView = React.lazy(() => import('./features/auth/ChangePasswordView').then(m => ({ default: m.ChangePasswordView })));
+const ResetPassword = React.lazy(() => import('@/components/auth/ResetPassword').then(m => ({ default: m.ResetPassword })));
 const SessionPortal = React.lazy(() => import('./features/session/SessionPortal').then(m => ({ default: m.SessionPortal })));
 
 import { ProtectedRoute } from './components/shared/ProtectedRoute';
@@ -71,7 +72,7 @@ function App() {
       if (!isAuthenticated) return;
 
       // Don't redirect if we're on a public page
-      const publicPaths = ['/', '/login', '/register', '/join', '/verify-email'];
+      const publicPaths = ['/', '/login', '/register', '/join', '/verify-email', '/reset-password'];
       const currentPath = window.location.pathname.toLowerCase().split(/[?#]/)[0].replace(/\/$/, '') || '/';
       
       if (publicPaths.includes(currentPath)) {
@@ -146,6 +147,7 @@ function App() {
           
           <Route path="/login" element={<Navigate to="/?auth=login" replace />} />
           <Route path="/register" element={<Navigate to="/?auth=register" replace />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
 
           <Route path="/join" element={<StudentJoinPage onBack={() => window.location.href = '/'} />} />
 

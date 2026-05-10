@@ -250,6 +250,18 @@ export const authAPI = {
       body: JSON.stringify(data),
     }),
 
+  forgotPassword: (data: { email: string }) =>
+    fetchWithAuth('/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  resetPassword: (data: { token: string; new_password: string }) =>
+    fetchWithAuth('/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
   // Change Password (GAP 4 Requirement)
   changePassword: (data: { old_password?: string; new_password: string }) =>
     fetchWithAuth('/auth/change-password', {
@@ -909,6 +921,21 @@ export const materialsAPI = {
 export const userAPI = {
   // Get current user
   getMe: (options?: any) => fetchWithAuth('/users/me', options),
+
+  uploadAvatar: async (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await fetchWithTimeout(`${API_BASE_URL}/users/avatar`, {
+      method: 'POST',
+      body: formData,
+      credentials: 'include',
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({ detail: 'Upload failed' }));
+      throw new Error(err.detail || 'Avatar upload failed');
+    }
+    return response.json();
+  },
 
   updateMe: (data: {
     full_name?: string;

@@ -39,7 +39,7 @@ export interface AuthContextType {
   setUser: (user: User | null) => void;
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => void;
-  register: (userData: RegisterData) => Promise<{ success: boolean; verificationSent?: boolean; email?: string }>;
+  register: (userData: RegisterData) => Promise<{ success: boolean; verificationRequired?: boolean; verificationSent?: boolean; email?: string }>;
   verifyEmail: (code: string, email: string) => Promise<boolean>;
   resendVerificationEmail: (email: string) => Promise<boolean>;
   completePasswordChange: (newPassword: string) => Promise<boolean>;
@@ -238,7 +238,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
-  const register = async (userData: RegisterData): Promise<{ success: boolean; verificationSent?: boolean; email?: string }> => {
+  const register = async (userData: RegisterData): Promise<{ success: boolean; verificationRequired?: boolean; verificationSent?: boolean; email?: string }> => {
     setIsLoading(true);
     setError(null);
 
@@ -317,9 +317,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
 
       if (response && response.user_id) {
+        const verificationSent = response.verification_sent || response.email_verification_sent || false;
         return {
           success: true,
-          verificationSent: response.verification_sent || response.email_verification_sent || false,
+          verificationRequired: response.verification_required ?? true,
+          verificationSent,
           email: userData.email,
         };
       }
@@ -395,7 +397,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setError(null);
 
     try {
-      await authAPI.resendVerification({ email });
+      const response = await authAPI.resendVerification({ email });
+      if (response.email_sent === false) {
+        setError('We could not send the verification email. Please check the SMTP settings and try again.');
+        return false;
+      }
       return true;
     } catch (err: any) {
       setError(err.message || 'Failed to resend verification email. Please try again.');

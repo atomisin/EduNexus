@@ -10,12 +10,14 @@ import { useAuth } from '@/contexts/AuthContext';
 interface VerificationSuccessProps {
   email: string;
   verificationToken: string;
+  verificationSent?: boolean;
   onContinue: () => void;
 }
 
 export const VerificationSuccess: React.FC<VerificationSuccessProps> = ({
   email,
   verificationToken: _verificationToken,
+  verificationSent = true,
   onContinue
 }) => {
   const { verifyEmail, resendVerificationEmail, isLoading } = useAuth();
@@ -23,6 +25,7 @@ export const VerificationSuccess: React.FC<VerificationSuccessProps> = ({
   const [isVerified, setIsVerified] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isResending, setIsResending] = useState(false);
+  const [emailSent, setEmailSent] = useState(verificationSent);
 
   const handleVerify = async () => {
     if (verificationCode.length < 6) {
@@ -48,9 +51,11 @@ export const VerificationSuccess: React.FC<VerificationSuccessProps> = ({
     const success = await resendVerificationEmail(email);
 
     if (success) {
+      setEmailSent(true);
       toast.success('Verification email resent. Check your inbox.');
     } else {
-      setError('Failed to resend verification email. Please try again.');
+      setEmailSent(false);
+      setError('We could not send the verification email. Please confirm the SMTP settings, then resend the code.');
     }
 
     setIsResending(false);
@@ -110,10 +115,26 @@ export const VerificationSuccess: React.FC<VerificationSuccessProps> = ({
           </div>
           <CardTitle className="text-2xl">Verify Your Email</CardTitle>
           <CardDescription>
-            We sent a 6-digit verification code to <strong>{email}</strong>.
+            {emailSent ? (
+              <>
+                We sent a 6-digit verification code to <strong>{email}</strong>.
+              </>
+            ) : (
+              <>
+                Your account was created, but EduNexus could not send the verification code to <strong>{email}</strong>.
+              </>
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {!emailSent && (
+            <Alert>
+              <AlertDescription>
+                Please check the email/SMTP configuration, then use resend. The code entry box is ready as soon as the email arrives.
+              </AlertDescription>
+            </Alert>
+          )}
+
           {error && (
             <Alert variant="destructive">
               <AlertDescription>{error}</AlertDescription>

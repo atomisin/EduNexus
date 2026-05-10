@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 import { 
   EDUCATION_CATEGORIES, 
@@ -21,6 +22,7 @@ import {
 import VerificationSuccess from './VerificationSuccess';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
+import { LegalDocument, legalDocuments } from '@/components/legal/LegalDocuments';
 
 const months = [
   { value: '01', label: 'January' },
@@ -58,8 +60,10 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSuccess, o
   const [registrationComplete, setRegistrationComplete] = useState(false);
   const [registeredEmail, setRegisteredEmail] = useState('');
   const [verificationToken, setVerificationToken] = useState('');
+  const [verificationEmailSent, setVerificationEmailSent] = useState(true);
   const [formError, setFormError] = useState<string | null>(null);
   const [birthDateParts, setBirthDateParts] = useState({ day: '', month: '', year: '' });
+  const [legalDocument, setLegalDocument] = useState<'terms' | 'privacy' | null>(null);
 
   // Form fields
   const [formData, setFormData] = useState({
@@ -174,12 +178,11 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSuccess, o
         specialization: activeTab === 'teacher' ? formData.specialization : undefined,
       });
 
-      console.log('Registration result:', result);
-
       if (result.success) {
-        if (result.verificationSent) {
+        if (result.verificationRequired !== false) {
           setRegisteredEmail(result.email || formData.email);
           setVerificationToken('code-verification'); // Use code-based verification
+          setVerificationEmailSent(result.verificationSent !== false);
           setRegistrationComplete(true);
         } else {
           onSuccess?.();
@@ -201,14 +204,15 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSuccess, o
       <VerificationSuccess
         email={registeredEmail}
         verificationToken={verificationToken}
+        verificationSent={verificationEmailSent}
         onContinue={() => onSuccess?.()}
       />
     );
   }
 
   return (
-    <div className="min-h-0 bg-subtle flex items-center justify-center p-1 sm:p-4">
-      <Card className="relative w-full max-w-4xl max-h-[92vh] overflow-y-auto rounded-lg border border-border shadow-xl">
+    <div className="min-h-0 w-full overflow-x-hidden bg-subtle flex items-center justify-center p-1 sm:p-4">
+      <Card className="relative w-full max-w-4xl max-h-[92vh] overflow-x-hidden overflow-y-auto rounded-lg border border-border shadow-xl">
         <div className="h-1 bg-primary" />
         <CardHeader className="border-b bg-background px-4 py-5 sm:px-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -249,8 +253,8 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSuccess, o
             </div>
           </div>
         </CardHeader>
-        <CardContent className="px-4 py-6 sm:px-6">
-          <div className="w-full">
+        <CardContent className="min-w-0 px-4 py-6 sm:px-6">
+          <div className="w-full min-w-0">
             <form onSubmit={handleSubmit} className="space-y-5">
               <div className="rounded-lg border border-border bg-muted/50 px-4 py-3">
                 <div className="flex items-center justify-between gap-3">
@@ -341,12 +345,12 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSuccess, o
               </div>
 
               {activeTab === 'student' && (
-                <div className="space-y-4 rounded-lg border border-border bg-subtle/60 p-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
+                <div className="min-w-0 space-y-4 rounded-lg border border-border bg-subtle/60 p-3 sm:p-4">
+                  <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div className="min-w-0 space-y-2">
                       <Label htmlFor="gender">Gender</Label>
                       <Select value={formData.gender} onValueChange={(value) => handleInputChange('gender', value)}>
-                        <SelectTrigger className="h-12">
+                        <SelectTrigger className="h-12 w-full min-w-0">
                           <SelectValue placeholder="Select gender" />
                         </SelectTrigger>
                         <SelectContent>
@@ -355,11 +359,11 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSuccess, o
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="space-y-2">
+                    <div className="min-w-0 space-y-2">
                       <Label>Date of Birth</Label>
-                      <div className="grid grid-cols-[1fr_1.2fr_1fr] gap-2">
+                      <div className="grid min-w-0 grid-cols-1 gap-2 min-[360px]:grid-cols-3">
                         <Select value={birthDateParts.day} onValueChange={(value) => handleBirthDateChange('day', value)}>
-                          <SelectTrigger className="h-12">
+                          <SelectTrigger className="h-12 w-full min-w-0">
                             <SelectValue placeholder="Day" />
                           </SelectTrigger>
                           <SelectContent className="max-h-72">
@@ -367,15 +371,15 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSuccess, o
                           </SelectContent>
                         </Select>
                         <Select value={birthDateParts.month} onValueChange={(value) => handleBirthDateChange('month', value)}>
-                          <SelectTrigger className="h-12">
-                            <SelectValue placeholder="Month" />
+                          <SelectTrigger className="h-12 w-full min-w-0">
+                            <SelectValue placeholder="Month" className="truncate" />
                           </SelectTrigger>
                           <SelectContent className="max-h-72">
                             {months.map((month) => <SelectItem key={month.value} value={month.value}>{month.label}</SelectItem>)}
                           </SelectContent>
                         </Select>
                         <Select value={birthDateParts.year} onValueChange={(value) => handleBirthDateChange('year', value)}>
-                          <SelectTrigger className="h-12">
+                          <SelectTrigger className="h-12 w-full min-w-0">
                             <SelectValue placeholder="Year" />
                           </SelectTrigger>
                           <SelectContent className="max-h-72">
@@ -643,22 +647,34 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSuccess, o
                 </div>
               )}
 
-              <div className="flex items-start space-x-3 pt-4">
+              <div className="flex min-w-0 items-start gap-3 pt-4">
                 <Checkbox
                   id="terms"
                   checked={agreedToTerms}
                   onCheckedChange={(checked) => setAgreedToTerms(checked as boolean)}
+                  className="mt-0.5 shrink-0"
                 />
-                <Label htmlFor="terms" className="text-sm leading-relaxed cursor-pointer">
-                  I agree to the{' '}
-                  <a href="#" className="text-primary hover:underline font-medium">
+                <div className="min-w-0 text-sm leading-relaxed text-muted-foreground">
+                  <Label htmlFor="terms" className="cursor-pointer text-sm leading-relaxed">
+                    I agree to the
+                  </Label>{' '}
+                  <button
+                    type="button"
+                    onClick={() => setLegalDocument('terms')}
+                    className="font-semibold text-primary underline-offset-4 hover:underline focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  >
                     Terms of Service
-                  </a>{' '}
+                  </button>{' '}
                   and{' '}
-                  <a href="#" className="text-primary hover:underline font-medium">
+                  <button
+                    type="button"
+                    onClick={() => setLegalDocument('privacy')}
+                    className="font-semibold text-primary underline-offset-4 hover:underline focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  >
                     Privacy Policy
-                  </a>
-                </Label>
+                  </button>
+                  .
+                </div>
               </div>
 
               <Button
@@ -692,6 +708,25 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSuccess, o
           </div>
         </CardContent>
       </Card>
+      <Dialog open={legalDocument !== null} onOpenChange={(open) => !open && setLegalDocument(null)}>
+        <DialogContent className="max-h-[88vh] w-[calc(100vw-1rem)] max-w-2xl overflow-hidden p-0">
+          {legalDocument && (
+            <>
+              <DialogHeader className="border-b px-5 py-4 text-left">
+                <DialogTitle className="pr-8 text-xl leading-tight">
+                  {legalDocuments[legalDocument].title}
+                </DialogTitle>
+                <DialogDescription>
+                  Please read this before creating your EduNexus account.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="max-h-[68vh] overflow-y-auto overflow-x-hidden px-5 py-4">
+                <LegalDocument type={legalDocument} />
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

@@ -30,24 +30,26 @@ export const StudentHeader: React.FC<StudentHeaderProps> = ({
   avatarUrl,
 }) => {
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const firstName = (getFullName() || 'Student').split(' ')[0] || 'Student';
 
   return (
-    <header className="bg-background border-b border-border px-3 md:px-5 h-14 flex items-center justify-between shrink-0 gap-3">
-      <div className="min-w-0 flex items-center gap-3">
+    <header className="bg-background border-b border-border px-2 sm:px-4 md:px-5 min-h-16 flex items-center justify-between shrink-0 gap-1.5 sm:gap-3 overflow-visible">
+      <div className="min-w-0 flex items-center gap-1.5 sm:gap-3 flex-1">
         <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(!sidebarOpen)} className="w-8 h-8 shrink-0">
           <Menu className="w-4 h-4" />
         </Button>
-        <div className="min-w-0">
-          <h1 className="text-sm md:text-base font-semibold truncate leading-none">
-            Hello, {getFullName()}!
+        <div className="min-w-0 flex-1 max-w-[44vw] min-[390px]:max-w-[50vw] sm:max-w-[56vw] md:max-w-none overflow-visible">
+          <h1 className="text-[11px] min-[360px]:text-xs min-[430px]:text-sm sm:text-[15px] font-semibold truncate leading-6 py-0.5">
+            <span className="min-[390px]:hidden">Hi, {firstName}</span>
+            <span className="hidden min-[390px]:inline">Hello, {firstName}</span>
           </h1>
-          <p className="text-[11px] text-muted-foreground hidden md:block leading-none mt-1 truncate">
+          <p className="text-[11px] text-muted-foreground hidden md:block leading-4 truncate">
             {getAgeAppropriateGreeting(profile?.age)}
           </p>
         </div>
       </div>
 
-      <div className="shrink-0 flex items-center gap-2 md:gap-3">
+      <div className="shrink-0 flex items-center gap-1.5 sm:gap-2 md:gap-3">
         <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-amber-100 rounded-full border border-amber-200">
           <Zap className="w-4 h-4 text-amber-600" />
           <span className="text-sm font-semibold text-amber-700">{profile?.current_streak || 0} day streak</span>
@@ -57,7 +59,7 @@ export const StudentHeader: React.FC<StudentHeaderProps> = ({
         <div className="relative">
           <button
             onClick={() => setShowUserMenu(!showUserMenu)}
-            className="relative w-9 h-9 rounded-full overflow-hidden border border-border hover:border-primary transition-colors"
+            className="relative w-8 h-8 sm:w-9 sm:h-9 rounded-full overflow-hidden border border-border hover:border-primary transition-colors"
           >
             <Avatar className="w-full h-full">
               <AvatarImage src={avatarUrl || user?.avatar_url || profile?.avatar_url || user?.avatar} />

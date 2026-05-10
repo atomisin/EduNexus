@@ -107,7 +107,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, onRegisterClick
               <Input
                 id="email"
                 type="email"
-                placeholder="testss1@example.com"
+                placeholder="email@school.edu.ng"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required

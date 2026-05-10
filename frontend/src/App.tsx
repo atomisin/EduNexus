@@ -200,11 +200,11 @@ function App() {
             onClose={() => setShowSmartHelper(false)}
           />
 
-          <div className="fixed bottom-4 right-4 z-40 flex gap-2">
+          <div className="fixed bottom-[calc(1.25rem+env(safe-area-inset-bottom))] right-4 z-40 flex gap-2">
             <Button
               variant="default"
               size="icon"
-              className="h-12 w-12 rounded-full bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/30"
+              className="h-11 w-11 sm:h-12 sm:w-12 rounded-full bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/30"
               onClick={() => setShowSmartHelper(!showSmartHelper)}
             >
               <MessageSquare className="w-5 h-5" />

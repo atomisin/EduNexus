@@ -58,12 +58,14 @@ async def get_my_reports(
 
         # Get guardian email from student profile
         guardian_email = None
+        guardian_name = None
         res_prof = await db.execute(
             select(StudentProfile).filter(StudentProfile.user_id == r.student_id)
         )
         profile = res_prof.scalars().first()
         if profile:
             guardian_email = profile.guardian_email
+            guardian_name = profile.guardian_name
 
         results.append(
             {
@@ -71,6 +73,7 @@ async def get_my_reports(
                 "student_id": str(r.student_id),
                 "student_name": student_name,
                 "guardian_email": guardian_email,
+                "guardian_name": guardian_name,
                 "month": r.month,
                 "year": r.year,
                 "status": r.status,
@@ -127,18 +130,21 @@ async def get_report_details(
 
     # Get guardian email
     guardian_email = None
+    guardian_name = None
     res_prof = await db.execute(
         select(StudentProfile).filter(StudentProfile.user_id == report.student_id)
     )
     profile = res_prof.scalars().first()
     if profile:
         guardian_email = profile.guardian_email
+        guardian_name = profile.guardian_name
 
     return {
         "id": str(report.id),
         "student_id": str(report.student_id),
         "student_name": student.full_name if student else "Unknown",
         "guardian_email": guardian_email,
+        "guardian_name": guardian_name,
         "month": report.month,
         "year": report.year,
         "status": report.status,
@@ -183,12 +189,14 @@ async def approve_report(
         
         # Get guardian email from student profile
         guardian_email = None
+        guardian_name = None
         res_prof = await db.execute(
             select(StudentProfile).filter(StudentProfile.user_id == report.student_id)
         )
         profile = res_prof.scalars().first()
         if profile:
             guardian_email = profile.guardian_email
+            guardian_name = profile.guardian_name
             
         if guardian_email:
             teacher_name = current_user.full_name or "Teacher"
@@ -199,6 +207,7 @@ async def approve_report(
                 report,
                 student.full_name if student else "Student",
                 teacher_name,
+                guardian_name,
             )
             
             if email_success:
@@ -262,12 +271,14 @@ async def send_report(
 
     # Get guardian email from student profile
     guardian_email = None
+    guardian_name = None
     res_prof = await db.execute(
         select(StudentProfile).filter(StudentProfile.user_id == student.id)
     )
     profile = res_prof.scalars().first()
     if profile:
         guardian_email = profile.guardian_email
+        guardian_name = profile.guardian_name
 
     if not guardian_email:
         raise HTTPException(
@@ -284,6 +295,7 @@ async def send_report(
         report,
         student.full_name,
         teacher_name,
+        guardian_name,
     )
 
     if success:

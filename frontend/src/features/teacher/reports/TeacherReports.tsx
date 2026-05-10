@@ -26,6 +26,7 @@ interface Report {
   student_id: string;
   student_name: string;
   guardian_email: string | null;
+  guardian_name?: string | null;
   month: number;
   year: number;
   status: string;
@@ -163,10 +164,10 @@ export const TeacherReports: React.FC<TeacherReportsProps> = ({ onNavigate }) =>
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4 sm:space-y-5">
       <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
-          <h2 className="text-2xl font-semibold tracking-tight">Monthly Reports</h2>
+          <h2 className="text-xl sm:text-2xl font-semibold tracking-tight">Monthly Reports</h2>
           <p className="text-sm text-muted-foreground">Review student progress reports before sending them to parents.</p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -181,7 +182,7 @@ export const TeacherReports: React.FC<TeacherReportsProps> = ({ onNavigate }) =>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
         {/* Reports List */}
         <div className="lg:col-span-1 space-y-4">
           <Card className="rounded-lg border-border shadow-none">
@@ -235,11 +236,12 @@ export const TeacherReports: React.FC<TeacherReportsProps> = ({ onNavigate }) =>
                 <div className="flex flex-col items-end gap-2">
                   {getStatusBadge(selectedReport.status)}
                   <div className="text-xs text-slate-500">
-                    Parent: {selectedReport.guardian_email || 'Not provided'}
+                    Parent: {selectedReport.guardian_name || 'Name not provided'}
+                    {selectedReport.guardian_email ? ` • ${selectedReport.guardian_email}` : ' • Email not provided'}
                   </div>
                 </div>
               </CardHeader>
-              <CardContent className="p-6 space-y-6">
+              <CardContent className="p-4 sm:p-6 space-y-5 sm:space-y-6">
                 
                 {/* Visual indicator of what happened in background */}
                 <div className="bg-primary/5 dark:bg-primary/10 p-4 rounded-lg border border-primary/10 dark:border-primary/20">
@@ -253,31 +255,31 @@ export const TeacherReports: React.FC<TeacherReportsProps> = ({ onNavigate }) =>
 
                 {/* Session Stats Cards */}
                 {selectedReport.report_data && (
-                  <div className="grid grid-cols-3 gap-4 mb-6">
-                    <div className="bg-emerald-50 dark:bg-emerald-900/10 p-4 rounded-lg border border-emerald-200 dark:border-emerald-800">
+                  <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-6">
+                    <div className="bg-emerald-50 dark:bg-emerald-900/10 p-3 sm:p-4 rounded-lg border border-emerald-200 dark:border-emerald-800">
                       <div className="flex items-center gap-2 mb-1">
                         <Users className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                        <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium uppercase tracking-wide">Sessions</span>
+                        <span className="text-[10px] sm:text-xs text-emerald-600 dark:text-emerald-400 font-medium uppercase tracking-wide">Sessions</span>
                       </div>
-                      <div className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">
+                      <div className="text-xl sm:text-2xl font-bold text-emerald-700 dark:text-emerald-300">
                         {selectedReport.report_data.total_sessions}
                       </div>
                     </div>
-                    <div className="bg-muted/40 p-4 rounded-lg border border-border">
+                    <div className="bg-muted/40 p-3 sm:p-4 rounded-lg border border-border">
                       <div className="flex items-center gap-2 mb-1">
                         <Clock className="w-4 h-4 text-slate-600 dark:text-slate-400" />
-                        <span className="text-xs text-slate-600 dark:text-slate-400 font-medium uppercase tracking-wide">Total Minutes</span>
+                        <span className="text-[10px] sm:text-xs text-slate-600 dark:text-slate-400 font-medium uppercase tracking-wide">Minutes</span>
                       </div>
-                      <div className="text-2xl font-bold text-slate-700 dark:text-slate-200">
+                      <div className="text-xl sm:text-2xl font-bold text-slate-700 dark:text-slate-200">
                         {selectedReport.report_data.total_duration_minutes}
                       </div>
                     </div>
-                    <div className="bg-amber-50 dark:bg-amber-900/20 p-4 rounded-lg border border-amber-100 dark:border-amber-800">
+                    <div className="bg-amber-50 dark:bg-amber-900/20 p-3 sm:p-4 rounded-lg border border-amber-100 dark:border-amber-800">
                       <div className="flex items-center gap-2 mb-1">
                         <TrendingUp className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-                        <span className="text-xs text-amber-600 dark:text-amber-400 font-medium uppercase tracking-wide">Attendance</span>
+                        <span className="text-[10px] sm:text-xs text-amber-600 dark:text-amber-400 font-medium uppercase tracking-wide">Attendance</span>
                       </div>
-                      <div className="text-2xl font-bold text-amber-700 dark:text-amber-300">
+                      <div className="text-xl sm:text-2xl font-bold text-amber-700 dark:text-amber-300">
                         {selectedReport.report_data.avg_attendance}%
                       </div>
                     </div>

@@ -254,36 +254,36 @@ export const AIChatSection = ({
 
       {showAIPanel ? (
         <Card className="flex-1 flex flex-col shadow-none border-0 overflow-hidden bg-white dark:bg-slate-900 min-h-0">
-          <CardHeader className="h-14 py-0 border-b bg-white dark:bg-slate-900 z-10 shrink-0 flex items-center justify-center">
-            <div className="flex items-center justify-between w-full">
-              <div className="flex items-center gap-3">
-                <Avatar className="w-12 h-12 border-2 border-teal-100 dark:border-teal-900 shadow-none">
+          <CardHeader className="min-h-14 h-auto py-2 px-3 sm:px-6 border-b bg-white dark:bg-slate-900 z-10 shrink-0 flex items-center justify-center">
+            <div className="flex items-center justify-between w-full gap-2">
+              <div className="min-w-0 flex items-center gap-2 sm:gap-3">
+                <Avatar className="w-8 h-8 sm:w-12 sm:h-12 border-2 border-teal-100 dark:border-teal-900 shadow-none">
                   <AvatarImage src={avatarUrl || ''} />
                   <AvatarFallback className="bg-teal-50 text-teal-600">
-                    <Brain className="w-6 h-6" />
+                    <Brain className="w-5 h-5 sm:w-6 sm:h-6" />
                   </AvatarFallback>
                 </Avatar>
-                <div className="flex flex-col">
-                  <CardTitle className="text-xl font-black flex items-center gap-2 text-slate-800 dark:text-slate-100 leading-tight mb-0.5">
+                <div className="min-w-0 max-w-[4.8rem] min-[360px]:max-w-[6rem] sm:max-w-none flex flex-col">
+                  <CardTitle className="block text-sm sm:text-xl font-bold text-slate-800 dark:text-slate-100 leading-none mb-0.5 truncate whitespace-nowrap">
                     {getPersonaName(profile?.education_level)} {getPersonaEmoji(profile?.education_level)}
                   </CardTitle>
-                  <p className="text-sm font-medium text-muted-foreground flex items-center gap-1.5 leading-none">
+                  <p className="text-[10px] sm:text-sm font-medium text-muted-foreground flex items-center gap-1.5 leading-none truncate">
                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                    Online & Ready
+                    <span className="truncate">Online</span>
                   </p>
                 </div>
               </div>
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800/50 p-1 rounded-full border border-slate-100 dark:border-slate-700 mr-2">
+              <div className="shrink-0 flex items-center gap-1 sm:gap-3">
+                <div className="flex items-center gap-1 bg-slate-50 dark:bg-slate-800/50 p-1 rounded-full border border-slate-100 dark:border-slate-700 sm:mr-2">
                   <button
                     onClick={() => setTutorGender('female')}
-                    className={`px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-tight transition-all ${tutorGender === 'female' ? 'bg-white dark:bg-slate-700 shadow-none text-teal-600' : 'text-slate-400'}`}
+                    className={`px-2 sm:px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-tight transition-all ${tutorGender === 'female' ? 'bg-white dark:bg-slate-700 shadow-none text-teal-600' : 'text-slate-400'}`}
                   >
                     Female
                   </button>
                   <button
                     onClick={() => setTutorGender('male')}
-                    className={`px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-tight transition-all ${tutorGender === 'male' ? 'bg-white dark:bg-slate-700 shadow-none text-teal-600' : 'text-slate-400'}`}
+                    className={`px-2 sm:px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-tight transition-all ${tutorGender === 'male' ? 'bg-white dark:bg-slate-700 shadow-none text-teal-600' : 'text-slate-400'}`}
                   >
                     Male
                   </button>
@@ -293,8 +293,8 @@ export const AIChatSection = ({
                     Learning: {selectedTopic.name}
                   </Badge>
                 )}
-                <Button variant="ghost" size="sm" onClick={() => setShowAIPanel(false)} className="rounded-full h-8 hover:bg-slate-100 dark:hover:bg-slate-800">
-                  <X className="w-4 h-4 mr-1.5" /> Close
+                <Button variant="ghost" size="sm" onClick={() => setShowAIPanel(false)} className="rounded-full h-8 px-2 sm:px-3 hover:bg-slate-100 dark:hover:bg-slate-800">
+                  <X className="w-4 h-4 sm:mr-1.5" /> <span className="hidden sm:inline">Close</span>
                 </Button>
               </div>
             </div>
@@ -608,8 +608,8 @@ export const AIChatSection = ({
                     <div className="space-y-8 pb-10">
                       {aiChatMessages.map((msg, idx) => (
                         <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-4 duration-500`}>
-                          <div className={`flex gap-4 max-w-[90%] lg:max-w-[80%] ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
-                            <Avatar className="w-10 h-10 flex-shrink-0 shadow-none border-2 border-white dark:border-slate-800">
+                          <div className={`flex gap-2.5 sm:gap-4 max-w-[94%] sm:max-w-[90%] lg:max-w-[80%] ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
+                            <Avatar className="w-8 h-8 sm:w-10 sm:h-10 flex-shrink-0 shadow-none border-2 border-white dark:border-slate-800">
                               {msg.role === 'ai' ? (
                                 <AvatarImage src={`/avatars/ai_tutor_${tutorGender}.png`} className="object-cover" />
                               ) : (
@@ -620,11 +620,11 @@ export const AIChatSection = ({
                               </AvatarFallback>
                             </Avatar>
                             <div className="flex flex-col gap-3 max-w-full">
-                              <div className={`p-5 rounded-lg shadow-none ${msg.role === 'user'
+                              <div className={`p-4 sm:p-5 rounded-lg shadow-none ${msg.role === 'user'
                                 ? 'bg-primary text-primary-foreground rounded-tr-none'
                                 : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-100 dark:border-slate-700 rounded-tl-none ring-1 ring-black/5 dark:ring-white/5'
                                 }`}>
-                                <div className={`${isYoungLearner && msg.role === 'ai' ? 'text-xl font-bold font-display' : 'text-base'} leading-relaxed prose dark:prose-invert max-w-none break-words overflow-hidden`}>
+                                <div className={`${isYoungLearner && msg.role === 'ai' ? 'text-lg sm:text-xl font-bold font-display' : 'text-sm sm:text-base'} leading-relaxed prose dark:prose-invert max-w-none break-words overflow-hidden`}>
                                   {msg.role === 'ai' ? (
                                     <ReactMarkdown components={mathMarkdownComponents}>{normalizeAcademicTextForDisplay(msg.content)}</ReactMarkdown>
                                   ) : (
@@ -756,7 +756,7 @@ export const AIChatSection = ({
               </ScrollArea>
 
               {/* Chat Input & Floating Actions */}
-              <div className="p-3 px-6 border-t bg-white/50 dark:bg-slate-900/50 backdrop-blur-md z-10">
+              <div className="p-3 sm:px-6 border-t bg-white/50 dark:bg-slate-900/50 backdrop-blur-md z-10">
                 {selectedTopic && !aiLoading && aiChatMessages.length > 0 && !showMasteryTest && (
                   <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar mb-2">
                     {isYoungLearner ? (
@@ -838,7 +838,7 @@ export const AIChatSection = ({
                     placeholder={showMasteryTest ? "Mastery Test in Progress..." : (isCheckingUnderstanding ? "Type your explanation here..." : isCurrentTopicCompleted ? "Topic completed!" : `Ask about ${(typeof viewingSubtopic === 'object' ? (viewingSubtopic as any)?.name : viewingSubtopic) || activeSubtopic || "this topic"}...`)}
                     value={chatInput}
                     onChange={(e) => setChatInput(e.target.value)}
-                    className="rounded-lg py-6 pl-6 pr-32 bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 focus:ring-4 focus:ring-teal-500/10 transition-all shadow-none text-lg resize-none"
+                    className="rounded-lg py-5 sm:py-6 pl-4 sm:pl-6 pr-24 sm:pr-32 bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 focus:ring-4 focus:ring-teal-500/10 transition-all shadow-none text-base sm:text-lg resize-none"
                     autoFocus
                     disabled={showMasteryTest || aiLoading || isCurrentTopicCompleted}
                     onKeyDown={(e) => {
@@ -856,19 +856,19 @@ export const AIChatSection = ({
                         variant="outline"
                         disabled={!isSpeechRecognitionSupported || aiLoading}
                         title={isListening ? 'Stop voice input' : 'Start voice input'}
-                        className={`absolute right-16 top-1/2 -translate-y-1/2 w-12 h-12 rounded-lg shadow-none transition-all active:scale-95 disabled:opacity-50 ${isListening ? 'border-teal-500 bg-teal-50 text-teal-700 dark:bg-teal-950/30' : 'border-slate-200 bg-white text-slate-600 hover:bg-teal-50 hover:text-teal-700 dark:bg-slate-950 dark:border-slate-800'}`}
+                        className={`absolute right-14 sm:right-16 top-1/2 -translate-y-1/2 w-10 h-10 sm:w-12 sm:h-12 rounded-lg shadow-none transition-all active:scale-95 disabled:opacity-50 ${isListening ? 'border-teal-500 bg-teal-50 text-teal-700 dark:bg-teal-950/30' : 'border-slate-200 bg-white text-slate-600 hover:bg-teal-50 hover:text-teal-700 dark:bg-slate-950 dark:border-slate-800'}`}
                         onClick={toggleListening}
                       >
-                        {isListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+                        {isListening ? <MicOff className="w-4 h-4 sm:w-5 sm:h-5" /> : <Mic className="w-4 h-4 sm:w-5 sm:h-5" />}
                       </Button>
                       <Button
                         type="button"
                         size="icon"
                         disabled={aiLoading || !chatInput.trim()}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 w-12 h-12 rounded-lg bg-primary hover:bg-primary/90 shadow-none transition-all active:scale-95 disabled:opacity-50"
+                        className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-primary hover:bg-primary/90 shadow-none transition-all active:scale-95 disabled:opacity-50"
                         onClick={submitChatInput}
                       >
-                        <Brain className="w-7 h-7 text-white" />
+                        <Brain className="w-5 h-5 sm:w-7 sm:h-7 text-white" />
                       </Button>
                     </>
                   )}
@@ -886,7 +886,7 @@ export const AIChatSection = ({
                     )}
                   </div>
                 )}
-                <div className="flex items-center justify-center gap-6 mt-4 opacity-50">
+                <div className="hidden sm:flex items-center justify-center gap-6 mt-4 opacity-50">
                   <p className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">EduNexus Socratic Engineering v2.0</p>
                   <div className="h-1 w-1 bg-slate-400 rounded-full" />
                   <p className="text-[11px] font-black text-teal-600 uppercase tracking-[0.2em]">Mastery Mode Enabled</p>

@@ -232,14 +232,14 @@ const SessionContent = ({
             </div>
 
             {/* Interaction Bar */}
-            <div className="absolute bottom-40 left-1/2 -translate-x-1/2 flex items-center gap-3 bg-slate-900/80 backdrop-blur-md p-2 rounded-2xl border border-slate-700/50 shadow-2xl z-40">
+            <div className="absolute bottom-28 sm:bottom-36 left-1/2 -translate-x-1/2 flex max-w-[calc(100%-1rem)] items-center gap-2 bg-slate-900/85 backdrop-blur-md p-2 rounded-lg border border-slate-700/50 shadow-2xl z-40">
                 {!isTeacher && (
-                    <div className="flex items-center gap-1 pr-3 border-r border-slate-700">
+                    <div className="flex items-center gap-1 pr-2 border-r border-slate-700 overflow-x-auto">
                         {['👍', '❤️', '👏', '😮', '🤔', '🔥'].map(emoji => (
                             <button
                                 key={emoji}
                                 onClick={() => sendReaction(emoji)}
-                                className="w-10 h-10 flex items-center justify-center hover:bg-slate-800 rounded-lg transition-colors text-xl"
+                                className="h-8 px-2 flex items-center justify-center hover:bg-slate-800 rounded-md transition-colors text-xs font-semibold text-slate-100"
                             >
                                 {emoji}
                             </button>
@@ -251,7 +251,7 @@ const SessionContent = ({
                         size="sm"
                         variant="ghost"
                         onClick={triggerPopQuiz}
-                        className="rounded-xl gap-2 text-teal-400 hover:bg-teal-500/10"
+                        className="rounded-lg gap-2 text-teal-300 hover:bg-teal-500/10"
                     >
                         <Sparkles className="w-4 h-4" />
                         Trigger Pop Quiz
@@ -431,33 +431,33 @@ export const LiveSessionRoom = ({
     };
 
     return (
-        <div className={`flex flex-col flex-1 min-h-0 bg-slate-950 text-white overflow-hidden transition-all duration-300 relative ${isTheaterMode ? 'rounded-none border-0' : 'rounded-2xl border border-slate-800 shadow-2xl'}`}>
+        <div className={`flex flex-col flex-1 min-h-0 bg-slate-950 text-white overflow-hidden transition-all duration-300 relative ${isTheaterMode ? 'rounded-none border-0' : 'rounded-lg border border-slate-800 shadow-2xl'}`}>
             {/* Session Header */}
-            <div className="bg-slate-900 border-b border-slate-800 px-4 py-2 flex items-center justify-between z-20">
-                <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-xl bg-teal-500/20 flex items-center justify-center border border-teal-500/30">
+            <div className="bg-slate-900 border-b border-slate-800 px-3 py-2 sm:px-4 flex items-center justify-between gap-3 z-20">
+                <div className="min-w-0 flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-lg bg-teal-500/20 flex items-center justify-center border border-teal-500/30 shrink-0">
                         <Video className="w-5 h-5 text-teal-400" />
                     </div>
-                    <div>
-                        <h2 className="text-lg font-bold flex items-center gap-2">
-                            {title}
-                            <Badge variant="secondary" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20">
+                    <div className="min-w-0">
+                        <h2 className="text-sm sm:text-lg font-bold flex items-center gap-2 truncate">
+                            <span className="truncate">{title}</span>
+                            <Badge variant="secondary" className="shrink-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/20">
                                 Live
                             </Badge>
                         </h2>
-                        <p className="text-xs text-slate-400">Room: {roomName}</p>
+                        <p className="hidden sm:block text-xs text-slate-400 truncate">Room: {roomName}</p>
                     </div>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="shrink-0 flex items-center gap-1.5 sm:gap-2 overflow-x-auto">
                     <Button
                         variant="ghost"
                         size="sm"
                         onClick={onToggleTheater}
-                        className="rounded-xl gap-2 text-slate-400 hover:text-white"
+                        className="rounded-lg gap-2 text-slate-400 hover:text-white px-2 sm:px-3"
                         title={isTheaterMode ? "Exit Theater Mode" : "Theater Mode"}
                     >
                         {isTheaterMode ? <X className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-                        {isTheaterMode ? 'Exit' : 'Wide'}
+                        <span className="hidden sm:inline">{isTheaterMode ? 'Exit' : 'Wide'}</span>
                     </Button>
                     {isTeacher ? (
                         <>
@@ -466,21 +466,21 @@ export const LiveSessionRoom = ({
                                 size="sm"
                                 onClick={handleSmartPrep}
                                 disabled={aiLoading}
-                                className="rounded-xl gap-2 text-teal-400 hover:bg-teal-500/10 font-bold"
+                                className="rounded-lg gap-2 text-teal-300 hover:bg-teal-500/10 font-bold px-2 sm:px-3"
                                 title="Use AI to prepare outline, quiz, and assignment"
                             >
                                 <Sparkles className="w-4 h-4" />
-                                {aiLoading ? 'Preparing...' : 'Smart Assistant'}
+                                <span className="hidden sm:inline">{aiLoading ? 'Preparing...' : 'Smart Assistant'}</span>
                             </Button>
                             <Button
                                 variant="ghost"
                                 size="sm"
                                 onClick={handleGenerateNotes}
                                 disabled={aiLoading}
-                                className="rounded-xl gap-2 text-amber-400 hover:bg-amber-500/10"
+                                className="rounded-lg gap-2 text-amber-400 hover:bg-amber-500/10 px-2 sm:px-3"
                             >
                                 <FileText className="w-4 h-4" />
-                                {aiLoading ? '...' : 'Notes'}
+                                <span className="hidden sm:inline">{aiLoading ? '...' : 'Notes'}</span>
                             </Button>
                         </>
                     ) : (
@@ -488,29 +488,29 @@ export const LiveSessionRoom = ({
                             variant="ghost"
                             size="sm"
                             onClick={() => aiContent && setShowAiContent(true)}
-                            className="rounded-xl gap-2 text-amber-400 hover:bg-amber-500/10"
+                            className="rounded-lg gap-2 text-amber-400 hover:bg-amber-500/10 px-2 sm:px-3"
                         >
                             <BookOpen className="w-4 h-4" />
-                            {aiContent ? 'View Notes' : 'Notes'}
+                            <span className="hidden sm:inline">{aiContent ? 'View Notes' : 'Notes'}</span>
                         </Button>
                     )}
                     <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => setShowChat(!showChat)}
-                        className={`rounded-xl gap-2 ${showChat ? 'bg-teal-500/20 text-teal-400' : 'text-slate-400'}`}
+                        className={`rounded-lg gap-2 px-2 sm:px-3 ${showChat ? 'bg-teal-500/20 text-teal-400' : 'text-slate-400'}`}
                     >
                         <MessageSquare className="w-4 h-4" />
-                        Chat
+                        <span className="hidden sm:inline">Chat</span>
                     </Button>
                     <Button
                         variant={showVirtualBg ? 'default' : 'ghost'}
                         size="sm"
                         onClick={() => setShowVirtualBg(true)}
-                        className={`rounded-xl gap-2 ${showVirtualBg ? 'bg-primary text-primary-foreground' : 'text-primary hover:bg-primary/10'}`}
+                        className={`rounded-lg gap-2 px-2 sm:px-3 ${showVirtualBg ? 'bg-primary text-primary-foreground' : 'text-primary hover:bg-primary/10'}`}
                     >
                         <Camera className="w-4 h-4" />
-                        Background
+                        <span className="hidden sm:inline">Background</span>
                     </Button>
                     {isTeacher ? (
                         <>
@@ -518,10 +518,10 @@ export const LiveSessionRoom = ({
                                 variant="outline"
                                 size="sm"
                                 onClick={onDisconnect}
-                                className="rounded-xl gap-2 border-slate-700 text-slate-300 hover:bg-slate-800"
+                                className="rounded-lg gap-2 border-slate-700 text-slate-300 hover:bg-slate-800 px-2 sm:px-3"
                             >
                                 <LogOut className="w-4 h-4" />
-                                Leave
+                                <span className="hidden sm:inline">Leave</span>
                             </Button>
                             <Button
                                 variant="destructive"
@@ -538,10 +538,10 @@ export const LiveSessionRoom = ({
                                         }
                                     }
                                 }}
-                                className="rounded-xl gap-2"
+                                className="rounded-lg gap-2 px-2 sm:px-3"
                             >
                                 <X className="w-4 h-4" />
-                                End Session
+                                <span className="hidden sm:inline">End Session</span>
                             </Button>
                         </>
                     ) : (
@@ -549,10 +549,10 @@ export const LiveSessionRoom = ({
                             variant="destructive"
                             size="sm"
                             onClick={onDisconnect}
-                            className="rounded-xl gap-2"
+                            className="rounded-lg gap-2 px-2 sm:px-3"
                         >
                             <X className="w-4 h-4" />
-                            Leave
+                            <span className="hidden sm:inline">Leave</span>
                         </Button>
                     )}
                     {isTeacher && (
@@ -560,10 +560,10 @@ export const LiveSessionRoom = ({
                             variant={showWhiteboard ? 'default' : 'ghost'}
                             size="sm"
                             onClick={() => setShowWhiteboard(!showWhiteboard)}
-                            className={`rounded-xl gap-2 ${showWhiteboard ? 'bg-primary text-primary-foreground' : 'text-primary hover:bg-primary/10'}`}
+                            className={`rounded-lg gap-2 px-2 sm:px-3 ${showWhiteboard ? 'bg-primary text-primary-foreground' : 'text-primary hover:bg-primary/10'}`}
                         >
                             <PenTool className="w-4 h-4" />
-                            Whiteboard
+                            <span className="hidden sm:inline">Whiteboard</span>
                         </Button>
                     )}
                 </div>
@@ -572,7 +572,7 @@ export const LiveSessionRoom = ({
             {/* Main Content Area */}
             <div className="flex-1 flex min-h-0 overflow-hidden relative">
                 {/* Video Area */}
-                <div className={`relative bg-black min-h-0 ${showWhiteboard ? 'w-1/2' : 'flex-1'}`}>
+                <div className={`relative bg-black min-h-0 ${showWhiteboard ? 'hidden md:block md:w-1/2' : 'flex-1'}`}>
                     <VideoErrorBoundary>
                         <LiveKitRoom
                             video={true}
@@ -636,13 +636,13 @@ export const LiveSessionRoom = ({
                 </div>
 
                 {/* Whiteboard Area */}
-                <div className={`border-l border-slate-800 transition-all duration-300 ${showWhiteboard ? 'w-1/2 opacity-100' : 'w-0 opacity-0 overflow-hidden pointer-events-none'}`}>
+                <div className={`border-l border-slate-800 transition-all duration-300 ${showWhiteboard ? 'w-full md:w-1/2 opacity-100' : 'w-0 opacity-0 overflow-hidden pointer-events-none'}`}>
                     <Whiteboard room={room} isTeacher={isTeacher} visible={showWhiteboard} />
                 </div>
 
                 {/* AI Explanations / Notes Panel */}
                 {showAiContent && aiContent && (
-                    <div className="absolute inset-y-0 right-0 w-96 bg-slate-900 border-l border-slate-700 flex flex-col z-[60] animate-in slide-in-from-right duration-300 shadow-2xl overflow-hidden">
+                    <div className="absolute inset-y-0 right-0 w-full sm:w-96 bg-slate-900 border-l border-slate-700 flex flex-col z-[60] animate-in slide-in-from-right duration-300 shadow-2xl overflow-hidden">
                         <div className="p-4 border-b border-slate-700 flex items-center justify-between bg-slate-800">
                             <div className="flex items-center gap-2">
                                 <Sparkles className="w-4 h-4 text-amber-400" />
@@ -728,7 +728,7 @@ export const LiveSessionRoom = ({
 
                 {/* Metrics Sidebar (Teacher Only) */}
                 {isTeacher && showMetrics && (
-                    <div className="w-96 border-l border-slate-800 bg-slate-900/95 backdrop-blur-md flex flex-col animate-in slide-in-from-right duration-300 z-10">
+                    <div className="absolute inset-y-0 right-0 w-full sm:relative sm:w-96 border-l border-slate-800 bg-slate-900/95 backdrop-blur-md flex flex-col animate-in slide-in-from-right duration-300 z-10">
                         <div className="p-4 border-b border-slate-800 flex items-center justify-between">
                             <div className="flex items-center gap-2">
                                 <Sparkles className="w-4 h-4 text-teal-400" />
@@ -755,7 +755,7 @@ export const LiveSessionRoom = ({
 
                 {/* Sidebar Chat */}
                 {showChat && (
-                    <div className="w-80 border-l border-slate-800 bg-slate-900 flex flex-col animate-in slide-in-from-right duration-300 z-10">
+                    <div className="absolute inset-y-0 right-0 w-full sm:relative sm:w-80 border-l border-slate-800 bg-slate-900 flex flex-col animate-in slide-in-from-right duration-300 z-10">
                         <div className="p-4 border-b border-slate-800 flex items-center justify-between">
                             <h3 className="font-semibold text-sm">Session Chat</h3>
                             <Button variant="ghost" size="icon" onClick={() => setShowChat(false)} className="h-8 w-8 text-slate-500">

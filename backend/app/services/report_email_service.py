@@ -422,6 +422,7 @@ Lagos International School"""
         report: StudentReport,
         student_name: str,
         teacher_name: str = "Your Teacher",
+        guardian_name: str | None = None,
     ) -> str:
         """Generate comprehensive HTML content for monthly report with charts"""
 
@@ -557,7 +558,7 @@ Lagos International School"""
             trend_color = "#F59E0B"
             trend_emoji = "➡️"
 
-        # Generate matplotlib charts
+        # Generate lightweight email-safe SVG charts from structured chart data.
         charts = chart_generator.generate_comprehensive_report(
             data, month_name, report_year
         )
@@ -569,8 +570,96 @@ Lagos International School"""
         portal_chart = charts.get("portal_activity", "")
         session_perf_chart = charts.get("session_performance", "")
 
-        # Wrap charts in img tags
+        from html import escape as html_escape
+
+        def pct(value) -> str:
+            try:
+                return f"{float(value):.0f}%"
+            except (TypeError, ValueError):
+                return "-"
+
+        def _bar(value, color="#f59e0b", width=100) -> str:
+            try:
+                bar_value = max(0, min(width, float(value or 0)))
+            except (TypeError, ValueError):
+                bar_value = 0
+            return f"""
+                <div style="background:#e5e7eb;border-radius:999px;height:10px;overflow:hidden;width:100%;">
+                    <div style="background:{color};border-radius:999px;height:10px;width:{bar_value}%;"></div>
+                </div>
+            """
+
+        def simple_bar_chart(chart_points, label_key="date", value_key="value", color="#f59e0b") -> str:
+            if not chart_points:
+                return ""
+            rows = "".join(
+                f"""
+                <tr>
+                    <td style="padding:7px 10px 7px 0;color:#374151;font-size:12px;width:84px;white-space:nowrap;">{html_escape(str(item.get(label_key, "-")))}</td>
+                    <td style="padding:7px 10px;width:auto;">{_bar(item.get(value_key, 0), color)}</td>
+                    <td style="padding:7px 0;text-align:right;color:#111827;font-size:12px;font-weight:700;width:46px;">{pct(item.get(value_key, 0))}</td>
+                </tr>
+                """
+                for item in chart_points[:8]
+            )
+            return f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">{rows}</table>'
+
+        def grouped_quiz_chart(chart_points) -> str:
+            if not chart_points:
+                return ""
+            rows = "".join(
+                f"""
+                <tr>
+                    <td style="padding:9px 10px 9px 0;color:#374151;font-size:12px;width:84px;white-space:nowrap;">{html_escape(str(item.get("date", "-")))}</td>
+                    <td style="padding:9px 8px;">
+                        <div style="font-size:11px;color:#92400e;margin-bottom:4px;">Pre {pct(item.get("pre", 0))}</div>
+                        {_bar(item.get("pre", 0), "#d97706")}
+                    </td>
+                    <td style="padding:9px 0 9px 8px;">
+                        <div style="font-size:11px;color:#047857;margin-bottom:4px;">Post {pct(item.get("post", 0))}</div>
+                        {_bar(item.get("post", 0), "#10b981")}
+                    </td>
+                </tr>
+                """
+                for item in chart_points[:8]
+            )
+            return f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">{rows}</table>'
+
+        def chart_dict_to_email_html(chart_data) -> str:
+            if not isinstance(chart_data, dict):
+                return ""
+            chart_type = chart_data.get("type")
+            chart_points = chart_data.get("data", [])
+            if chart_type == "bar":
+                return simple_bar_chart(chart_points, "date", "value", "#f59e0b")
+            if chart_type == "line":
+                return simple_bar_chart(chart_points, "date", "value", "#10b981")
+            if chart_type == "grouped-bar":
+                return grouped_quiz_chart(chart_points)
+            if chart_type == "horizontal-bar":
+                bar_points = [
+                    {"date": item.get("category", ""), "value": item.get("value", 0)}
+                    for item in chart_points
+                ]
+                return simple_bar_chart(bar_points, "date", "value", "#111827")
+            if chart_type == "pie":
+                bar_points = [
+                    {"date": item.get("label") or item.get("name") or "Item", "value": item.get("value", 0)}
+                    for item in chart_points
+                ]
+                return simple_bar_chart(bar_points, "date", "value", "#0f766e")
+            if chart_type == "composed":
+                bar_points = [
+                    {"date": item.get("date", ""), "value": item.get("attendance", item.get("value", 0))}
+                    for item in chart_points
+                ]
+                return simple_bar_chart(bar_points, "date", "value", "#f59e0b")
+            return ""
+
+        # Data URI images are supported, but structured chart data becomes email-safe HTML.
         def wrap_in_img(chart_data: str) -> str:
+            if isinstance(chart_data, dict):
+                return chart_dict_to_email_html(chart_data)
             if chart_data and chart_data.startswith("data:image"):
                 return f'<img src="{chart_data}" style="max-width: 100%; height: auto; border-radius: 8px;" alt="Chart"/>'
             return chart_data
@@ -581,6 +670,8 @@ Lagos International School"""
         performance_chart_img = wrap_in_img(performance_chart)
         portal_chart_img = wrap_in_img(portal_chart)
         session_perf_chart_img = wrap_in_img(session_perf_chart)
+        participation_chart = ""
+        session_perf_chart = session_perf_chart_img
 
         # Get gender for pronouns
         student_gender = data.get("gender", "")
@@ -596,6 +687,294 @@ Lagos International School"""
             performance_trend,
             student_gender,
         )
+
+        def esc(value) -> str:
+            return html_escape(str(value if value is not None else ""))
+
+        def parent_salutation(name: str | None) -> str:
+            clean_name = " ".join(str(name or "").split())
+            if not clean_name:
+                return "Dear Parent/Guardian,"
+            lowered = clean_name.lower()
+            if lowered.startswith(("mr ", "mr. ", "mrs ", "mrs. ", "ms ", "ms. ", "dr ", "dr. ", "prof ", "prof. ")):
+                return f"Dear {clean_name},"
+            return f"Dear Mr(s). {clean_name},"
+
+        def number(value) -> str:
+            try:
+                return f"{int(float(value)):,}"
+            except (TypeError, ValueError):
+                return "-"
+
+        def section(title: str, body: str, subtitle: str = "") -> str:
+            subtitle_html = (
+                f'<p style="margin:4px 0 0;color:#64748b;font-size:13px;">{subtitle}</p>'
+                if subtitle
+                else ""
+            )
+            return f"""
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff;border:1px solid #e5e7eb;border-radius:8px;margin-top:16px;">
+                    <tr>
+                        <td style="padding:20px;">
+                            <h2 style="margin:0;color:#111827;font-size:18px;line-height:1.3;">{title}</h2>
+                            {subtitle_html}
+                            <div style="margin-top:16px;">{body}</div>
+                        </td>
+                    </tr>
+                </table>
+            """
+
+        def metric_card(label: str, value: str, note: str = "") -> str:
+            note_html = (
+                f'<div style="margin-top:3px;color:#64748b;font-size:11px;line-height:1.35;">{note}</div>'
+                if note
+                else ""
+            )
+            return f"""
+                <td width="25%" style="padding:6px;vertical-align:top;">
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:8px;background:#f8fafc;">
+                        <tr>
+                            <td style="padding:14px;text-align:center;">
+                                <div style="font-size:22px;font-weight:700;color:#111827;line-height:1.1;">{value}</div>
+                                <div style="margin-top:6px;font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:#64748b;">{label}</div>
+                                {note_html}
+                            </td>
+                        </tr>
+                    </table>
+                </td>
+            """
+
+        def chart_block(chart_html: str, empty_text: str) -> str:
+            if chart_html:
+                return f'<div style="overflow-x:auto;">{chart_html}</div>'
+            return f'<p style="margin:0;color:#64748b;font-size:13px;">{empty_text}</p>'
+
+        def list_items(items, tone: str) -> str:
+            if not items:
+                return '<p style="margin:0;color:#64748b;font-size:13px;">No items recorded for this report period.</p>'
+            border = "#16a34a" if tone == "positive" else "#d97706"
+            background = "#ecfdf5" if tone == "positive" else "#fffbeb"
+            return "".join(
+                f"""
+                <div style="margin-bottom:8px;padding:10px 12px;border-left:3px solid {border};background:{background};border-radius:6px;color:#1f2937;font-size:13px;line-height:1.45;">
+                    {esc(item)}
+                </div>
+                """
+                for item in items[:5]
+            )
+
+        quiz_rows = "".join(
+            f"""
+            <tr>
+                <td style="padding:10px;border-bottom:1px solid #e5e7eb;color:#111827;">{esc(qs.get("subject", "-"))}</td>
+                <td style="padding:10px;border-bottom:1px solid #e5e7eb;text-align:center;color:#374151;">{number(qs.get("sessions_count", 0))}</td>
+                <td style="padding:10px;border-bottom:1px solid #e5e7eb;text-align:center;color:#92400e;">{pct(qs.get("pre_score_avg", 0))}</td>
+                <td style="padding:10px;border-bottom:1px solid #e5e7eb;text-align:center;color:#047857;">{pct(qs.get("post_score_avg", 0))}</td>
+                <td style="padding:10px;border-bottom:1px solid #e5e7eb;text-align:center;color:#047857;">{pct(qs.get("improvement", 0))}</td>
+            </tr>
+            """
+            for qs in quiz_by_subject[:8]
+        )
+
+        quiz_table = (
+            f"""
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:13px;">
+                <tr style="background:#f8fafc;">
+                    <th style="padding:10px;text-align:left;border-bottom:1px solid #d1d5db;color:#374151;">Subject</th>
+                    <th style="padding:10px;text-align:center;border-bottom:1px solid #d1d5db;color:#374151;">Sessions</th>
+                    <th style="padding:10px;text-align:center;border-bottom:1px solid #d1d5db;color:#374151;">Pre</th>
+                    <th style="padding:10px;text-align:center;border-bottom:1px solid #d1d5db;color:#374151;">Post</th>
+                    <th style="padding:10px;text-align:center;border-bottom:1px solid #d1d5db;color:#374151;">Gain</th>
+                </tr>
+                {quiz_rows}
+            </table>
+            """
+            if quiz_rows
+            else '<p style="margin:0;color:#64748b;font-size:13px;">No subject quiz breakdown was recorded for this period.</p>'
+        )
+
+        portal_rows = [
+            ("AI Tutor sessions", number(ai_chat_count), f"{number(ai_chat_time)} minutes"),
+            ("Materials accessed", number(materials_count), f"{number(materials_time)} minutes"),
+            ("Portal quizzes", number(portal_quiz_count), f"Average {pct(portal_quiz_avg)}"),
+            ("Videos watched", number(videos_count), f"{number(videos_time)} minutes"),
+            ("Topic requests", number(topic_requests), "Learner-initiated support"),
+        ]
+        portal_table = "".join(
+            f"""
+            <tr>
+                <td style="padding:9px 0;border-bottom:1px solid #e5e7eb;color:#374151;">{label}</td>
+                <td style="padding:9px 0;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:700;color:#111827;">{value}</td>
+                <td style="padding:9px 0 9px 12px;border-bottom:1px solid #e5e7eb;color:#64748b;font-size:12px;">{note}</td>
+            </tr>
+            """
+            for label, value, note in portal_rows
+        )
+
+        session_rows = "".join(
+            f"""
+            <tr>
+                <td style="padding:9px;border-bottom:1px solid #e5e7eb;color:#374151;">{esc(s.get("date", "-"))}</td>
+                <td style="padding:9px;border-bottom:1px solid #e5e7eb;color:#111827;">{esc(s.get("subject", "-"))}</td>
+                <td style="padding:9px;border-bottom:1px solid #e5e7eb;text-align:center;color:#374151;">{number(s.get("duration", 0))}</td>
+                <td style="padding:9px;border-bottom:1px solid #e5e7eb;text-align:center;color:#047857;">{pct(s.get("attendance", 0))}</td>
+                <td style="padding:9px;border-bottom:1px solid #e5e7eb;text-align:center;color:#374151;">{esc(str(s.get("status", "-")).title())}</td>
+            </tr>
+            """
+            for s in sessions[:8]
+        )
+
+        session_table = (
+            f"""
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:13px;">
+                <tr style="background:#f8fafc;">
+                    <th style="padding:9px;text-align:left;border-bottom:1px solid #d1d5db;color:#374151;">Date</th>
+                    <th style="padding:9px;text-align:left;border-bottom:1px solid #d1d5db;color:#374151;">Subject</th>
+                    <th style="padding:9px;text-align:center;border-bottom:1px solid #d1d5db;color:#374151;">Min</th>
+                    <th style="padding:9px;text-align:center;border-bottom:1px solid #d1d5db;color:#374151;">Attendance</th>
+                    <th style="padding:9px;text-align:center;border-bottom:1px solid #d1d5db;color:#374151;">Status</th>
+                </tr>
+                {session_rows}
+            </table>
+            """
+            if session_rows
+            else '<p style="margin:0;color:#64748b;font-size:13px;">No session records were available for this period.</p>'
+        )
+
+        performance_width = max(0, min(100, int(float(quality_score or 0))))
+        summary_html = esc(plain_summary).replace("\n\n", "<br><br>").replace("\n", "<br>")
+
+        html = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>EduNexus Monthly Progress Report</title>
+        </head>
+        <body style="margin:0;padding:0;background:#ffffff;color:#111827;font-family:Arial,'Segoe UI',sans-serif;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff;">
+                <tr>
+                    <td align="center" style="padding:0;">
+                        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;max-width:none;background:#ffffff;border:0;border-radius:0;overflow:hidden;">
+                            <tr>
+                                <td style="padding:28px 30px;background:#111827;color:#ffffff;">
+                                    <div style="font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:#f59e0b;font-weight:700;">EduNexus</div>
+                                    <h1 style="margin:8px 0 4px;font-size:28px;line-height:1.2;color:#ffffff;">Monthly Progress Report</h1>
+                                    <p style="margin:0;color:#d1d5db;font-size:14px;">{month_name} {report_year} report for {esc(student_name)}</p>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding:24px 30px;background:#ffffff;">
+                                    <p style="margin:0 0 12px;color:#111827;font-size:15px;font-weight:700;">{esc(parent_salutation(guardian_name))}</p>
+                                    <p style="margin:0 0 12px;color:#374151;font-size:14px;line-height:1.7;">{esc(intro_paragraph)}</p>
+                                    <p style="margin:0;color:#374151;font-size:14px;line-height:1.7;">Please use this report to understand {esc(student_name)}'s progress, strengths, and next learning priorities.</p>
+
+                                    {section("Student Information", f'''
+                                        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:13px;border-collapse:collapse;">
+                                            <tr><td style="padding:7px 0;color:#64748b;">Student</td><td style="padding:7px 0;text-align:right;font-weight:700;color:#111827;">{esc(student_name)}</td></tr>
+                                            <tr><td style="padding:7px 0;color:#64748b;">Teacher</td><td style="padding:7px 0;text-align:right;color:#111827;">{esc(teacher_name)}</td></tr>
+                                            <tr><td style="padding:7px 0;color:#64748b;">Report date</td><td style="padding:7px 0;text-align:right;color:#111827;">{datetime.now(timezone.utc).strftime("%B %d, %Y")}</td></tr>
+                                            <tr><td style="padding:7px 0;color:#64748b;">Learning level</td><td style="padding:7px 0;text-align:right;color:#111827;">{esc(assimilation_level)}</td></tr>
+                                        </table>
+                                    ''')}
+
+                                    {section("Performance Snapshot", f'''
+                                        <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                                            <tr>
+                                                <td style="vertical-align:middle;width:140px;text-align:center;">
+                                                    <div style="font-size:48px;font-weight:800;line-height:1;color:#111827;">{number(quality_score)}</div>
+                                                    <div style="font-size:12px;color:#64748b;">out of 100</div>
+                                                </td>
+                                                <td style="vertical-align:middle;padding-left:20px;">
+                                                    <div style="font-size:14px;font-weight:700;color:{trend_color};">{esc(performance_trend)} trend</div>
+                                                    <div style="margin-top:10px;background:#e5e7eb;border-radius:999px;height:10px;overflow:hidden;">
+                                                        <div style="width:{performance_width}%;background:#f59e0b;height:10px;border-radius:999px;"></div>
+                                                    </div>
+                                                    <p style="margin:10px 0 0;color:#64748b;font-size:12px;">A combined view of attendance, participation, quiz movement, assignments, and platform engagement.</p>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    ''')}
+
+                                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:10px;">
+                                        <tr>
+                                            {metric_card("Sessions", number(total_sessions))}
+                                            {metric_card("Minutes", number(total_duration))}
+                                            {metric_card("Attendance", pct(avg_attendance))}
+                                            {metric_card("Participation", pct(avg_participation))}
+                                        </tr>
+                                    </table>
+
+                                    {section("Attendance Trend", chart_block(attendance_chart_img, "Attendance trend data was not available for this report."))}
+                                    {section("Participation Trend", chart_block(participation_chart_img, "Participation trend data was not available for this report."))}
+
+                                    {section("Quiz Performance", f'''
+                                        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:14px;">
+                                            <tr>
+                                                {metric_card("Pre-Quiz Avg", pct(avg_pre_score))}
+                                                {metric_card("Post-Quiz Avg", pct(avg_post_score))}
+                                                {metric_card("Improvement", pct(avg_improvement))}
+                                                {metric_card("Assignments", pct(assignment_completion), "completion")}
+                                            </tr>
+                                        </table>
+                                        {chart_block(quiz_chart_img, "Quiz comparison data was not available for this report.")}
+                                        <div style="margin-top:16px;">{quiz_table}</div>
+                                    ''')}
+
+                                    {section("Performance Breakdown", chart_block(performance_chart_img, "Performance breakdown data was not available for this report."))}
+
+                                    {section("Strengths", list_items(strengths, "positive"))}
+                                    {section("Areas for Improvement", list_items(areas_for_improvement, "warning"))}
+
+                                    {section("Student Portal Activity", f'''
+                                        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:14px;">
+                                            <tr>
+                                                {metric_card("Activities", number(portal_total_activities))}
+                                                {metric_card("Active Minutes", number(portal_time_spent))}
+                                                {metric_card("AI Chats", number(ai_chat_count))}
+                                                {metric_card("Quiz Avg", pct(portal_quiz_avg))}
+                                            </tr>
+                                        </table>
+                                        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:13px;border-collapse:collapse;">{portal_table}</table>
+                                        <div style="margin-top:16px;">{chart_block(portal_chart_img, "Portal activity chart data was not available for this report.")}</div>
+                                    ''', "Self-directed activity completed outside live lessons.")}
+
+                                    {section("Session Overview", f'''
+                                        {chart_block(session_perf_chart, "Session performance chart data was not available for this report.")}
+                                        <div style="margin-top:16px;">{session_table}</div>
+                                    ''')}
+
+                                    {section("Teacher Summary", f'''
+                                        <div style="font-size:14px;line-height:1.7;color:#374151;">{summary_html}</div>
+                                    ''')}
+
+                                    {section("Teacher's Note", f'''
+                                        <p style="margin:0;color:#374151;font-size:14px;line-height:1.7;">{esc(teacher_notes)}</p>
+                                    ''')}
+
+                                    <div style="margin-top:22px;padding-top:18px;border-top:1px solid #e5e7eb;text-align:center;color:#64748b;font-size:12px;line-height:1.6;">
+                                        <strong style="color:#111827;">EduNexus</strong><br>
+                                        This is an automated monthly progress report. Please contact the teaching team for follow-up questions.<br>
+                                        Copyright {datetime.now(timezone.utc).year} EduNexus. All rights reserved.
+                                    </div>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+            </table>
+        </body>
+        </html>
+        """
+        return {
+            "html": html,
+            "month_name": month_name,
+            "year": report_year,
+            "plain_summary": plain_summary,
+            "quiz_by_subject": quiz_by_subject,
+            "assignments_by_subject": assignments_by_subject,
+        }
 
         html = f"""
         <!DOCTYPE html>
@@ -1027,10 +1406,11 @@ Lagos International School"""
         report: StudentReport,
         student_name: str,
         teacher_name: str = "Your Teacher",
+        guardian_name: str | None = None,
     ) -> bool:
         """Send monthly report to parent email"""
         try:
-            result = await self.generate_report_html(report, student_name, teacher_name)
+            result = await self.generate_report_html(report, student_name, teacher_name, guardian_name)
             html_content = result["html"]
             month_name_val = result["month_name"]
             report_year = result["year"]

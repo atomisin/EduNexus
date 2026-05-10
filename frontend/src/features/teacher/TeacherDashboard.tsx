@@ -187,7 +187,7 @@ export const TeacherDashboard = ({ user, onLogout, onUserUpdate, onStartSession,
   ];
 
   return (
-    <div className="min-h-screen bg-subtle flex w-full relative overflow-x-hidden">
+    <div className="min-h-dvh bg-subtle flex w-full relative overflow-x-hidden">
       {sidebarOpen && (
         <button
           type="button"
@@ -197,7 +197,7 @@ export const TeacherDashboard = ({ user, onLogout, onUserUpdate, onStartSession,
         />
       )}
       <aside
-        className={`fixed lg:relative z-50 h-screen bg-background border-r border-border transition-all duration-300 flex flex-col shadow-2xl lg:shadow-none ${sidebarOpen ? 'w-64 lg:w-60 translate-x-0' : 'w-64 -translate-x-full lg:w-20 lg:translate-x-0'
+        className={`fixed lg:relative z-50 h-dvh bg-background border-r border-border transition-all duration-300 flex flex-col shadow-2xl lg:shadow-none ${sidebarOpen ? 'w-64 lg:w-60 translate-x-0' : 'w-64 -translate-x-full lg:w-20 lg:translate-x-0'
           }`}
       >
         <div className="h-16 px-4 flex items-center justify-start border-b border-border">
@@ -228,26 +228,26 @@ export const TeacherDashboard = ({ user, onLogout, onUserUpdate, onStartSession,
         {/* Sidebar Footer Removed */}
       </aside>
 
-      <main className="flex-1 flex flex-col min-h-screen min-w-0 overflow-hidden">
-        <header className="h-14 bg-background border-b border-border px-3 md:px-5 flex items-center justify-between text-foreground">
-          <div className="min-w-0 flex items-center gap-3">
-            <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(!sidebarOpen)} className="text-slate-500">
+      <main className="flex-1 flex flex-col min-h-dvh min-w-0 overflow-hidden">
+        <header className="min-h-16 bg-background border-b border-border px-2.5 sm:px-4 md:px-5 flex items-center justify-between text-foreground gap-2 overflow-visible">
+          <div className="min-w-0 flex items-center gap-2 sm:gap-3">
+            <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(!sidebarOpen)} className="h-8 w-8 shrink-0 text-slate-500">
               <Menu className="w-5 h-5" />
             </Button>
-            <div className="min-w-0">
-              <h1 className="text-base md:text-lg font-semibold truncate">
-                Welcome back, {user.first_name || user.name?.split(' ')[0] || 'Teacher'}!
+            <div className="min-w-0 max-w-[40vw] sm:max-w-none">
+              <h1 className="text-sm sm:text-base md:text-lg font-semibold truncate leading-6 py-0.5">
+                Hello, {user.first_name || user.name?.split(' ')[0] || 'Teacher'}
               </h1>
-              <p className="text-xs md:text-sm text-muted-foreground hidden sm:block">Here's what's happening today</p>
+              <p className="text-xs md:text-sm text-muted-foreground hidden sm:block leading-5">Here's what's happening today</p>
             </div>
           </div>
-          <div className="flex items-center gap-2 md:gap-4">
+          <div className="shrink-0 flex items-center gap-1.5 sm:gap-2 md:gap-4">
             <ThemeToggle />
             <NotificationBell />
             <div className="relative">
               <button
                 onClick={() => setShowUserMenu(!showUserMenu)}
-                className="relative w-10 h-10 rounded-full overflow-hidden border-2 border-white dark:border-slate-800 shadow-sm hover:border-primary transition-colors"
+                className="relative w-8 h-8 sm:w-10 sm:h-10 rounded-full overflow-hidden border-2 border-white dark:border-slate-800 shadow-sm hover:border-primary transition-colors"
               >
                 <Avatar className="w-full h-full">
                   <AvatarImage src={user.avatar || user.avatar_url} />
@@ -310,7 +310,7 @@ export const TeacherDashboard = ({ user, onLogout, onUserUpdate, onStartSession,
         </header>
 
         <ScrollArea className="flex-1">
-          <div className="w-full max-w-7xl mx-auto p-4 md:p-6">
+          <div className="w-full max-w-7xl mx-auto px-3 py-4 pb-24 sm:p-4 md:p-6 md:pb-8">
           {activeView === 'dashboard' && (
             <div className="space-y-5">
               <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
@@ -323,18 +323,18 @@ export const TeacherDashboard = ({ user, onLogout, onUserUpdate, onStartSession,
                 </Button>
               </div>
 
-              <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
                 {quickStats.map((stat: any, i: number) => (
                   <Card key={i} className="rounded-lg border border-border shadow-none overflow-hidden">
                     <div className="h-1 bg-primary" />
-                    <CardContent className="p-4">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{stat.label}</p>
-                          <p className="text-2xl font-semibold text-foreground mt-2">{stat.value}</p>
+                    <CardContent className="p-3 sm:p-4">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="min-w-0">
+                          <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wide text-muted-foreground truncate">{stat.label}</p>
+                          <p className="text-xl sm:text-2xl font-semibold text-foreground mt-1 sm:mt-2">{stat.value}</p>
                         </div>
-                        <div className="w-10 h-10 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center">
-                          <stat.icon className="w-5 h-5 text-primary" />
+                        <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center">
+                          <stat.icon className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
                         </div>
                       </div>
                     </CardContent>

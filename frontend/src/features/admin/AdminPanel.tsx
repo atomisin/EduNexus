@@ -183,70 +183,70 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   }
 
   return (
-    <div className="min-h-screen bg-subtle">
-      <header className="h-14 bg-background border-b border-border px-3 md:px-5">
+    <div className="min-h-dvh bg-subtle">
+      <header className="min-h-16 bg-background border-b border-border px-2.5 sm:px-4 md:px-5">
         <div className="h-full max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center">
+          <div className="min-w-0 flex items-center gap-2 sm:gap-3">
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
               <User className="w-4 h-4 text-primary" />
             </div>
-            <h1 className="text-lg font-semibold">Admin Panel</h1>
+            <h1 className="text-sm sm:text-lg font-semibold truncate leading-6 py-0.5">Admin Panel</h1>
           </div>
-          <div className="flex items-center gap-2 md:gap-3">
+          <div className="shrink-0 flex items-center gap-1.5 sm:gap-2 md:gap-3">
             <ThemeToggle />
             <NotificationBell />
             <Button variant="outline" className="hidden sm:inline-flex rounded-lg" onClick={onBack}>Back to Main</Button>
-            <Button variant="ghost" className="rounded-lg" onClick={logout}>Logout</Button>
+            <Button variant="ghost" className="h-9 rounded-lg px-2 sm:px-3" onClick={logout}>Logout</Button>
           </div>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto p-4 md:p-6">
-        <div className="mb-5">
-          <h2 className="text-2xl font-semibold tracking-tight">Platform Operations</h2>
+      <main className="max-w-7xl mx-auto px-3 py-4 pb-24 sm:p-4 md:p-6 md:pb-8">
+        <div className="mb-4 sm:mb-5">
+          <h2 className="text-xl sm:text-2xl font-semibold tracking-tight">Platform Operations</h2>
           <p className="text-sm text-muted-foreground">Review users, teacher licenses, curriculum materials, and AI cost trends.</p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4 mb-5 sm:mb-6">
           <Card className="rounded-lg border-border shadow-none">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Total Users</p>
-                  <p className="text-2xl font-semibold mt-2">{users.length}</p>
+            <CardContent className="p-3 sm:p-4">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wide text-muted-foreground truncate">Total Users</p>
+                  <p className="text-xl sm:text-2xl font-semibold mt-1 sm:mt-2">{users.length}</p>
                 </div>
                 <Users className="w-5 h-5 text-primary" />
               </div>
             </CardContent>
           </Card>
           <Card className="rounded-lg border-border shadow-none">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Pending Approval</p>
-                  <p className="text-2xl font-semibold text-amber-600 mt-2">{pendingUsers.length}</p>
+            <CardContent className="p-3 sm:p-4">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wide text-muted-foreground truncate">Pending</p>
+                  <p className="text-xl sm:text-2xl font-semibold text-amber-600 mt-1 sm:mt-2">{pendingUsers.length}</p>
                 </div>
                 <Clock className="w-5 h-5 text-amber-500" />
               </div>
             </CardContent>
           </Card>
           <Card className="rounded-lg border-border shadow-none">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Teachers</p>
-                  <p className="text-2xl font-semibold mt-2">{teacherCount}</p>
+            <CardContent className="p-3 sm:p-4">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wide text-muted-foreground truncate">Teachers</p>
+                  <p className="text-xl sm:text-2xl font-semibold mt-1 sm:mt-2">{teacherCount}</p>
                 </div>
                 <Briefcase className="w-5 h-5 text-primary" />
               </div>
             </CardContent>
           </Card>
           <Card className="rounded-lg border-border shadow-none">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Students</p>
-                  <p className="text-2xl font-semibold mt-2">{studentCount}</p>
+            <CardContent className="p-3 sm:p-4">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wide text-muted-foreground truncate">Students</p>
+                  <p className="text-xl sm:text-2xl font-semibold mt-1 sm:mt-2">{studentCount}</p>
                 </div>
                 <GraduationCap className="w-5 h-5 text-emerald-500" />
               </div>

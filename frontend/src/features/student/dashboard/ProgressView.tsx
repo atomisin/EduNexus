@@ -10,9 +10,9 @@ interface ProgressViewProps {
 }
 
 const metricCards = [
-  { key: 'time', label: 'Minutes Studied', icon: Trophy },
-  { key: 'quizzes', label: 'Quizzes Taken', icon: Activity },
-  { key: 'mastery', label: 'Average Mastery', icon: Star },
+  { key: 'time', label: 'Minutes Studied', shortLabel: 'Minutes', icon: Trophy },
+  { key: 'quizzes', label: 'Quizzes Taken', shortLabel: 'Quizzes', icon: Activity },
+  { key: 'mastery', label: 'Average Mastery', shortLabel: 'Mastery', icon: Star },
 ];
 
 export const ProgressView: React.FC<ProgressViewProps> = ({ progress, radarData }) => {
@@ -23,10 +23,10 @@ export const ProgressView: React.FC<ProgressViewProps> = ({ progress, radarData 
   };
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4 sm:space-y-5">
       <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
-          <h2 className="text-2xl font-semibold tracking-tight">Learning Analytics</h2>
+          <h2 className="text-xl sm:text-2xl font-semibold tracking-tight">Learning Analytics</h2>
           <p className="text-sm text-muted-foreground">Progress, mastery, and activity across EduNexus.</p>
         </div>
         <Badge variant="outline" className="w-fit bg-card border-border py-1.5 px-3 rounded-full flex gap-2 items-center">
@@ -35,17 +35,20 @@ export const ProgressView: React.FC<ProgressViewProps> = ({ progress, radarData 
         </Badge>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-3">
-        {metricCards.map(({ key, label, icon: Icon }) => (
+      <div className="grid grid-cols-3 gap-2 sm:gap-3">
+        {metricCards.map(({ key, label, shortLabel, icon: Icon }) => (
           <Card key={key} className="rounded-lg border-border shadow-none">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
-                  <p className="mt-2 text-3xl font-semibold tracking-tight">{values[key]}</p>
+            <CardContent className="p-3 sm:p-4">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                <div className="min-w-0">
+                  <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wide text-muted-foreground truncate">
+                    <span className="sm:hidden">{shortLabel}</span>
+                    <span className="hidden sm:inline">{label}</span>
+                  </p>
+                  <p className="mt-1 sm:mt-2 text-2xl sm:text-3xl font-semibold tracking-tight">{values[key]}</p>
                 </div>
-                <div className="w-10 h-10 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
-                  <Icon className="w-5 h-5" />
+                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
+                  <Icon className="w-4 h-4 sm:w-5 sm:h-5" />
                 </div>
               </div>
             </CardContent>

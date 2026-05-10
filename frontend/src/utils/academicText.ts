@@ -52,6 +52,21 @@ export const normalizeAcademicTextForDisplay = (text: string) => {
   );
 
   normalized = normalized.replace(
+    /(^|[\n:])\s*\[\s*([^\]\n]*(?:\\[a-zA-Z]+|[=^_]|[xX\u00d7]\s*10)[^\]\n]*)\s*\]/g,
+    (_match, prefix, expression) => `${prefix}${prefix === ':' ? ' ' : ''}\\[${expression.trim()}\\]`
+  );
+
+  normalized = normalized.replace(
+    /where\s*\n+([A-Za-z])\s*\n*=\s*\n*([A-Za-z])\s*[xX\u00d7]\s*10\s*\n*([A-Za-z])\s*\n+\1\s*=\s*\2\s*[xX\u00d7]\s*10\s*\n*\3/gi,
+    (_match, total, coefficient, exponent) => `where \\(${total} = ${coefficient} \\times 10^{${exponent}}\\)`
+  );
+
+  normalized = normalized.replace(
+    /(^|\n)([A-Za-z])\s*=\s*([A-Za-z])\s*[xX\u00d7]\s*10\s+([A-Za-z])(?=\n|$)/g,
+    (_match, prefix, total, coefficient, exponent) => `${prefix}\\(${total} = ${coefficient} \\times 10^{${exponent}}\\)`
+  );
+
+  normalized = normalized.replace(
     /(?<!\\)\blog(?:[\s\n]+|\u2044|\u2061)+([A-Za-z0-9]+)[\s\n]+([A-Za-z0-9]+)\s*=\s*(-?\d+(?:\.\d+)?)(?:[\s\n]+log[\s\n]*\1[\s\n]*\2\s*=\s*\3)?/g,
     (match, base, argument, value) => {
       if (!isLikelyLogBase(base) || !isLikelyLogArgument(argument)) return match;

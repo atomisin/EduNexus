@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { CheckCircle, Loader2, Mail, ArrowLeft, RefreshCw } from 'lucide-react';
+import { CheckCircle, Clock, Loader2, Mail, ArrowLeft, RefreshCw, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -35,7 +35,7 @@ export const VerificationSuccess: React.FC<VerificationSuccessProps> = ({
 
     if (success) {
       setIsVerified(true);
-      toast.success('Email verified successfully!');
+      toast.success('Email verified successfully');
     } else {
       setError('Invalid verification code. Please try again.');
     }
@@ -48,7 +48,7 @@ export const VerificationSuccess: React.FC<VerificationSuccessProps> = ({
     const success = await resendVerificationEmail(email);
 
     if (success) {
-      toast.success('Verification email resent! Check your inbox.');
+      toast.success('Verification email resent. Check your inbox.');
     } else {
       setError('Failed to resend verification email. Please try again.');
     }
@@ -58,29 +58,37 @@ export const VerificationSuccess: React.FC<VerificationSuccessProps> = ({
 
   if (isVerified) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-indigo-50 dark:from-slate-950 dark:to-indigo-950 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md">
+      <div className="min-h-screen bg-subtle flex items-center justify-center p-4">
+        <Card className="w-full max-w-md rounded-lg">
           <CardHeader className="text-center">
-            <div className="w-20 h-20 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-4">
+            <div className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-4">
               <CheckCircle className="w-10 h-10 text-emerald-600" />
             </div>
-            <CardTitle className="text-2xl">Email Verified!</CardTitle>
+            <CardTitle className="text-2xl">Email Verified</CardTitle>
             <CardDescription>
-              Your email has been successfully verified.
+              Your email is confirmed. The admin team will now complete the final account review.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4">
-              <div className="flex items-center gap-2 text-blue-700 dark:text-blue-400 mb-2">
-                <Mail className="w-5 h-5" />
-                <span className="font-medium">What happens next?</span>
+            <div className="bg-primary/5 border border-primary/20 rounded-lg p-4">
+              <div className="flex items-center gap-2 text-primary mb-3">
+                <ShieldCheck className="w-5 h-5" />
+                <span className="font-semibold">What happens next?</span>
               </div>
-              <ul className="space-y-2 text-sm text-blue-600 dark:text-blue-300">
-                <li>✓ Your email is now verified</li>
-                <li>⏳ Your account is pending admin approval</li>
-                <li>📧 You'll receive an email once approved</li>
-                <li>🔓 Then you can login and start using EduNexus</li>
-              </ul>
+              <div className="space-y-2 text-sm text-foreground/80">
+                <p className="flex gap-2">
+                  <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+                  Your email address has been verified.
+                </p>
+                <p className="flex gap-2">
+                  <Clock className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                  An administrator will review and activate your account.
+                </p>
+                <p className="flex gap-2">
+                  <Mail className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                  You will receive an email once access is approved.
+                </p>
+              </div>
             </div>
 
             <Button onClick={onContinue} className="w-full btn-primary">
@@ -93,16 +101,16 @@ export const VerificationSuccess: React.FC<VerificationSuccessProps> = ({
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-indigo-50 dark:from-slate-950 dark:to-indigo-950 flex items-center justify-center p-4">
-      <Card className="w-full max-w-md">
-        <div className="h-1.5 bg-gradient-to-r from-indigo-500 to-indigo-500" />
+    <div className="min-h-screen bg-subtle flex items-center justify-center p-4">
+      <Card className="w-full max-w-md rounded-lg">
+        <div className="h-1.5 bg-primary" />
         <CardHeader className="text-center">
-          <div className="w-20 h-20 rounded-full bg-gradient-to-br from-indigo-400 to-indigo-500 flex items-center justify-center mx-auto mb-4 shadow-lg">
-            <Mail className="w-10 h-10 text-white" />
+          <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
+            <Mail className="w-9 h-9 text-primary" />
           </div>
           <CardTitle className="text-2xl">Verify Your Email</CardTitle>
           <CardDescription>
-            We've sent a verification code to: <strong>{email}</strong>
+            We sent a 6-digit verification code to <strong>{email}</strong>.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -113,7 +121,7 @@ export const VerificationSuccess: React.FC<VerificationSuccessProps> = ({
           )}
 
           <div className="space-y-2">
-            <label className="text-sm font-medium">Enter Verification Code</label>
+            <label className="text-sm font-medium">Verification Code</label>
             <Input
               type="text"
               placeholder="Enter 6-digit code"
@@ -122,8 +130,8 @@ export const VerificationSuccess: React.FC<VerificationSuccessProps> = ({
               maxLength={6}
               className="text-center text-2xl tracking-widest h-14"
             />
-            <p className="text-xs text-slate-500">
-              Check your email inbox for the 6-digit verification code
+            <p className="text-xs text-muted-foreground">
+              After email verification, an administrator will review and activate the account.
             </p>
           </div>
 
@@ -146,7 +154,7 @@ export const VerificationSuccess: React.FC<VerificationSuccessProps> = ({
             <button
               onClick={handleResend}
               disabled={isResending}
-              className="text-sm text-indigo-600 hover:text-indigo-700 font-medium flex items-center justify-center gap-2 mx-auto disabled:opacity-50"
+              className="text-sm text-primary hover:underline font-medium flex items-center justify-center gap-2 mx-auto disabled:opacity-50"
             >
               {isResending ? (
                 <>

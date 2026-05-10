@@ -98,6 +98,12 @@ async def ensure_ai_topic_unlocked(
         else:
             statuses[topic.id] = "locked"
 
+    if statuses.get(topic_uuid) == "completed":
+        raise HTTPException(
+            status_code=409,
+            detail="This lesson is already completed. It is open for revision, but chat is disabled for mastered lessons.",
+        )
+
     if statuses.get(topic_uuid) != "locked":
         return
 

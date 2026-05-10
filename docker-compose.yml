@@ -39,16 +39,16 @@ services:
       - STORAGE_USE_SSL=false
       - STORAGE_PUBLIC_URL=http://localhost:8333
       # SMTP Configuration
-      - SMTP_HOST=smtp.resend.com
-      - SMTP_PORT=587
+      - SMTP_HOST=${SMTP_HOST:-smtp.gmail.com}
+      - SMTP_PORT=${SMTP_PORT:-587}
       - SMTP_USER=${SMTP_USER}
       - SMTP_PASSWORD=${SMTP_PASSWORD}
-      - SMTP_USE_TLS=true
-      - SMTP_FROM_EMAIL=noreply@edunexus.local
-      - SMTP_FROM_NAME=EduNexus
+      - SMTP_USE_TLS=${SMTP_USE_TLS:-true}
+      - SMTP_FROM_EMAIL=${SMTP_FROM_EMAIL:-atomdeatomic@gmail.com}
+      - SMTP_FROM_NAME=${SMTP_FROM_NAME:-EduNexus}
       # Email Verification
       - VERIFICATION_ENABLED=true
-      - VERIFICATION_BYPASS=true
+      - VERIFICATION_BYPASS=${VERIFICATION_BYPASS:-false}
       - VERIFICATION_TOKEN_EXPIRE_HOURS=24
       - APP_BASE_URL=http://localhost:3000
       # LiveKit Configuration
@@ -63,7 +63,7 @@ services:
       - YOUTUBE_API_KEY=${YOUTUBE_API_KEY}
       - ACCESS_TOKEN_EXPIRE_MINUTES=30
       - VERIFICATION_ENABLED=true
-      - VERIFICATION_BYPASS=true
+      - VERIFICATION_BYPASS=${VERIFICATION_BYPASS:-false}
     dns:
       - 8.8.8.8
       - 1.1.1.1

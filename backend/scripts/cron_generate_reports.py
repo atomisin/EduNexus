@@ -117,7 +117,8 @@ async def run_monthly_automation():
                             profile.guardian_email,
                             report,
                             student_name,
-                            "EduNexus AI Tutor"
+                            "EduNexus AI Tutor",
+                            profile.guardian_name,
                         )
                         
                         if success:

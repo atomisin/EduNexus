@@ -35,40 +35,40 @@ export const QuizView: React.FC<QuizViewProps> = ({
   profile
 }) => {
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold flex items-center gap-2">
-          <FileText className="w-6 h-6" /> Practice Quiz Center
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h2 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
+          <FileText className="w-5 h-5 sm:w-6 sm:h-6" /> Practice Quiz Center
         </h2>
         {selectedTopic && (
           <Button
             onClick={() => handleAIContinue(`Give me a 5-question quiz on ${selectedTopic.name}`)}
-            className="bg-teal-600 hover:bg-teal-700 gap-2"
+            className="w-full sm:w-auto bg-teal-600 hover:bg-teal-700 gap-2"
           >
-            <Sparkles className="w-4 h-4" /> Generate Quiz for {selectedTopic.name}
+            <Sparkles className="w-4 h-4" /> <span className="truncate">Generate Quiz for {selectedTopic.name}</span>
           </Button>
         )}
       </div>
 
-      <div className="grid lg:grid-cols-3 gap-6">
-        <Card className="lg:col-span-2">
-          <CardHeader>
+      <div className="grid lg:grid-cols-3 gap-4 sm:gap-6">
+        <Card className="lg:col-span-2 rounded-lg">
+          <CardHeader className="p-4 sm:p-6">
             <CardTitle className="text-lg">Select a Topic to Test</CardTitle>
             <p className="text-sm text-muted-foreground">Pick a subject and topic you want to be quizzed on. Our AI will generate unique questions for you.</p>
           </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="space-y-4">
+          <CardContent className="space-y-5 p-4 pt-0 sm:p-6 sm:pt-0">
+            <div className="space-y-3 sm:space-y-4">
               <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">1. Choose Subject</label>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 min-[380px]:grid-cols-2 sm:grid-cols-3 gap-2">
                 {subjects.filter(s => enrolledSubjects.includes(s.id)).map(subject => (
                   <button
                     key={subject.id}
-                    className={`p-3 rounded-xl border-2 transition-all text-sm font-medium flex items-center gap-2 ${selectedSubject?.id === subject.id
+                    className={`min-w-0 p-2.5 rounded-lg border transition-all text-sm font-medium flex items-center gap-2 text-left ${selectedSubject?.id === subject.id
                       ? 'border-teal-500 bg-teal-50 text-teal-700 dark:bg-teal-950/30'
                       : 'border-slate-100 hover:border-slate-200 dark:border-slate-800'}`}
                     onClick={() => handleSubjectSelect(subject)}
                   >
-                    <BookMarked className="w-4 h-4" /> {subject.name}
+                    <BookMarked className="w-4 h-4 shrink-0" /> <span className="min-w-0 line-clamp-2">{subject.name}</span>
                   </button>
                 ))}
               </div>
@@ -81,7 +81,7 @@ export const QuizView: React.FC<QuizViewProps> = ({
                   {topics.map(topic => (
                     <button
                       key={topic.id}
-                      className={`p-3 rounded-xl border transition-all text-sm text-left px-4 ${selectedTopic?.id === topic.id
+                      className={`p-3 rounded-lg border transition-all text-sm text-left ${selectedTopic?.id === topic.id
                         ? 'bg-teal-600 text-white border-teal-100 shadow-md'
                         : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-teal-400'}`}
                       onClick={() => setSelectedTopic(topic)}
@@ -96,7 +96,7 @@ export const QuizView: React.FC<QuizViewProps> = ({
             {selectedTopic && (
               <div className="pt-4 animate-in zoom-in-95">
                 <Button
-                  className="w-full py-6 text-lg rounded-lg bg-primary hover:bg-primary/90 shadow-none shadow-teal-200 dark:shadow-none font-bold"
+                  className="w-full py-5 sm:py-6 text-base sm:text-lg rounded-lg bg-primary hover:bg-primary/90 shadow-none shadow-teal-200 dark:shadow-none font-bold"
                   onClick={() => {
                     if (selectedTopic) {
                       setSelectedTopic(selectedTopic);
@@ -122,7 +122,7 @@ export const QuizView: React.FC<QuizViewProps> = ({
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="rounded-lg">
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2"><Trophy className="w-5 h-5 text-amber-500" /> Recent Results</CardTitle>
           </CardHeader>

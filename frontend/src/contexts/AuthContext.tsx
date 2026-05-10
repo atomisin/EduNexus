@@ -319,7 +319,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (response && response.user_id) {
         return {
           success: true,
-          verificationSent: response.verification_sent || false,
+          verificationSent: response.verification_sent || response.email_verification_sent || false,
           email: userData.email,
         };
       }

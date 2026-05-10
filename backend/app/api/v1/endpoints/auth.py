@@ -333,6 +333,7 @@ async def register_teacher(
         "email": db_user.email,
         "role": "teacher",
         "verification_status": "pending",
+        "verification_sent": email_sent,
         "email_verification_sent": email_sent,
     }
 

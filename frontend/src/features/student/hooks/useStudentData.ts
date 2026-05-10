@@ -5,6 +5,18 @@ import { studentAPI, sessionAPI, subjectsAPI,
 } from '@/services/api';
 import type { StudentProfile, Session, Subject, ProgressData } from '../types';
 
+const normalizeSubjectName = (name?: string) => (name || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+
+const subjectScore = (subject: Subject, profile?: StudentProfile | null) => {
+  const grade = (profile?.grade_level || profile?.education_level || '').toString().replace(/[^a-z0-9]/gi, '').toUpperCase();
+  const gradeLevels = (subject as any).grade_levels || [];
+  let score = 0;
+  if (grade && gradeLevels.some((level: string) => String(level).replace(/[^a-z0-9]/gi, '').toUpperCase() === grade)) score += 100;
+  if (profile?.education_level && (subject as any).education_level === profile.education_level) score += 50;
+  if ((subject as any).topic_count) score += Math.min((subject as any).topic_count, 20);
+  return score;
+};
+
 export const useStudentData = (user?: any) => {
   const queryClient = useQueryClient();
 
@@ -93,10 +105,20 @@ export const useStudentData = (user?: any) => {
   const [isLoadingManual, setIsLoadingManual] = useState(false);
   const [errorManual, setErrorManual] = useState<string | null>(null);
 
-  // Derived subjects - show all subjects without education_level filtering
+  // Derived subjects - keep one best class-level subject per name.
   const subjects = useMemo(() => {
-    return allSubjectsRaw || [];
-  }, [allSubjectsRaw]);
+    const best = new Map<string, Subject>();
+    const bestScore = new Map<string, number>();
+    for (const subject of allSubjectsRaw || []) {
+      const key = normalizeSubjectName(subject.name);
+      const score = subjectScore(subject, profile);
+      if (!best.has(key) || score > (bestScore.get(key) ?? -1)) {
+        best.set(key, subject);
+        bestScore.set(key, score);
+      }
+    }
+    return Array.from(best.values());
+  }, [allSubjectsRaw, profile]);
 
 
 

@@ -16,43 +16,43 @@ export const StatsCards = ({ profile, energy }: StatsCardsProps) => {
   const displayEnergy = energy ?? profile?.brain_power ?? 100;
   
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-      <Card className="bg-gradient-to-br from-teal-500 to-emerald-600 text-white border-0 shadow-lg">
-        <CardContent className="p-4 flex flex-col items-center justify-center text-center">
-          <Trophy className="w-8 h-8 opacity-80 mb-2" />
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
+      <Card className="rounded-lg bg-gradient-to-br from-teal-500 to-emerald-600 text-white border-0 shadow-sm">
+        <CardContent className="min-h-[110px] p-3 sm:p-4 flex flex-col items-center justify-center text-center">
+          <Trophy className="w-6 h-6 sm:w-8 sm:h-8 opacity-80 mb-2" />
           <div>
-            <p className="text-2xl font-bold">{profile?.xp || 0}</p>
-            <p className="text-xs opacity-80 uppercase tracking-wider font-bold">Total XP</p>
+            <p className="text-xl sm:text-2xl font-bold">{profile?.xp || 0}</p>
+            <p className="text-[10px] sm:text-xs opacity-80 uppercase tracking-wider font-bold">Total XP</p>
           </div>
         </CardContent>
       </Card>
-      <Card className="bg-white dark:bg-slate-900 border-slate-100 shadow-sm">
-        <CardContent className="p-4 flex flex-col items-center justify-center text-center">
-          <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center mb-2">
-            <Star className="w-6 h-6 text-amber-500" fill="currentColor" />
+      <Card className="rounded-lg bg-white dark:bg-slate-900 border-slate-100 shadow-sm">
+        <CardContent className="min-h-[110px] p-3 sm:p-4 flex flex-col items-center justify-center text-center">
+          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-amber-100 flex items-center justify-center mb-2">
+            <Star className="w-5 h-5 sm:w-6 sm:h-6 text-amber-500" fill="currentColor" />
           </div>
           <div>
-            <p className="text-2xl font-bold">Level {profile?.level || 1}</p>
-            <p className="text-xs text-muted-foreground uppercase tracking-wider font-bold">Current Rank</p>
+            <p className="text-xl sm:text-2xl font-bold">Level {profile?.level || 1}</p>
+            <p className="text-[10px] sm:text-xs text-muted-foreground uppercase tracking-wider font-bold">Current Rank</p>
           </div>
         </CardContent>
       </Card>
-      <Card className="bg-white dark:bg-slate-900 border-slate-100 shadow-sm">
-        <CardContent className="p-4 flex flex-col items-center justify-center text-center">
-          <div className="w-10 h-10 rounded-full bg-rose-100 flex items-center justify-center mb-2">
-            <Zap className="w-6 h-6 text-rose-500" fill="currentColor" />
+      <Card className="rounded-lg bg-white dark:bg-slate-900 border-slate-100 shadow-sm">
+        <CardContent className="min-h-[110px] p-3 sm:p-4 flex flex-col items-center justify-center text-center">
+          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-rose-100 flex items-center justify-center mb-2">
+            <Zap className="w-5 h-5 sm:w-6 sm:h-6 text-rose-500" fill="currentColor" />
           </div>
           <div>
-            <p className="text-2xl font-bold">{profile?.current_streak || 0}</p>
-            <p className="text-xs text-muted-foreground uppercase tracking-wider font-bold">Day Streak</p>
+            <p className="text-xl sm:text-2xl font-bold">{profile?.current_streak || 0}</p>
+            <p className="text-[10px] sm:text-xs text-muted-foreground uppercase tracking-wider font-bold">Day Streak</p>
           </div>
         </CardContent>
       </Card>
-      <Card className="bg-white dark:bg-slate-900 border-slate-100 shadow-sm">
-        <CardContent className="p-4">
+      <Card className="rounded-lg bg-white dark:bg-slate-900 border-slate-100 shadow-sm">
+        <CardContent className="min-h-[110px] p-3 sm:p-4">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-3xl font-bold text-primary">{displayEnergy}%</span>
-            <Brain className="w-8 h-8 text-primary opacity-20" />
+            <span className="text-2xl sm:text-3xl font-bold text-primary">{displayEnergy}%</span>
+            <Brain className="w-7 h-7 sm:w-8 sm:h-8 text-primary opacity-20" />
           </div>
           <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
             <div
@@ -66,7 +66,7 @@ export const StatsCards = ({ profile, energy }: StatsCardsProps) => {
               Recharges in {Math.floor(profile.seconds_until_recharge / 3600)}h {Math.floor((profile.seconds_until_recharge % 3600) / 60)}m
             </p>
           )}
-          <p className="text-xs text-muted-foreground uppercase tracking-wider font-bold mt-2">Brain Power</p>
+          <p className="text-[10px] sm:text-xs text-muted-foreground uppercase tracking-wider font-bold mt-2">Brain Power</p>
         </CardContent>
       </Card>
     </div>

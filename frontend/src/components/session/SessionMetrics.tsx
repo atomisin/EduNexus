@@ -62,39 +62,39 @@ export const SessionMetrics: React.FC<SessionMetricsProps> = ({
     }, [studentPresence]);
 
     return (
-        <div className={`space-y-6 ${className}`}>
+        <div className={`space-y-4 ${className}`}>
             {/* Quick Stats */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-3 gap-2">
                 <Card className="bg-slate-900/50 border-slate-800">
-                    <CardContent className="p-4 flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-lg bg-indigo-500/20 flex items-center justify-center">
-                            <Users className="w-5 h-5 text-indigo-400" />
+                    <CardContent className="p-3 flex flex-col gap-2">
+                        <div className="w-8 h-8 rounded-lg bg-teal-500/15 flex items-center justify-center">
+                            <Users className="w-4 h-4 text-teal-300" />
                         </div>
                         <div>
-                            <p className="text-xs text-slate-400">Attendance</p>
-                            <p className="text-xl font-bold">{stats.activeStudents}/{stats.totalStudents}</p>
+                            <p className="text-[10px] uppercase tracking-wide text-slate-400">Attendance</p>
+                            <p className="text-lg font-bold">{stats.activeStudents}/{stats.totalStudents}</p>
                         </div>
                     </CardContent>
                 </Card>
                 <Card className="bg-slate-900/50 border-slate-800">
-                    <CardContent className="p-4 flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
-                            <Activity className="w-5 h-5 text-emerald-400" />
+                    <CardContent className="p-3 flex flex-col gap-2">
+                        <div className="w-8 h-8 rounded-lg bg-emerald-500/15 flex items-center justify-center">
+                            <Activity className="w-4 h-4 text-emerald-300" />
                         </div>
                         <div>
-                            <p className="text-xs text-slate-400">Avg. Attention</p>
-                            <p className="text-xl font-bold">{stats.avgAttention}%</p>
+                            <p className="text-[10px] uppercase tracking-wide text-slate-400">Attention</p>
+                            <p className="text-lg font-bold">{stats.avgAttention}%</p>
                         </div>
                     </CardContent>
                 </Card>
                 <Card className="bg-slate-900/50 border-slate-800">
-                    <CardContent className="p-4 flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
-                            <Sparkles className="w-5 h-5 text-emerald-400" />
+                    <CardContent className="p-3 flex flex-col gap-2">
+                        <div className="w-8 h-8 rounded-lg bg-amber-500/15 flex items-center justify-center">
+                            <Sparkles className="w-4 h-4 text-amber-300" />
                         </div>
                         <div>
-                            <p className="text-xs text-slate-400">Quiz Success</p>
-                            <p className="text-xl font-bold">
+                            <p className="text-[10px] uppercase tracking-wide text-slate-400">Quiz</p>
+                            <p className="text-lg font-bold truncate">
                                 {quizResults ? `${quizResults.correct}/${quizResults.total}` : 'No Quiz'}
                             </p>
                         </div>
@@ -128,7 +128,7 @@ export const SessionMetrics: React.FC<SessionMetricsProps> = ({
                 <Card className="bg-slate-900/50 border-slate-800">
                     <CardHeader className="pb-2">
                         <CardTitle className="text-sm font-medium flex items-center gap-2">
-                            <Activity className="w-4 h-4 text-indigo-400" />
+                            <Activity className="w-4 h-4 text-teal-300" />
                             Engagement Timeline
                         </CardTitle>
                     </CardHeader>
@@ -157,7 +157,7 @@ export const SessionMetrics: React.FC<SessionMetricsProps> = ({
                                 <Line
                                     type="monotone"
                                     dataKey="attention"
-                                    stroke="#6366f1"
+                                    stroke="#14b8a6"
                                     strokeWidth={3}
                                     dot={false}
                                     animationDuration={1000}

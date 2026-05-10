@@ -218,7 +218,7 @@ export const SimpleRegistrationForm: React.FC<SimpleRegistrationFormProps> = ({
               type="email"
               value={formData.email}
               onChange={(e) => handleInputChange('email', e.target.value)}
-              placeholder="you@example.com"
+              placeholder="email@school.edu.ng"
               required
             />
           </div>

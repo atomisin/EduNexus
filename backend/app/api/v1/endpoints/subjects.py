@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from typing import Optional, List
 import uuid
 from datetime import datetime, timezone
+import re
 
 from app.db.database import get_async_db
 from app.api.v1.endpoints.auth import get_current_user
@@ -97,6 +98,65 @@ EDUCATION_LEVEL_MAP = {
     "junior_secondary": ["secondary"],
     "senior_secondary": ["secondary"],
 }
+
+
+def _normalize_subject_name(name: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", (name or "").lower())
+
+
+def _subject_match_score(
+    subject: Subject,
+    mapped_grade: Optional[str] = None,
+    education_level: Optional[str] = None,
+    curriculum_type: Optional[str] = None,
+) -> int:
+    """Prefer the subject that most closely matches the learner's exact class."""
+    score = 0
+    grade_levels = subject.grade_levels or []
+    if mapped_grade and mapped_grade in grade_levels:
+        score += 100
+    elif mapped_grade and not grade_levels:
+        score += 10
+
+    if education_level and subject.education_level == education_level:
+        score += 50
+    elif education_level and subject.education_level in EDUCATION_LEVEL_MAP.get(education_level, []):
+        score += 20
+
+    if curriculum_type and subject.curriculum_type == curriculum_type:
+        score += 30
+
+    if getattr(subject, "topics", None):
+        score += min(len(subject.topics), 20)
+
+    if subject.created_by:
+        score += 5
+
+    return score
+
+
+def _dedupe_subjects_for_catalog(
+    subjects: List[Subject],
+    mapped_grade: Optional[str] = None,
+    education_level: Optional[str] = None,
+    curriculum_type: Optional[str] = None,
+) -> List[Subject]:
+    best_by_name: dict[str, Subject] = {}
+    best_score_by_name: dict[str, int] = {}
+
+    for subject in subjects:
+        key = _normalize_subject_name(subject.name)
+        if not key:
+            continue
+        score = _subject_match_score(subject, mapped_grade, education_level, curriculum_type)
+        if key not in best_by_name or score > best_score_by_name[key]:
+            best_by_name[key] = subject
+            best_score_by_name[key] = score
+
+    return sorted(
+        best_by_name.values(),
+        key=lambda s: ((s.name or "").lower(), min(s.grade_levels or ["ZZZ"])),
+    )
 
 
 async def generate_curriculum_for_subject(
@@ -341,9 +401,16 @@ async def get_subjects(
     if search:
         query = query.filter(Subject.name.ilike(f"%{search}%"))
 
+    mapped_grade_for_dedupe = map_grade_level(grade_level) if grade_level else None
+
     # Execute
     res_exec = await db.execute(query)
-    subjects = res_exec.scalars().all()
+    subjects = _dedupe_subjects_for_catalog(
+        res_exec.scalars().all(),
+        mapped_grade=mapped_grade_for_dedupe,
+        education_level=education_level,
+        curriculum_type=curriculum_type,
+    )
  
     return {
         "subjects": [

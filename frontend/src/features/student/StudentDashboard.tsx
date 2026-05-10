@@ -190,7 +190,7 @@ export const StudentDashboard = ({
   const energy = profile?.brain_power ?? 100;
 
   return (
-    <div className="h-screen bg-subtle flex w-full relative overflow-hidden">
+    <div className="h-dvh bg-subtle flex w-full relative overflow-hidden">
       {sidebarOpen && (
         <button
           type="button"
@@ -259,7 +259,7 @@ export const StudentDashboard = ({
               </div>
             ) : (
               <ScrollArea className="flex-1 h-full">
-                <div className="w-full max-w-7xl mx-auto p-4 md:p-6">
+                <div className="w-full max-w-7xl mx-auto px-3 py-4 pb-24 sm:p-4 md:p-6 md:pb-8">
                   <StudentViewRouter
                      activeView={activeView} isLoading={isLoading} profile={profile} energy={energy}
                      getLearningStyleLabel={getLearningStyleLabel} setActiveView={setActiveView}

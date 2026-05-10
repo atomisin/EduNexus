@@ -57,10 +57,10 @@ export const SubjectList = ({
   );
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4 sm:space-y-5">
       <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
-          <h2 className="text-2xl font-semibold tracking-tight">Subjects</h2>
+          <h2 className="text-xl sm:text-2xl font-semibold tracking-tight">Subjects</h2>
           <p className="text-sm text-muted-foreground">Manage enrolled subjects and learning materials.</p>
         </div>
         <Input
@@ -89,25 +89,25 @@ export const SubjectList = ({
               const subjectMaterials = materials.filter(m => m.subject === subject.name);
 
               return (
-                <div key={subject.id} className="px-4 py-3">
-                  <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_120px_140px_140px] md:items-center">
+                <div key={subject.id} className="px-3 py-3 sm:px-4">
+                  <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 md:grid-cols-[minmax(0,1fr)_120px_140px_140px] md:items-center md:gap-3">
                     <div className="min-w-0 flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-primary/10 border border-primary/20 text-primary shrink-0">
+                      <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center bg-primary/10 border border-primary/20 text-primary shrink-0">
                         <BookMarked className="w-4 h-4" />
                       </div>
                       <div className="min-w-0">
-                        <h3 className="font-semibold leading-tight truncate">{subject.name}</h3>
+                        <h3 className="text-sm sm:text-base font-semibold leading-tight truncate">{subject.name}</h3>
                         <p className="text-xs text-muted-foreground">Curriculum subject</p>
                       </div>
                     </div>
 
-                    <div>
+                    <div className="justify-self-end md:justify-self-auto">
                       {isEnrolled ? (
-                        <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+                        <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 text-[10px] sm:text-xs">
                           Enrolled
                         </Badge>
                       ) : (
-                        <Badge variant="outline" className="text-muted-foreground">
+                        <Badge variant="outline" className="text-muted-foreground text-[10px] sm:text-xs">
                           Available
                         </Badge>
                       )}
@@ -116,18 +116,18 @@ export const SubjectList = ({
                     <button
                       disabled={!isEnrolled}
                       onClick={() => setExpandedSubjectId(expandedSubjectId === subject.id ? null : subject.id)}
-                      className="flex items-center gap-2 text-sm text-muted-foreground disabled:opacity-40 md:justify-start"
+                      className="col-span-2 md:col-span-1 flex items-center gap-2 text-sm text-muted-foreground disabled:opacity-40 md:justify-start"
                     >
                       <FileText className="w-4 h-4" />
                       {subjectMaterials.length} material{subjectMaterials.length === 1 ? '' : 's'}
                       {isEnrolled && (expandedSubjectId === subject.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />)}
                     </button>
 
-                    <div className="flex justify-start md:justify-end">
+                    <div className="col-span-2 md:col-span-1 flex justify-start md:justify-end">
                       <Button
                         size="sm"
                         variant={isEnrolled ? 'outline' : 'default'}
-                        className="rounded-lg"
+                        className="h-8 rounded-lg px-3"
                         onClick={() => handleEnroll(subject.id, isEnrolled)}
                       >
                         {isEnrolled ? 'Unenroll' : 'Enroll'}

@@ -236,7 +236,7 @@ export function SmartHelper({ isOpen, onClose, subject, topic }: SmartHelperProp
   };
 
   return (
-    <div className={`fixed bottom-4 right-4 z-50 w-96 max-w-[calc(100vw-2rem)] transition-all duration-300 transform ${isOpen ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0 pointer-events-none'}`}>
+    <div className={`fixed inset-x-3 bottom-[calc(1rem+env(safe-area-inset-bottom))] z-50 w-auto transition-all duration-300 transform sm:inset-x-auto sm:right-4 sm:w-96 sm:max-w-[calc(100vw-2rem)] ${isOpen ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0 pointer-events-none'}`}>
       <Card className="shadow-2xl border-0 bg-gradient-to-br from-teal-50/50 to-slate-50/50 dark:from-slate-900/50 dark:to-slate-900/50 border-t-4 border-t-teal-600">
         <CardHeader className="pb-3 border-b bg-white/50 dark:bg-slate-900/50 rounded-t-lg">
           <div className="flex items-center justify-between">
@@ -259,7 +259,7 @@ export function SmartHelper({ isOpen, onClose, subject, topic }: SmartHelperProp
         </CardHeader>
 
         <CardContent className="p-0">
-          <ScrollArea className="h-[400px] p-4">
+          <ScrollArea className="h-[min(60vh,400px)] p-3 sm:p-4">
             <div className="space-y-4">
               {messages.map((message) => (
                 <div

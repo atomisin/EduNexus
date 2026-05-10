@@ -29,21 +29,21 @@ export const DashboardHome: React.FC<DashboardHomeProps> = ({
   formatDate
 }) => {
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <StatsCards profile={profile} energy={energy} />
 
-      <div className="grid lg:grid-cols-3 gap-6">
-        <Card>
-          <CardHeader><CardTitle className="flex items-center gap-2"><Target className="w-5 h-5" />My Learning Profile</CardTitle></CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-center gap-3 p-4 bg-secondary rounded-xl">
+      <div className="grid lg:grid-cols-3 gap-4 sm:gap-6">
+        <Card className="rounded-lg">
+          <CardHeader className="p-4 pb-2 sm:p-6 sm:pb-3"><CardTitle className="flex items-center gap-2 text-base sm:text-lg"><Target className="w-5 h-5" />My Learning Profile</CardTitle></CardHeader>
+          <CardContent className="p-4 pt-2 sm:p-6 sm:pt-0">
+            <div className="space-y-3 sm:space-y-4">
+              <div className="flex items-center gap-3 p-3 sm:p-4 bg-secondary rounded-lg">
                 <Eye className="w-5 h-5 text-primary" />
                 <div><p className="font-medium">{getLearningStyleLabel(profile?.learning_style).label}</p><p className="text-xs text-muted-foreground">{getLearningStyleLabel(profile?.learning_style).desc}</p></div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="p-3 bg-subtle rounded-xl text-center"><p className="text-lg font-bold">{profile?.best_study_time || 'Not set'}</p><p className="text-xs text-muted-foreground">Best Time</p></div>
-                <div className="p-3 bg-subtle rounded-xl text-center"><p className="text-lg font-bold">{profile?.attention_span_minutes || 30} min</p><p className="text-xs text-muted-foreground">Focus Span</p></div>
+              <div className="grid grid-cols-2 gap-2 sm:gap-3">
+                <div className="p-3 bg-subtle rounded-lg text-center"><p className="text-base sm:text-lg font-bold truncate">{profile?.best_study_time || 'Not set'}</p><p className="text-xs text-muted-foreground">Best Time</p></div>
+                <div className="p-3 bg-subtle rounded-lg text-center"><p className="text-base sm:text-lg font-bold">{profile?.attention_span_minutes || 30} min</p><p className="text-xs text-muted-foreground">Focus Span</p></div>
               </div>
               <Button variant="outline" className="w-full" onClick={() => setActiveView('profile')}>Complete Profile</Button>
             </div>

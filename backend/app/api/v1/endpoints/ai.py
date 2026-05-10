@@ -56,6 +56,12 @@ def handle_api_error(
 
 router = APIRouter()
 
+PLACEHOLDER_TOPIC_NAMES = {"CLASS", "SUBJECT", "TERM", "TOPIC", "TOPICS"}
+
+
+def is_real_learning_topic(topic: Topic) -> bool:
+    return (topic.name or "").strip().upper() not in PLACEHOLDER_TOPIC_NAMES
+
 
 async def ensure_ai_topic_unlocked(
     db: AsyncSession,
@@ -75,7 +81,7 @@ async def ensure_ai_topic_unlocked(
         .filter(Topic.subject_id == subject_uuid)
         .order_by(Topic.sort_order.asc(), Topic.name.asc())
     )
-    topics = res_topics.scalars().all()
+    topics = [topic for topic in res_topics.scalars().all() if is_real_learning_topic(topic)]
     if not topics or topic_uuid not in {topic.id for topic in topics}:
         return
 

@@ -1,6 +1,5 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
-import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { MessageSquare } from 'lucide-react';
@@ -118,7 +117,6 @@ function App() {
     return (
       <>
         <ChangePasswordView onComplete={completePasswordChange} />
-        <Toaster />
       </>
     );
   }
@@ -212,8 +210,6 @@ function App() {
           </div>
         </>
       )}
-
-      <Toaster />
     </>
   );
 }

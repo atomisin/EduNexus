@@ -783,65 +783,8 @@ export const AIChatSection = ({
                 </div >
               </ScrollArea>
 
-              {/* Chat Input & Floating Actions */}
+              {/* Chat Input */}
               <div className="p-3 sm:px-6 border-t bg-white/50 dark:bg-slate-900/50 backdrop-blur-md z-10">
-                {selectedTopic && !aiLoading && aiChatMessages.length > 0 && !showMasteryTest && (
-                  <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar mb-2">
-                    {isYoungLearner ? (
-                      <>
-                        <Button
-                          variant="outline"
-                          className="whitespace-nowrap rounded-lg bg-amber-100 text-amber-800 border-amber-200 hover:bg-amber-200 px-6 py-6 font-black text-lg"
-                          onClick={() => handleAIContinue("Explain like I'm 5! 🐥")}
-                        >
-                          🐥 Explain simpler
-                        </Button>
-                        <Button
-                          variant="outline"
-                          className="whitespace-nowrap rounded-lg bg-teal-100 text-teal-800 border-teal-200 hover:bg-teal-200 px-6 py-6 font-black text-lg"
-                          onClick={() => handleAIContinue("Show me a picture or video! 🎥")}
-                        >
-                          🎥 See it
-                        </Button>
-                        <Button
-                          variant="outline"
-                          className="whitespace-nowrap rounded-lg bg-teal-100 text-teal-800 border-teal-200 hover:bg-teal-200 px-6 py-6 font-black text-lg"
-                          onClick={() => handleAIContinue("I'm confused, help! 🙋")}
-                        >
-                          🙋 I'm stuck
-                        </Button>
-                      </>
-                    ) : (
-                      <>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="whitespace-nowrap rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-teal-50 dark:hover:bg-teal-900/20 px-5 py-5 font-bold"
-                          onClick={() => {
-                            const lastAI = aiChatMessages.filter(m => m.role === 'ai').slice(-1)[0]?.content || '';
-                            const contextSnippet = lastAI.length > 60 ? lastAI.substring(0, 60) + "..." : lastAI;
-                            handleAIContinue(`That last part about "${contextSnippet}" was a bit complex. Can you simplify it or explain it differently, keeping our focus on ${viewingSubtopic || activeSubtopic || selectedTopic.name}? 🐘`);
-                          }}
-                        >
-                          <Zap className="w-4 h-4 mr-2 text-amber-500 fill-amber-500" /> Simplify 🐘
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="whitespace-nowrap rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-teal-50 dark:hover:bg-teal-900/20 px-5 py-5 font-bold"
-                          onClick={() => {
-                            const lastAI = aiChatMessages.filter(m => m.role === 'ai').slice(-1)[0]?.content || '';
-                            const contextSnippet = lastAI.length > 60 ? lastAI.substring(0, 60) + "..." : lastAI;
-                            handleAIContinue(`Can you give me a real-world example related to that last point about "${contextSnippet}" within ${(typeof viewingSubtopic === 'object' ? (viewingSubtopic as any)?.name : viewingSubtopic) || activeSubtopic || selectedTopic.name}? 💡`);
-                          }}
-                        >
-                          <Star className="w-4 h-4 mr-2 text-emerald-500 fill-emerald-500" /> Example 💡
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                )}
-
                 <div className="relative group max-w-6xl mx-auto">
                   {isCurrentTopicCompleted && (
                     <div className="absolute inset-0 z-20 flex items-center justify-center bg-slate-50/80 dark:bg-slate-900/80 rounded-lg backdrop-blur-[1px] border border-emerald-200 dark:border-emerald-900/50">

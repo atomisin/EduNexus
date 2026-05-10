@@ -13,6 +13,13 @@ logger = logging.getLogger(__name__)
 # quality vs token cost
 MAX_HISTORY_MESSAGES = 20
 
+FALLBACK_MODEL_PRICING_USD_PER_1M = {
+    "groq/llama-3.1-8b-instant": (0.05, 0.08),
+    "groq/llama-3.1-70b-versatile": (0.59, 0.79),
+    "groq/llama-3.3-70b-versatile": (0.59, 0.79),
+    "gpt-4o-mini": (0.15, 0.60),
+}
+
 class LLMService:
     """Service for interacting with AI models using LiteLLM"""
 
@@ -52,11 +59,23 @@ class LLMService:
 
     def calculate_cost_microdollars(self, model: str, prompt_tokens: int, completion_tokens: int) -> int:
         """Calculate cost in microdollars (USD * 1,000,000)"""
-        # Fallback to $0.05 per 1M tokens if litellm.completion_cost is not used
-        # prompt_cost + completion_cost logic:
-        prompt_cost = prompt_tokens * 0.05
-        completion_cost = completion_tokens * 0.05
-        return int(prompt_cost + completion_cost)
+        try:
+            import litellm
+
+            prompt_cost, completion_cost = litellm.cost_per_token(
+                model=model,
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+            )
+            return int(round((prompt_cost + completion_cost) * 1_000_000))
+        except Exception:
+            input_rate, output_rate = FALLBACK_MODEL_PRICING_USD_PER_1M.get(
+                model,
+                (0.05, 0.05),
+            )
+            prompt_cost = (prompt_tokens / 1_000_000) * input_rate
+            completion_cost = (completion_tokens / 1_000_000) * output_rate
+            return int(round((prompt_cost + completion_cost) * 1_000_000))
 
     def _log_usage(self, model: str, prompt_tokens: int, completion_tokens: int, total_tokens: int, cost_microdollars: int, user_id: Optional[uuid.UUID] = None):
         import asyncio
@@ -160,7 +179,7 @@ class LLMService:
             use_model = model or self.fast_model
             if use_model and ("/" not in use_model and len(use_model) < 60):
                 # Map old bare models to groq/ prefix if needed
-                if use_model == "llama-3.1-8b-instant" or use_model == self.model:
+                if use_model == "llama-3.1-8b-instant":
                     use_model = self.fast_model
             
             sys_prompt = system_prompt or "You are EduNexus, an AI educational assistant for Nigerian students. Be helpful, clear, and culturally sensitive."
@@ -210,6 +229,21 @@ class LLMService:
                 try:
                     import litellm
                     fallback_res = await litellm.acompletion(**kwargs)
+                    if hasattr(fallback_res, 'usage') and fallback_res.usage:
+                        usage = fallback_res.usage
+                        cost_micros = self.calculate_cost_microdollars(
+                            model=self.fallback_model,
+                            prompt_tokens=getattr(usage, 'prompt_tokens', 0),
+                            completion_tokens=getattr(usage, 'completion_tokens', 0),
+                        )
+                        self._log_usage(
+                            model=self.fallback_model,
+                            prompt_tokens=getattr(usage, 'prompt_tokens', 0),
+                            completion_tokens=getattr(usage, 'completion_tokens', 0),
+                            total_tokens=getattr(usage, 'total_tokens', 0),
+                            cost_microdollars=cost_micros,
+                            user_id=user_id,
+                        )
                     return fallback_res.choices[0].message.content or ""
                 except Exception as fallback_e:
                     logger.error(f"Fallback model also failed: {fallback_e}")
@@ -287,7 +321,7 @@ For detailed content on **{concept}**, I recommend:
         try:
             use_model = model or self.fast_model
             if use_model and ("/" not in use_model and len(use_model) < 60):
-                if use_model == "llama-3.1-8b-instant" or use_model == self.model:
+                if use_model == "llama-3.1-8b-instant":
                     use_model = self.fast_model
 
             # Summarize if needed
@@ -337,6 +371,21 @@ For detailed content on **{concept}**, I recommend:
                 try:
                     import litellm
                     fallback_res = await litellm.acompletion(**kwargs)
+                    if hasattr(fallback_res, 'usage') and fallback_res.usage:
+                        usage = fallback_res.usage
+                        cost_micros = self.calculate_cost_microdollars(
+                            model=self.fallback_model,
+                            prompt_tokens=getattr(usage, 'prompt_tokens', 0),
+                            completion_tokens=getattr(usage, 'completion_tokens', 0),
+                        )
+                        self._log_usage(
+                            model=self.fallback_model,
+                            prompt_tokens=getattr(usage, 'prompt_tokens', 0),
+                            completion_tokens=getattr(usage, 'completion_tokens', 0),
+                            total_tokens=getattr(usage, 'total_tokens', 0),
+                            cost_microdollars=cost_micros,
+                            user_id=user_id,
+                        )
                     return fallback_res.choices[0].message.content or ""
                 except Exception as fallback_e:
                     logger.error(f"Fallback model chat also failed: {fallback_e}")

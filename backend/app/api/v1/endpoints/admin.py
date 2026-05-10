@@ -766,6 +766,8 @@ async def get_token_usage(
     
     stats = []
     total_cost_micros = 0
+    total_tokens = 0
+    total_requests = 0
     for row in rows:
         stats.append({
             "model": row.model,
@@ -776,6 +778,8 @@ async def get_token_usage(
             "requests": row.total_requests or 0
         })
         total_cost_micros += (row.total_cost_micros or 0)
+        total_tokens += int(row.total_tokens or 0)
+        total_requests += int(row.total_requests or 0)
 
     # 2. Daily Trends
     trend_stmt = select(
@@ -830,7 +834,13 @@ async def get_token_usage(
         
     return {
         "period_days": days,
+        "summary": {
+            "total_tokens": total_tokens,
+            "total_requests": total_requests,
+            "total_cost": round(total_cost_micros / 1000000.0, 6),
+        },
         "total_estimated_cost": round(total_cost_micros / 1000000.0, 4),
+        "cost_basis": "Logged provider token usage priced with LiteLLM model rates when available, with configured per-model fallback rates.",
         "usage_by_model": stats,
         "daily_trends": daily_trends,
         "top_consumers": top_consumers

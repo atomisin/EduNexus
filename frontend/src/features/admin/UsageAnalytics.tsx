@@ -58,6 +58,7 @@ interface UsageApiResponse {
   daily_trends?: Array<Partial<DailyTrend>>;
   top_users?: RawTopUser[];
   total_estimated_cost?: number;
+  cost_basis?: string;
   usage_by_model?: RawModelUsage[];
   top_consumers?: RawTopUser[];
 }
@@ -387,7 +388,7 @@ export const UsageAnalytics: React.FC = () => {
         <div>
           <h4 className="font-semibold text-amber-800 dark:text-amber-400">Financial Accuracy Disclaimer</h4>
           <p className="text-sm text-amber-700 dark:text-amber-500/80">
-            Costs are estimates based on standard API rates for input and output tokens. Actual Groq/OpenAI/Anthropic billing may vary based on specific prompt overheads and regional taxes.
+            Costs come from logged provider token usage and model-specific rates. Treat this as the operating-cost ledger; final invoices can still include provider taxes, credits, or account-level adjustments.
           </p>
         </div>
       </div>

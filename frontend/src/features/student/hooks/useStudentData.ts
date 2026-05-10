@@ -174,6 +174,7 @@ export const useStudentData = (user?: any) => {
     progress,
     analytics,
     brainPower,
+    brainPowerData,
     isLoading: combinedLoading,
     error: combinedError,
     refetchProfile,

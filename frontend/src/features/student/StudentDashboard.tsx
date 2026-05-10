@@ -75,7 +75,7 @@ export const StudentDashboard = ({
 
   const {
     profile, sessions, subjects, progress, analytics, enrolledSubjects,
-    materials, brainPower, isLoading: isDataLoading, error,
+    materials, brainPower, brainPowerData, isLoading: isDataLoading, error,
     refetchProfile, refetchSessions, refetchBrainPower,
     handleEnroll, handleDeleteMaterial, handleUpload, handleJoinSession,
     setProfile
@@ -187,7 +187,8 @@ export const StudentDashboard = ({
     }
   }, [messages, isLoading]);
 
-  const energy = profile?.brain_power ?? 100;
+  const profileWithBrainPower = profile ? { ...profile, ...(brainPowerData || {}), brain_power: brainPower } : profile;
+  const energy = brainPower;
 
   return (
     <div className="h-dvh bg-subtle flex w-full relative overflow-hidden">
@@ -203,13 +204,13 @@ export const StudentDashboard = ({
         activeView={activeView}
         setActiveView={setActiveView}
         sidebarOpen={sidebarOpen}
-        profile={profile}
+        profile={profileWithBrainPower}
       />
 
       <main className="min-w-0 flex-1 flex flex-col h-full overflow-hidden relative">
         <StudentHeader
           user={user}
-          profile={profile}
+          profile={profileWithBrainPower}
           sidebarOpen={sidebarOpen}
           setSidebarOpen={setSidebarOpen}
           onLogout={onLogout}
@@ -228,7 +229,7 @@ export const StudentDashboard = ({
             activeView === 'learn' ? (
               <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
                 <StudentViewRouter
-                   activeView={activeView} isLoading={isLoading} profile={profile} energy={energy}
+                   activeView={activeView} isLoading={isLoading} profile={profileWithBrainPower} energy={energy}
                    getLearningStyleLabel={getLearningStyleLabel} setActiveView={setActiveView}
                    liveSessions={liveSessions} upcomingSessions={upcomingSessions}
                    handleJoinSession={(s) => handleJoinSession(s, onJoinSession)} formatDate={formatDate}
@@ -261,7 +262,7 @@ export const StudentDashboard = ({
               <ScrollArea className="flex-1 h-full">
                 <div className="w-full max-w-7xl mx-auto px-3 py-4 pb-24 sm:p-4 md:p-6 md:pb-8">
                   <StudentViewRouter
-                     activeView={activeView} isLoading={isLoading} profile={profile} energy={energy}
+                     activeView={activeView} isLoading={isLoading} profile={profileWithBrainPower} energy={energy}
                      getLearningStyleLabel={getLearningStyleLabel} setActiveView={setActiveView}
                      liveSessions={liveSessions} upcomingSessions={upcomingSessions}
                      handleJoinSession={(s) => handleJoinSession(s, onJoinSession)} formatDate={formatDate}

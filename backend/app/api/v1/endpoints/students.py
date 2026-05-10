@@ -20,6 +20,7 @@ from app.models.subject import Subject, Topic
 from sqlalchemy.orm.attributes import flag_modified
 from app.models.junction_tables import StudentTopicProgress
 from app.services.storage_service import storage_service
+from app.services.brain_power import brain_power_budget_summary
 from app.services.curriculum_service import curriculum_service
 
 router = APIRouter()
@@ -216,8 +217,7 @@ async def get_my_brain_power(
     seconds_until_recharge = int((recharge_at - now).total_seconds())
 
     return {
-        "brain_power": profile.brain_power,
-        "max_brain_power": 100,
+        **brain_power_budget_summary(profile.brain_power),
         "recharge_at": recharge_at.isoformat(),
         "seconds_until_recharge": seconds_until_recharge,
     }

@@ -23,6 +23,11 @@ from jose import jwt, JWTError
 from app.core.config import settings
 from app.services.ai_coordinator import ai_coordinator
 from app.services.revision_context import get_revision_context, get_subject_and_topic
+from app.services.brain_power import (
+    brain_power_cost_for_tokens,
+    estimate_message_tokens,
+    estimate_text_tokens,
+)
 import logging
 
 logger = logging.getLogger(__name__)
@@ -353,11 +358,13 @@ async def generate_text(
     request: Request,
     generate_req: GenerateRequest,
     current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Generate text using LLM (C-06: Sanitized & Rate Limited)"""
     sanitized_prompt = sanitize_user_input(generate_req.prompt)
 
-    if not await deduct_brain_power(current_user.id, 1, db):
+    brain_power_cost = brain_power_cost_for_tokens(estimate_text_tokens(sanitized_prompt), 1024)
+    if not await deduct_brain_power(current_user.id, brain_power_cost, db):
         raise_brain_power_depleted()
 
     try:
@@ -369,7 +376,7 @@ async def generate_text(
         )
         return {"response": response}
     except Exception:
-        await refund_brain_power(current_user.id, 1, db)
+        await refund_brain_power(current_user.id, brain_power_cost, db)
         raise
 
 
@@ -408,7 +415,8 @@ async def chat(
     # Token limit based on age (kept for logic, but persona handled)
     # max_tokens = 80 if age_group == "child" else 150 if age_group == "teen" else 250
 
-    if not await deduct_brain_power(current_user.id, 1, db):
+    brain_power_cost = brain_power_cost_for_tokens(estimate_message_tokens(chat_req.messages), 900)
+    if not await deduct_brain_power(current_user.id, brain_power_cost, db):
         raise_brain_power_depleted()
 
     try:
@@ -444,7 +452,7 @@ async def chat(
         result["student_context"] = student_context
         return result
     except Exception:
-        await refund_brain_power(current_user.id, 1, db)
+        await refund_brain_power(current_user.id, brain_power_cost, db)
         raise
 
 
@@ -466,7 +474,9 @@ async def explain_concept(
     student_profile = res_prof.scalars().first()
     student_context = get_student_context(current_user, student_profile)
 
-    if not await deduct_brain_power(current_user.id, 1, db):
+    explain_input_tokens = estimate_text_tokens(explain_req.concept) + estimate_text_tokens(explain_req.context) + estimate_text_tokens(explain_req.question)
+    brain_power_cost = brain_power_cost_for_tokens(explain_input_tokens, 700)
+    if not await deduct_brain_power(current_user.id, brain_power_cost, db):
         raise_brain_power_depleted()
 
     try:
@@ -479,7 +489,7 @@ async def explain_concept(
         )
         return {"explanation": explanation, "student_context": student_context}
     except Exception:
-        await refund_brain_power(current_user.id, 1, db)
+        await refund_brain_power(current_user.id, brain_power_cost, db)
         raise
 
 
@@ -501,7 +511,9 @@ async def evaluate_understanding(
     student_profile = res_prof.scalars().first()
     student_context = get_student_context(current_user, student_profile)
 
-    if not await deduct_brain_power(current_user.id, 1, db):
+    eval_input_tokens = estimate_text_tokens(eval_req.concept) + estimate_text_tokens(eval_req.explanation)
+    brain_power_cost = brain_power_cost_for_tokens(eval_input_tokens, 500)
+    if not await deduct_brain_power(current_user.id, brain_power_cost, db):
         raise_brain_power_depleted()
 
     try:
@@ -514,7 +526,7 @@ async def evaluate_understanding(
             user_id=current_user.id,
         )
     except Exception:
-        await refund_brain_power(current_user.id, 1, db)
+        await refund_brain_power(current_user.id, brain_power_cost, db)
         raise
 
     # Persist XP if student profile exists and is_correct is True
@@ -626,7 +638,9 @@ async def generate_mastery_test(
     student_profile = res_prof.scalars().first()
     student_context = get_student_context(current_user, student_profile)
 
-    if not await deduct_brain_power(current_user.id, 1, db):
+    mastery_input_tokens = estimate_text_tokens(test_req.topic) + estimate_text_tokens(test_req.subject) + estimate_message_tokens(test_req.chat_history)
+    brain_power_cost = brain_power_cost_for_tokens(mastery_input_tokens, 1600)
+    if not await deduct_brain_power(current_user.id, brain_power_cost, db):
         raise_brain_power_depleted()
 
     try:
@@ -648,7 +662,7 @@ async def generate_mastery_test(
             )
         return {"questions": questions}
     except Exception:
-        await refund_brain_power(current_user.id, 1, db)
+        await refund_brain_power(current_user.id, brain_power_cost, db)
         raise
 
 
@@ -771,7 +785,9 @@ async def get_topic_breakdown(
                 if first_sub_name != "corrected_topic":
                     return cached_breakdown
 
-        if not await deduct_brain_power(current_user.id, 1, db):
+        breakdown_input_tokens = estimate_text_tokens(body.topic) + estimate_text_tokens(subject_name) + estimate_text_tokens(education_level) + estimate_text_tokens(grade_level)
+        brain_power_cost = brain_power_cost_for_tokens(breakdown_input_tokens, 1200)
+        if not await deduct_brain_power(current_user.id, brain_power_cost, db):
             raise_brain_power_depleted()
 
         try:
@@ -784,7 +800,7 @@ async def get_topic_breakdown(
                 user_id=current_user.id,
             )
         except Exception:
-            await refund_brain_power(current_user.id, 1, db)
+            await refund_brain_power(current_user.id, brain_power_cost, db)
             raise
 
         subtopics_list = []

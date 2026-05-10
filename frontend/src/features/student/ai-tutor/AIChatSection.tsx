@@ -327,7 +327,7 @@ export const AIChatSection = ({
           <div className="flex-1 flex flex-row min-h-0 overflow-hidden relative">
             {/* Sidebar - Learning Path / Roadmap */}
             {(roadmap || (topicsForCurrentSubject && topicsForCurrentSubject.length > 0)) && (
-              <div className="w-80 min-w-[280px] border-r border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 hidden md:flex flex-col shrink-0">
+              <div className="w-80 min-w-[280px] min-h-0 border-r border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 hidden md:flex flex-col shrink-0">
                 <div className="p-5 border-b border-slate-100 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50">
                   <h4 className="text-xs font-black uppercase tracking-widest text-slate-500 flex items-center gap-2 mb-3">
                     <Target className="w-3.5 h-3.5 text-teal-600" /> Learning Path
@@ -364,7 +364,7 @@ export const AIChatSection = ({
                     </>
                   )}
                 </div>
-                <ScrollArea className="flex-1">
+                <ScrollArea className="flex-1 min-h-0 overflow-y-auto">
                   <div className="p-3 space-y-1">
                     {topicsForCurrentSubject && topicsForCurrentSubject.length > 0 ? (
                       topicsForCurrentSubject.map((st: any, idx: number) => {
@@ -1038,11 +1038,11 @@ export const AIChatSection = ({
                     <p className="text-xs text-muted-foreground mt-1">Choose a specific area to focus on</p>
                   </div>
                 </CardHeader>
-                <CardContent className="pt-0">
+                <CardContent className="pt-0 min-h-0">
                   {loading ? (
                     <div className="flex justify-center py-10"><Loader2 className="w-8 h-8 animate-spin text-teal-500" /></div>
                   ) : (
-                    <div className="space-y-6">
+                    <div className="space-y-6 max-h-[min(68vh,720px)] overflow-y-auto pr-1">
                       {Array.from(new Set(visibleTopics.map(t => t.term || 'Other'))).sort((a, b) => {
                         const order: Record<string, number> = { 'First Term': 1, 'Second Term': 2, 'Third Term': 3, 'Other': 4 };
                         return (order[a as string] || 5) - (order[b as string] || 5);

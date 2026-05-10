@@ -26,6 +26,10 @@ export interface StudentProfile {
   gender?: string;
   avatar_url?: string;
   brain_power?: number;
+  max_brain_power?: number;
+  daily_token_budget?: number;
+  tokens_per_brain_power?: number;
+  approx_tokens_remaining?: number;
   recharge_at?: string;
   seconds_until_recharge?: number;
 }

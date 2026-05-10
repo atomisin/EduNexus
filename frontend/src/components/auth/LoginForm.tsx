@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { ChevronLeft, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { warmUpServer } from '@/services/api';
 
-const COLD_START_MESSAGE = 'Connecting to server — free hosting can take up to 60 seconds on cold start. Please wait...';
+const COLD_START_MESSAGE = 'Please wait...';
 
 interface LoginFormProps {
   onSuccess?: () => void;

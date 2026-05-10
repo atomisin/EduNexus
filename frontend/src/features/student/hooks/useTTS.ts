@@ -8,6 +8,7 @@ type SpeakOptions = {
 type TutorVoiceGender = 'male' | 'female';
 
 const BRITISH_VOICE_HINTS = ['en-gb', 'united kingdom', 'british', 'uk english', 'great britain'];
+const NATURAL_VOICE_HINTS = ['natural', 'neural', 'premium', 'enhanced', 'google', 'microsoft', 'online'];
 const MALE_VOICE_HINTS = [' male', '(male', 'man', 'daniel', 'george', 'ryan', 'thomas', 'arthur', 'oliver'];
 const FEMALE_VOICE_HINTS = [' female', '(female', 'woman', 'libby', 'sonia', 'kate', 'serena', 'susan', 'hazel'];
 
@@ -27,11 +28,19 @@ const pickTutorVoice = (
     voiceMatches(voice, BRITISH_VOICE_HINTS)
   );
   const genderHints = tutorGender === 'male' ? MALE_VOICE_HINTS : FEMALE_VOICE_HINTS;
+  const highQualityVoices = englishVoices.filter((voice) =>
+    voiceMatches(voice, NATURAL_VOICE_HINTS) || voice.localService === false
+  );
 
-  return britishVoices.find((voice) => voiceMatches(voice, genderHints))
+  return highQualityVoices.find((voice) => voiceMatches(voice, BRITISH_VOICE_HINTS) && voiceMatches(voice, genderHints))
+    || britishVoices.find((voice) => voiceMatches(voice, NATURAL_VOICE_HINTS) && voiceMatches(voice, genderHints))
+    || britishVoices.find((voice) => voiceMatches(voice, genderHints))
     || englishVoices.find((voice) => voice.lang.toLowerCase().startsWith('en-gb') && voiceMatches(voice, genderHints))
+    || highQualityVoices.find((voice) => voiceMatches(voice, genderHints))
     || englishVoices.find((voice) => voiceMatches(voice, genderHints))
+    || highQualityVoices.find((voice) => voiceMatches(voice, BRITISH_VOICE_HINTS))
     || britishVoices[0]
+    || highQualityVoices[0]
     || englishVoices[0];
 };
 
@@ -67,8 +76,8 @@ export const useTTS = (educationLevel: string | undefined, tutorGender: TutorVoi
     const cleanText = normalizeAcademicTextForSpeech(text);
 
     const utterance = new SpeechSynthesisUtterance(cleanText);
-    utterance.rate = isYoungLearner ? 0.85 : 0.92;
-    utterance.pitch = isYoungLearner ? 1.1 : tutorGender === 'male' ? 0.95 : 1.03;
+    utterance.rate = isYoungLearner ? 0.84 : 0.88;
+    utterance.pitch = isYoungLearner ? 1.04 : tutorGender === 'male' ? 0.92 : 1.0;
     utterance.volume = 1.0;
     utterance.lang = 'en-GB';
     utterance.onend = () => setIsSpeaking(false);

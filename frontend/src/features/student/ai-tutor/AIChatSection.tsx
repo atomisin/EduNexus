@@ -47,16 +47,16 @@ const renderMathChildren = (children: React.ReactNode): React.ReactNode =>
   });
 
 const mathMarkdownComponents = {
-  h1: ({ children }: any) => <h3 className="mb-3 text-lg font-black tracking-normal text-slate-950 dark:text-white">{renderMathChildren(children)}</h3>,
-  h2: ({ children }: any) => <h3 className="mb-3 text-lg font-black tracking-normal text-slate-950 dark:text-white">{renderMathChildren(children)}</h3>,
-  h3: ({ children }: any) => <h4 className="mb-2 text-base font-black tracking-normal text-slate-900 dark:text-slate-100">{renderMathChildren(children)}</h4>,
-  p: ({ children }: any) => <p className="mb-3 last:mb-0">{renderMathChildren(children)}</p>,
-  ul: ({ children }: any) => <ul className="my-3 ml-5 list-disc space-y-1.5 marker:text-primary">{children}</ul>,
-  ol: ({ children }: any) => <ol className="my-3 ml-5 list-decimal space-y-1.5 marker:text-primary marker:font-bold">{children}</ol>,
-  li: ({ children }: any) => <li className="pl-1">{renderMathChildren(children)}</li>,
+  h1: ({ children }: any) => <h3 className="mb-3 min-w-0 break-words text-lg font-black tracking-normal text-slate-950 [overflow-wrap:anywhere] dark:text-white">{renderMathChildren(children)}</h3>,
+  h2: ({ children }: any) => <h3 className="mb-3 min-w-0 break-words text-lg font-black tracking-normal text-slate-950 [overflow-wrap:anywhere] dark:text-white">{renderMathChildren(children)}</h3>,
+  h3: ({ children }: any) => <h4 className="mb-2 min-w-0 break-words text-base font-black tracking-normal text-slate-900 [overflow-wrap:anywhere] dark:text-slate-100">{renderMathChildren(children)}</h4>,
+  p: ({ children }: any) => <p className="mb-3 min-w-0 break-words [overflow-wrap:anywhere] last:mb-0">{renderMathChildren(children)}</p>,
+  ul: ({ children }: any) => <ul className="my-3 ml-5 min-w-0 list-disc space-y-1.5 marker:text-primary">{children}</ul>,
+  ol: ({ children }: any) => <ol className="my-3 ml-5 min-w-0 list-decimal space-y-1.5 marker:text-primary marker:font-bold">{children}</ol>,
+  li: ({ children }: any) => <li className="min-w-0 break-words pl-1 [overflow-wrap:anywhere]">{renderMathChildren(children)}</li>,
   strong: ({ children }: any) => <strong className="font-black text-slate-950 dark:text-white">{renderMathChildren(children)}</strong>,
   em: ({ children }: any) => <em className="italic text-slate-700 dark:text-slate-200">{renderMathChildren(children)}</em>,
-  code: ({ children }: any) => <code className="rounded bg-slate-100 px-1.5 py-0.5 text-sm font-semibold text-slate-800 dark:bg-slate-900 dark:text-slate-100">{children}</code>,
+  code: ({ children }: any) => <code className="whitespace-pre-wrap break-words rounded bg-slate-100 px-1.5 py-0.5 text-sm font-semibold text-slate-800 [overflow-wrap:anywhere] dark:bg-slate-900 dark:text-slate-100">{children}</code>,
   blockquote: ({ children }: any) => <blockquote className="my-3 border-l-4 border-primary/50 pl-4 text-slate-600 dark:text-slate-300">{children}</blockquote>,
 };
 
@@ -245,21 +245,22 @@ export const AIChatSection = ({
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden">
       {!showAIPanel && (
-        <div className="flex items-center justify-between px-6 py-1 shrink-0">
-          <h2 className="text-2xl font-bold flex items-center gap-2">
-            <img src={`/avatars/ai_tutor_${tutorGender}.png`} alt="AI Tutor" className="w-8 h-8 rounded-full border border-teal-200" /> AI Tutoring Center
+        <div className="flex min-w-0 items-center justify-between gap-2 px-3 py-2 sm:px-6 shrink-0">
+          <h2 className="min-w-0 flex items-center gap-2 text-base font-semibold tracking-tight sm:text-2xl">
+            <img src={`/avatars/ai_tutor_${tutorGender}.png`} alt="AI Tutor" className="h-7 w-7 shrink-0 rounded-full border border-teal-200 sm:h-8 sm:w-8" />
+            <span className="truncate">AI Tutoring Center</span>
           </h2>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 p-1 rounded-full border border-slate-200 dark:border-slate-700">
+          <div className="flex min-w-0 shrink-0 items-center gap-2 sm:gap-4">
+            <div className="flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 p-1 dark:border-slate-700 dark:bg-slate-800">
               <button
                 onClick={() => setTutorGender('female')}
-                className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${tutorGender === 'female' ? 'bg-white dark:bg-slate-700 shadow-none text-teal-600' : 'text-slate-500'}`}
+                className={`rounded-full px-2 py-1 text-[11px] font-medium transition-all sm:px-3 sm:text-xs ${tutorGender === 'female' ? 'bg-white dark:bg-slate-700 shadow-none text-teal-600' : 'text-slate-500'}`}
               >
                 Female
               </button>
               <button
                 onClick={() => setTutorGender('male')}
-                className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${tutorGender === 'male' ? 'bg-white dark:bg-slate-700 shadow-none text-teal-600' : 'text-slate-500'}`}
+                className={`rounded-full px-2 py-1 text-[11px] font-medium transition-all sm:px-3 sm:text-xs ${tutorGender === 'male' ? 'bg-white dark:bg-slate-700 shadow-none text-teal-600' : 'text-slate-500'}`}
               >
                 Male
               </button>
@@ -267,9 +268,12 @@ export const AIChatSection = ({
             {selectedTopic && !showAIPanel && (
               <Button
                 onClick={() => openTutorFromSelection(selectedTopic, setShowAIPanel, handleAIContinue, aiChatMessages)}
-                className="gap-2 bg-primary hover:bg-primary/90 shadow-none"
+                size="sm"
+                className="shrink-0 gap-1.5 rounded-lg bg-primary px-3 shadow-none hover:bg-primary/90 sm:gap-2 sm:px-4"
               >
-                <Sparkles className="w-4 h-4" /> Start Tutoring
+                <Sparkles className="h-4 w-4" />
+                <span className="hidden sm:inline">Start Tutoring</span>
+                <span className="sm:hidden">Start</span>
               </Button>
             )}
           </div>
@@ -591,8 +595,8 @@ export const AIChatSection = ({
                 </div>
               ) : null}
 
-              <ScrollArea ref={scrollAreaRef} className="flex-1 h-full min-h-0">
-                <div className="max-w-6xl mx-auto p-4 lg:p-6 pb-20">
+              <ScrollArea ref={scrollAreaRef} className="flex-1 h-full min-h-0 overflow-x-hidden">
+                <div className="mx-auto w-full max-w-6xl min-w-0 overflow-x-hidden px-3 py-4 pb-20 sm:px-4 lg:p-6">
                   {aiChatMessages.length === 0 ? (
                     <div className="text-center py-20 animate-in fade-in zoom-in duration-700">
                       <div className="w-28 h-28 bg-primary rounded-lg flex items-center justify-center mx-auto mb-8 shadow-none  transition-transform duration-500 overflow-hidden border-4 border-white dark:border-slate-800">
@@ -629,10 +633,10 @@ export const AIChatSection = ({
                       </div>
                     </div>
                   ) : (
-                    <div className="space-y-8 pb-10">
+                    <div className="min-w-0 space-y-8 pb-10">
                       {aiChatMessages.map((msg, idx) => (
-                        <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-4 duration-500`}>
-                          <div className={`flex gap-2.5 sm:gap-4 max-w-[94%] sm:max-w-[90%] lg:max-w-[80%] ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
+                        <div key={idx} className={`flex w-full min-w-0 ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-4 duration-500`}>
+                          <div className={`flex min-w-0 gap-2.5 sm:gap-4 ${msg.role === 'user' ? 'w-auto max-w-[92%] flex-row-reverse sm:max-w-[84%] lg:max-w-[76%]' : 'w-full max-w-full sm:max-w-[90%] lg:max-w-[80%]'}`}>
                             <Avatar className="w-8 h-8 sm:w-10 sm:h-10 flex-shrink-0 shadow-none border-2 border-white dark:border-slate-800">
                               {msg.role === 'ai' ? (
                                 <AvatarImage src={`/avatars/ai_tutor_${tutorGender}.png`} className="object-cover" />
@@ -643,16 +647,16 @@ export const AIChatSection = ({
                                 {msg.role === 'ai' ? <Brain className="w-5 h-5" /> : (getFullName()[0] || 'U')}
                               </AvatarFallback>
                             </Avatar>
-                            <div className="flex flex-col gap-3 max-w-full">
-                              <div className={`p-4 sm:p-5 rounded-lg shadow-none ${msg.role === 'user'
+                            <div className="flex min-w-0 max-w-full flex-col gap-3">
+                              <div className={`min-w-0 max-w-full overflow-hidden p-3 sm:p-5 rounded-lg shadow-none ${msg.role === 'user'
                                 ? 'bg-primary text-primary-foreground rounded-tr-none'
                                 : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-100 dark:border-slate-700 rounded-tl-none ring-1 ring-black/5 dark:ring-white/5'
                                 }`}>
-                                <div className={`${isYoungLearner && msg.role === 'ai' ? 'text-lg sm:text-xl font-bold font-display' : 'text-sm sm:text-base'} leading-relaxed prose dark:prose-invert max-w-none break-words overflow-hidden`}>
+                                <div className={`${isYoungLearner && msg.role === 'ai' ? 'text-base font-bold font-display sm:text-xl' : 'text-sm sm:text-base'} min-w-0 max-w-full overflow-hidden break-words leading-relaxed [overflow-wrap:anywhere] prose dark:prose-invert prose-pre:max-w-full prose-pre:overflow-x-auto prose-table:block prose-table:max-w-full prose-table:overflow-x-auto`}>
                                   {msg.role === 'ai' ? (
                                     <ReactMarkdown components={mathMarkdownComponents}>{normalizeAcademicTextForDisplay(msg.content)}</ReactMarkdown>
                                   ) : (
-                                    <p className="whitespace-pre-wrap"><MathText>{msg.content}</MathText></p>
+                                    <p className="min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere]"><MathText>{msg.content}</MathText></p>
                                   )}
                                 </div>
                               </div>
@@ -920,7 +924,7 @@ export const AIChatSection = ({
           </div>
         </Card>
       ) : (
-        <div className="grid xl:grid-cols-[minmax(0,1fr)_320px] gap-4 flex-1 min-h-0 overflow-y-auto overscroll-contain pb-8 px-4">
+        <div className="grid xl:grid-cols-[minmax(0,1fr)_320px] gap-4 flex-1 min-h-0 overflow-y-auto overscroll-contain pb-8 px-3 sm:px-4">
           <div className="min-w-0 space-y-4">
             <Card className="rounded-lg border-border shadow-none bg-card">
               <CardHeader className="flex flex-row items-center justify-between py-4">
@@ -974,13 +978,17 @@ export const AIChatSection = ({
 
             {/* Suggested Videos Section */}
             {selectedTopic && suggestedVideos.length > 0 && (
-              <Card className="border-0 shadow-none bg-card border-teal-100 dark:border-teal-900/50 mb-6">
+              <Card className="mb-6 rounded-lg border-border bg-card shadow-none">
                 <CardHeader className="pb-2">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      <Video className="w-5 h-5 text-teal-600" /> Recommended for {selectedTopic.name}
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                    <CardTitle className="flex min-w-0 items-start gap-2 text-base font-semibold leading-snug sm:text-lg">
+                      <Video className="mt-0.5 h-4 w-4 shrink-0 text-teal-600 sm:h-5 sm:w-5" />
+                      <span className="min-w-0">
+                        <span className="block text-xs font-medium uppercase tracking-wide text-muted-foreground">Recommended videos</span>
+                        <span className="line-clamp-2 break-words">For {selectedTopic.name}</span>
+                      </span>
                     </CardTitle>
-                    <Badge variant="outline" className="text-[10px] uppercase font-bold text-teal-600 border-teal-200">YouTube Resources</Badge>
+                    <Badge variant="outline" className="w-fit shrink-0 text-[10px] uppercase font-bold text-teal-600 border-teal-200">YouTube Resources</Badge>
                   </div>
                 </CardHeader>
                 <CardContent>
@@ -1239,13 +1247,17 @@ function BrainPowerCardsSection({ topicName, subjectName, onJumpIn }: { topicNam
   const cards = data?.cards || [];
 
   return (
-    <Card className="border-0 shadow-none bg-card border-teal-100 dark:border-teal-900/50 mb-6">
+    <Card className="mb-6 rounded-lg border-border bg-card shadow-none">
       <CardHeader className="pb-2">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-lg flex items-center gap-2">
-            <BookOpen className="w-5 h-5 text-teal-600" /> Study Materials for {topicName}
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <CardTitle className="flex min-w-0 items-start gap-2 text-base font-semibold leading-snug sm:text-lg">
+            <BookOpen className="mt-0.5 h-4 w-4 shrink-0 text-teal-600 sm:h-5 sm:w-5" />
+            <span className="min-w-0">
+              <span className="block text-xs font-medium uppercase tracking-wide text-muted-foreground">Study materials</span>
+              <span className="line-clamp-2 break-words">For {topicName}</span>
+            </span>
           </CardTitle>
-          <Badge variant="outline" className="text-[10px] uppercase font-bold text-teal-600 border-teal-200">Reading Material</Badge>
+          <Badge variant="outline" className="w-fit shrink-0 text-[10px] uppercase font-bold text-teal-600 border-teal-200">Reading Material</Badge>
         </div>
       </CardHeader>
       <CardContent>

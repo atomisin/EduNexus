@@ -1,6 +1,6 @@
-import { useState, useRef } from 'react';
+import { useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { Loader2, Camera, CheckCircle2 } from 'lucide-react';
+import { Camera, CheckCircle2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -66,9 +66,7 @@ export const ProfileView = ({
     try {
       await studentAPI.updateProfile(profileFormData);
       toast.success('Profile updated successfully!');
-      if (profile) {
-        setProfile({ ...profile, ...profileFormData });
-      }
+      if (profile) setProfile({ ...profile, ...profileFormData });
       setIsEditingProfile(false);
     } catch (error) {
       console.error('Failed to save profile:', error);
@@ -77,59 +75,66 @@ export const ProfileView = ({
     setSavingProfile(false);
   };
 
+  const enrolled = subjects.filter((subject) => enrolledSubjects.includes(subject.id));
+  const jambSubjects = subjects.filter(
+    (subject) => subject.grade_levels?.includes('JAMB') || subject.grade_levels?.includes('SS3')
+  );
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold">My Profile</h2>
-        <Button variant={isEditingProfile ? "default" : "outline"} onClick={() => isEditingProfile ? handleSave() : setIsEditingProfile(true)}>
+    <div className="mx-auto w-full max-w-6xl space-y-4 sm:space-y-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <h2 className="text-xl font-semibold tracking-tight sm:text-2xl">My Profile</h2>
+          <p className="text-sm text-muted-foreground">Keep your learning details accurate and useful.</p>
+        </div>
+        <Button
+          variant={isEditingProfile ? 'default' : 'outline'}
+          className="w-full rounded-lg sm:w-auto"
+          onClick={() => (isEditingProfile ? handleSave() : setIsEditingProfile(true))}
+        >
           {isEditingProfile ? (savingProfile ? 'Saving...' : 'Save Changes') : 'Edit Profile'}
         </Button>
       </div>
-      <div className="grid lg:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader><CardTitle>Personal Information</CardTitle></CardHeader>
-          <CardContent className="space-y-4">
-            {/* Avatar with upload */}
-            <div className="flex items-center gap-4 mb-6">
+
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(280px,0.65fr)]">
+        <Card className="overflow-hidden rounded-lg border-border shadow-none">
+          <CardHeader className="px-4 py-4 sm:px-5">
+            <CardTitle className="text-base font-semibold sm:text-lg">Personal Information</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4 px-4 pb-5 sm:px-5">
+            <div className="flex flex-col gap-4 rounded-lg border border-border bg-subtle p-4 sm:flex-row sm:items-center">
               <div className="relative group">
-                <Avatar className="w-24 h-24 border-4 border-white dark:border-slate-800 shadow-xl overflow-hidden bg-muted">
+                <Avatar className="h-20 w-20 overflow-hidden border border-border bg-muted shadow-sm sm:h-24 sm:w-24">
                   <AvatarImage
-                    src={avatarUrl || user.avatar || (profile as any)?.avatar_url}
+                    src={avatarUrl || user.avatar || profile?.avatar_url}
                     className="object-cover"
                   />
-                  <AvatarFallback className="text-2xl bg-teal-100 text-teal-700">
-                    {user.name?.charAt(0) || 'S'}
+                  <AvatarFallback className="bg-primary/10 text-2xl text-primary">
+                    {user.name?.charAt(0) || user.first_name?.charAt(0) || 'S'}
                   </AvatarFallback>
                 </Avatar>
                 <button
+                  type="button"
                   onClick={() => avatarInputRef.current?.click()}
                   disabled={uploadingAvatar}
-                  className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                  className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50 opacity-0 transition-opacity group-hover:opacity-100"
                 >
-                  {uploadingAvatar ? <Loader2 className="w-5 h-5 text-white animate-spin" /> : <Camera className="w-5 h-5 text-white" />}
+                  {uploadingAvatar ? <Loader2 className="h-5 w-5 animate-spin text-white" /> : <Camera className="h-5 w-5 text-white" />}
                 </button>
                 <input
                   ref={avatarInputRef}
                   type="file"
                   accept="image/*"
                   className="hidden"
-                  onChange={async (e) => {
-                    const file = e.target.files?.[0];
+                  onChange={async (event) => {
+                    const file = event.target.files?.[0];
                     if (!file) return;
                     setUploadingAvatar(true);
                     try {
                       const result = await studentAPI.uploadAvatar(file);
                       setAvatarUrl(result.avatar_url);
-
-                      // Update global auth context so avatar changes everywhere
-                      if (user) {
-                        setUser({
-                          ...user,
-                          avatar: result.avatar_url
-                        });
-                      }
-
-                      toast.success('Profile picture updated! 🎉', { style: { color: '#fff', background: '#059669', fontWeight: '600' } });
+                      if (user) setUser({ ...user, avatar: result.avatar_url });
+                      toast.success('Profile picture updated!');
                     } catch (err: any) {
                       toast.error(err.message || 'Failed to upload photo');
                     } finally {
@@ -138,24 +143,28 @@ export const ProfileView = ({
                   }}
                 />
               </div>
-              <div>
-                <h3 className="text-xl font-semibold">{user.first_name} {user.last_name}</h3>
-                <p className="text-muted-foreground">{user.email}</p>
-                <p className="text-xs text-muted-foreground mt-1">Hover over photo to change</p>
+              <div className="min-w-0 flex-1">
+                <h3 className="truncate text-lg font-semibold sm:text-xl">{user.first_name} {user.last_name}</h3>
+                <p className="break-all text-sm text-muted-foreground">{user.email}</p>
+                <p className="mt-1 text-xs text-muted-foreground">Tap photo to change</p>
               </div>
             </div>
-            <div className="p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-xl">
-              <label className="text-sm text-amber-700 dark:text-amber-400 font-medium">Your Student ID</label>
-              <p className="text-lg font-mono font-bold text-amber-800 dark:text-amber-300">{profile?.student_id || 'Complete registration to get your ID'}</p>
-              <p className="text-xs text-amber-600 dark:text-amber-500 mt-1">Share this ID with your teacher to join their class</p>
+
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-900/70 dark:bg-amber-950/20">
+              <label className="text-sm font-medium text-amber-700 dark:text-amber-400">Your Student ID</label>
+              <p className="break-all font-mono text-base font-bold text-amber-800 dark:text-amber-300 sm:text-lg">
+                {profile?.student_id || 'Complete registration to get your ID'}
+              </p>
+              <p className="mt-1 text-xs text-amber-600 dark:text-amber-500">Share this ID with your teacher to join their class.</p>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <label className="text-sm text-muted-foreground">Education Level / Grade</label>
                 {isEditingProfile ? (
                   <div className="space-y-2">
                     <Select disabled value={profileFormData.education_level} onValueChange={(val) => setProfileFormData({ ...profileFormData, education_level: val })}>
-                      <SelectTrigger className="bg-slate-100 dark:bg-slate-800 cursor-not-allowed"><SelectValue placeholder="Select level" /></SelectTrigger>
+                      <SelectTrigger className="cursor-not-allowed bg-subtle"><SelectValue placeholder="Select level" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="primary_1">Primary 1</SelectItem>
                         <SelectItem value="primary_2">Primary 2</SelectItem>
@@ -164,50 +173,35 @@ export const ProfileView = ({
                         <SelectItem value="primary_5">Primary 5</SelectItem>
                         <SelectItem value="primary_6">Primary 6</SelectItem>
                         {EDUCATION_LEVELS.map((level) => (
-                          <SelectItem key={level.value} value={level.value}>
-                            {level.label}
-                          </SelectItem>
+                          <SelectItem key={level.value} value={level.value}>{level.label}</SelectItem>
                         ))}
                         <SelectItem value="professional">Professional / Career Track</SelectItem>
                       </SelectContent>
                     </Select>
-                    <p className="text-[10px] text-amber-600 font-medium">Locked: Promotion is system-controlled based on performance.</p>
+                    <p className="text-[10px] font-medium text-amber-600">Locked: promotion is system-controlled based on performance.</p>
                   </div>
                 ) : (
                   <p className="font-medium">{formatEducationLevel(profile?.education_level)}</p>
                 )}
               </div>
+
               <div>
                 <label className="text-sm text-muted-foreground">Graduation Status</label>
-                <p className="font-medium text-teal-600 flex items-center gap-1">
-                  <CheckCircle2 className="w-3 h-3" />
+                <p className="flex items-center gap-1 font-medium text-primary">
+                  <CheckCircle2 className="h-3 w-3" />
                   Active Learning
                 </p>
               </div>
+
               <div>
                 <label className="text-sm text-muted-foreground">School / Organization</label>
                 {isEditingProfile ? (
                   <Input value={profileFormData.school_name} onChange={(e) => setProfileFormData({ ...profileFormData, school_name: e.target.value })} placeholder="Your school or company" />
                 ) : (
-                  <p className="font-medium">{profile?.school_name || 'Not set'}</p>
+                  <p className="break-words font-medium">{profile?.school_name || 'Not set'}</p>
                 )}
               </div>
-              {profileFormData.education_level === 'professional' && (
-                <div className="col-span-2 p-4 bg-teal-50 dark:bg-teal-950/20 border border-teal-200 dark:border-teal-800 rounded-xl animate-in zoom-in duration-300">
-                  <label className="text-sm text-teal-700 dark:text-teal-400 font-bold uppercase tracking-wider">Professional Course / Certification</label>
-                  {isEditingProfile ? (
-                    <Input
-                      value={profileFormData.course_name || ''}
-                      onChange={(e) => setProfileFormData({ ...profileFormData, course_name: e.target.value })}
-                      placeholder="e.g., Data Science, UI/UX Design, AWS Associate"
-                      className="mt-2 border-teal-300 focus:border-teal-500"
-                    />
-                  ) : (
-                    <p className="font-black text-xl text-teal-800 dark:text-teal-200 mt-1">{profile?.course_name || 'Not set'}</p>
-                  )}
-                  <p className="text-[10px] text-teal-600 dark:text-teal-500 mt-2 font-medium">✨ AI will curate a comprehensive "Zero to Hero" curriculum based on this course.</p>
-                </div>
-              )}
+
               <div>
                 <label className="text-sm text-muted-foreground">Curriculum</label>
                 {isEditingProfile ? (
@@ -237,104 +231,127 @@ export const ProfileView = ({
                     </SelectContent>
                   </Select>
                 ) : (
-                  <p className="font-medium">{formatCurriculumLabel(profile?.curriculum_type)}</p>
+                  <p className="break-words font-medium">{formatCurriculumLabel(profile?.curriculum_type)}</p>
                 )}
               </div>
 
-              {/* Department Selection for SS Students */}
-              {(profileFormData.education_level?.startsWith('ss')) && (
-                <div className="col-span-2 p-4 bg-primary/5 border border-primary/20 rounded-xl animate-in fade-in slide-in-from-top-2">
-                  <label className="text-sm font-bold text-primary mb-2 block uppercase tracking-tight">Academic Department</label>
+              {profileFormData.education_level === 'professional' && (
+                <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 sm:col-span-2">
+                  <label className="text-sm font-bold uppercase tracking-wide text-primary">Professional Course / Certification</label>
                   {isEditingProfile ? (
-                    <Select value={profileFormData.department} onValueChange={(val) => setProfileFormData({ ...profileFormData, department: val })}>
-                      <SelectTrigger className="border-primary/30 focus:ring-primary"><SelectValue placeholder="Choose Department" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Science">Science (Physics, Chemistry, Bio, etc.)</SelectItem>
-                        <SelectItem value="Art">Art (Lit, Govt, CRS, etc.)</SelectItem>
-                        <SelectItem value="Commercial">Commercial (Accounting, Commerce, etc.)</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <Input
+                      value={profileFormData.course_name || ''}
+                      onChange={(e) => setProfileFormData({ ...profileFormData, course_name: e.target.value })}
+                      placeholder="e.g., Data Science, UI/UX Design, AWS Associate"
+                      className="mt-2"
+                    />
                   ) : (
-                    <Badge className="bg-primary text-white hover:bg-primary/90 px-3 py-1">{profile?.department || 'Not Selected'}</Badge>
+                    <p className="mt-1 break-words text-lg font-semibold">{profile?.course_name || 'Not set'}</p>
                   )}
-                  <p className="text-[10px] text-muted-foreground mt-2 italic">✨ This will automatically filter your core and elective subjects.</p>
+                  <p className="mt-2 text-xs text-muted-foreground">AI will curate a comprehensive curriculum based on this course.</p>
                 </div>
               )}
 
-              {/* Exam Targets */}
+              {profileFormData.education_level?.startsWith('ss') && (
+                <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 sm:col-span-2">
+                  <label className="mb-2 block text-sm font-bold uppercase tracking-tight text-primary">Academic Department</label>
+                  {isEditingProfile ? (
+                    <Select value={profileFormData.department} onValueChange={(val) => setProfileFormData({ ...profileFormData, department: val })}>
+                      <SelectTrigger><SelectValue placeholder="Choose Department" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Science">Science (Physics, Chemistry, Biology)</SelectItem>
+                        <SelectItem value="Art">Art (Literature, Government, CRS)</SelectItem>
+                        <SelectItem value="Commercial">Commercial (Accounting, Commerce)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Badge className="bg-primary px-3 py-1 text-primary-foreground hover:bg-primary">{profile?.department || 'Not selected'}</Badge>
+                  )}
+                  <p className="mt-2 text-xs text-muted-foreground">This automatically filters your core and elective subjects.</p>
+                </div>
+              )}
+
               {(profileFormData.education_level?.startsWith('ss') || profileFormData.education_level === 'jss_3') && (
-                <div className="col-span-2 p-4 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl">
-                  <label className="text-sm font-bold mb-2 block">National Exam Targets</label>
-                  <div className="flex flex-wrap gap-2 mb-3">
-                    {['WAEC', 'JAMB', 'NECO'].map(exam => (
-                      <Badge 
+                <div className="rounded-lg border border-border bg-subtle p-4 sm:col-span-2">
+                  <label className="mb-2 block text-sm font-bold">National Exam Targets</label>
+                  <div className="mb-3 flex flex-wrap gap-2">
+                    {['WAEC', 'JAMB', 'NECO'].map((exam) => (
+                      <Badge
                         key={exam}
-                        variant={profileFormData.exam_targets?.includes(exam) ? "default" : "outline"}
+                        variant={profileFormData.exam_targets?.includes(exam) ? 'default' : 'outline'}
                         className="cursor-pointer transition-all active:scale-95"
                         onClick={() => {
                           if (!isEditingProfile) return;
                           const current = profileFormData.exam_targets || [];
-                          const next = current.includes(exam) 
-                            ? current.filter(e => e !== exam)
-                            : [...current, exam];
-                          setProfileFormData({...profileFormData, exam_targets: next});
+                          const next = current.includes(exam) ? current.filter((item) => item !== exam) : [...current, exam];
+                          setProfileFormData({ ...profileFormData, exam_targets: next });
                         }}
                       >
                         {exam}
                       </Badge>
                     ))}
                   </div>
+
                   {profileFormData.exam_targets?.includes('JAMB') && (
-                    <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800 animate-in zoom-in duration-200">
-                      <label className="text-sm font-bold text-teal-600 mb-2 block">JAMB Subjects (Select 4)</label>
+                    <div className="mt-4 border-t border-border pt-4">
+                      <label className="mb-2 block text-sm font-bold text-primary">JAMB Subjects (Select 4)</label>
                       <div className="flex flex-wrap gap-2 text-xs">
-                        {subjects.filter(s => s.grade_levels?.includes('JAMB') || s.grade_levels?.includes('SS3')).map(subj => (
+                        {jambSubjects.map((subject) => (
                           <button
-                            key={subj.id}
+                            key={subject.id}
+                            type="button"
                             disabled={!isEditingProfile}
                             onClick={() => {
                               const current = profileFormData.jamb_subjects || [];
-                              const next = current.includes(subj.id)
-                                ? current.filter(id => id !== subj.id)
-                                : current.length < 4 ? [...current, subj.id] : current;
-                              setProfileFormData({...profileFormData, jamb_subjects: next});
+                              const next = current.includes(subject.id)
+                                ? current.filter((id) => id !== subject.id)
+                                : current.length < 4 ? [...current, subject.id] : current;
+                              setProfileFormData({ ...profileFormData, jamb_subjects: next });
                             }}
-                            className={`px-3 py-1.5 rounded-lg border transition-all ${
-                              profileFormData.jamb_subjects?.includes(subj.id)
-                                ? 'bg-teal-600 border-teal-600 text-white shadow-md'
-                                : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-teal-400'
+                            className={`rounded-lg border px-3 py-1.5 text-left transition-all ${
+                              profileFormData.jamb_subjects?.includes(subject.id)
+                                ? 'border-primary bg-primary text-primary-foreground shadow-sm'
+                                : 'border-border bg-white hover:border-primary dark:bg-slate-800'
                             }`}
                           >
-                            {subj.name}
+                            {subject.name}
                           </button>
                         ))}
                       </div>
-                      <p className="text-[10px] text-muted-foreground mt-2 italic">Select the 4 subjects you will write in UTME.</p>
+                      <p className="mt-2 text-xs text-muted-foreground">Select the 4 subjects you will write in UTME.</p>
                     </div>
                   )}
                 </div>
               )}
             </div>
-            <div className="col-span-2 pt-4 border-t border-slate-100 dark:border-slate-800">
-              <label className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-3 block">Enrolled Courses & Subjects</label>
+
+            <div className="border-t border-border pt-4">
+              <label className="mb-3 block text-sm font-bold text-slate-700 dark:text-slate-300">Enrolled Courses & Subjects</label>
               <div className="flex flex-wrap gap-2">
-                {subjects.filter(s => enrolledSubjects.includes(s.id)).map(subject => (
-                  <Badge key={subject.id} variant="secondary" className="bg-teal-50 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300 text-sm py-1.5 px-3">
+                {enrolled.map((subject) => (
+                  <Badge key={subject.id} variant="secondary" className="bg-primary/10 px-3 py-1.5 text-sm text-primary">
                     {subject.name}
                   </Badge>
                 ))}
-                {subjects.filter(s => enrolledSubjects.includes(s.id)).length === 0 && (
-                  <span className="text-sm text-muted-foreground italic">No Active Courses</span>
+                {enrolled.length === 0 && (
+                  <span className="text-sm italic text-muted-foreground">No active courses</span>
                 )}
               </div>
             </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader><CardTitle>Learning Preferences</CardTitle></CardHeader>
-          <CardContent className="space-y-4">
-            <div><label className="text-sm text-muted-foreground">Learning Style</label><p className="font-medium">{getLearningStyleLabel(profile?.learning_style).label}</p></div>
-            <div className="grid grid-cols-2 gap-4">
+
+        <Card className="rounded-lg border-border shadow-none">
+          <CardHeader className="px-4 py-4 sm:px-5">
+            <CardTitle className="text-base font-semibold sm:text-lg">Learning Preferences</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4 px-4 pb-5 sm:px-5">
+            <div className="rounded-lg border border-border bg-subtle p-4">
+              <label className="text-sm text-muted-foreground">Learning Style</label>
+              <p className="font-medium">{getLearningStyleLabel(profile?.learning_style).label}</p>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-1">
               <div>
                 <label className="text-sm text-muted-foreground">Best Study Time</label>
                 {isEditingProfile ? (
@@ -351,11 +368,17 @@ export const ProfileView = ({
                   <p className="font-medium">{profile?.best_study_time || 'Not set'}</p>
                 )}
               </div>
+
               <div>
                 <label className="text-sm text-muted-foreground">Focus Duration</label>
                 {isEditingProfile ? (
                   <div className="flex items-center gap-2">
-                    <Input type="number" value={profileFormData.attention_span_minutes} onChange={(e) => setProfileFormData({ ...profileFormData, attention_span_minutes: parseInt(e.target.value) })} className="w-20" />
+                    <Input
+                      type="number"
+                      value={profileFormData.attention_span_minutes}
+                      onChange={(e) => setProfileFormData({ ...profileFormData, attention_span_minutes: parseInt(e.target.value, 10) })}
+                      className="w-24"
+                    />
                     <span className="text-xs">min</span>
                   </div>
                 ) : (
@@ -363,7 +386,12 @@ export const ProfileView = ({
                 )}
               </div>
             </div>
-            {!isEditingProfile && <Button className="w-full mt-4" onClick={startAssessment}>Take Learning Style Assessment</Button>}
+
+            {!isEditingProfile && (
+              <Button className="mt-2 w-full rounded-lg" onClick={startAssessment}>
+                Take Learning Style Assessment
+              </Button>
+            )}
           </CardContent>
         </Card>
       </div>

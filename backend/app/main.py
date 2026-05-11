@@ -22,7 +22,7 @@ from app.db.database import AsyncSessionLocal
 from app.models import (
     user, student, session, subject, assessment,
     rag_models, student_progress, notification,
-    message, report, token_usage,
+    message, report, token_usage, placement,
     junction_tables, mock_exam, subject_outline
 )
 
@@ -105,6 +105,23 @@ async def lifespan(app: FastAPI):
             await db.execute(text("ALTER TABLE student_topic_progress ADD COLUMN IF NOT EXISTS completed_at TIMESTAMP WITH TIME ZONE"))
             await db.execute(text("ALTER TABLE student_topic_progress ADD COLUMN IF NOT EXISTS subject_id UUID"))
             await db.execute(text("ALTER TABLE student_topic_progress ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP"))
+            await db.execute(text("""
+                CREATE TABLE IF NOT EXISTS placement_question_cache (
+                    id UUID PRIMARY KEY,
+                    subject_id UUID NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+                    topic_id UUID NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
+                    education_level VARCHAR(80) NOT NULL,
+                    curriculum_hash VARCHAR(64) NOT NULL,
+                    question_spec JSONB NOT NULL,
+                    source VARCHAR(30) DEFAULT 'llm',
+                    status VARCHAR(20) DEFAULT 'active',
+                    review_notes TEXT,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                    CONSTRAINT uq_placement_question_cache_scope
+                        UNIQUE (subject_id, topic_id, education_level, curriculum_hash)
+                )
+            """))
             await db.execute(text("""
                 UPDATE student_topic_progress
                 SET status = CASE

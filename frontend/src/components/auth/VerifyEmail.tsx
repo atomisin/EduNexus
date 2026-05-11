@@ -5,6 +5,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { CheckCircle, XCircle, Loader2, Mail, ArrowLeft } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
+import { useSearchParams } from 'react-router-dom';
 
 interface VerifyEmailProps {
   token: string | null;
@@ -14,20 +15,24 @@ interface VerifyEmailProps {
 
 export const VerifyEmail: React.FC<VerifyEmailProps> = ({ token, onBack, onLogin }) => {
   const { verifyEmail, isLoading, error } = useAuth();
+  const [searchParams] = useSearchParams();
   const [verificationStatus, setVerificationStatus] = useState<'pending' | 'success' | 'error'>('pending');
   const [verificationError, setVerificationError] = useState<string | null>(null);
+  const codeFromUrl = searchParams.get('code') || '';
+  const emailFromUrl = searchParams.get('email') || '';
+  const verificationCode = token || codeFromUrl;
 
   useEffect(() => {
-    if (token) {
+    if (verificationCode && emailFromUrl) {
       handleVerify();
     }
-  }, [token]);
+  }, [verificationCode, emailFromUrl]);
 
   const handleVerify = async () => {
-    if (!token) return;
+    if (!verificationCode || !emailFromUrl) return;
     
     try {
-      const success = await verifyEmail(token, '');
+      const success = await verifyEmail(verificationCode, emailFromUrl);
       if (success) {
         setVerificationStatus('success');
         toast.success('Email verified successfully!');
@@ -41,7 +46,7 @@ export const VerifyEmail: React.FC<VerifyEmailProps> = ({ token, onBack, onLogin
     }
   };
 
-  if (!token) {
+  if (!verificationCode || !emailFromUrl) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-indigo-50 dark:from-slate-950 dark:to-indigo-950 flex items-center justify-center p-4">
         <Card className="w-full max-w-md">

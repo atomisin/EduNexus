@@ -41,7 +41,7 @@ def _warmup_registry():
     from app.models import (
         user, student, session, subject, assessment,
         rag_models, student_progress, notification,
-        message, report, token_usage,
+        message, report, token_usage, placement,
         junction_tables, mock_exam, subject_outline
     )
     # Force SQLAlchemy to resolve all string relationship names

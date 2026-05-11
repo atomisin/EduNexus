@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone, date
@@ -8,6 +9,9 @@ import uuid
 import base64
 import hashlib
 import hmac
+import json
+import logging
+import re
 import time
 
 from app.db.database import get_async_db
@@ -23,12 +27,15 @@ from app.models.student import StudentProfile
 from sqlalchemy.orm.attributes import flag_modified
 from app.models.junction_tables import StudentTopicProgress
 from app.models.subject import Topic, Subject
+from app.models.placement import PlacementQuestionCache
+from app.services.llm_service import llm_service
 from app.services.revision_context import (
     get_revision_context,
     is_revision_topic,
 )
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 PLACEHOLDER_TOPIC_NAMES = {"CLASS", "SUBJECT", "TERM", "TOPIC", "TOPICS"}
 
@@ -471,7 +478,7 @@ async def get_monthly_report_detail(
     }
 
 
-# ─── Completion Tracking ───────────────────────────────────────────
+# Completion Tracking
 
 
 class TopicProgressUpdate(BaseModel):
@@ -566,170 +573,259 @@ def normalize_placement_text(*parts: Optional[str]) -> str:
     return " ".join(part or "" for part in parts).lower()
 
 
-def build_competency_question_spec(topic: Topic, subject: Optional[Subject]) -> Dict[str, Any]:
-    """Return deterministic, answerable placement checks instead of metadata-recognition prompts."""
-    subject_name = (subject.name if subject else "").strip()
-    subject_text = normalize_placement_text(subject_name, subject.curriculum_type if subject else "")
-    topic_text = normalize_placement_text(topic.name, topic.description)
+def placement_education_scope(subject: Optional[Subject]) -> str:
+    if not subject:
+        return "general"
+    grade_levels = [str(level).strip() for level in (subject.grade_levels or []) if level]
+    parts = [
+        subject.education_level or "",
+        subject.curriculum_type or "",
+        ",".join(grade_levels),
+    ]
+    return "|".join(part for part in parts if part) or "general"
 
-    if "math" in subject_text or any(keyword in topic_text for keyword in ["logarithm", "equation", "factor", "ratio", "percent", "trigonometry"]):
-        if "logarithm" in topic_text:
-            if "table" in topic_text:
-                return {
-                    "text": "A student wants to multiply two numbers using common logarithms. Which step is mathematically correct?",
-                    "correct": "Add the logarithms of the two numbers, then use the antilogarithm to get the product.",
-                    "distractors": [
-                        "Subtract the logarithms, then use the antilogarithm to get the product.",
-                        "Multiply the logarithms directly and keep that as the final product.",
-                        "Ignore the characteristic and read only the mantissa from the table.",
-                    ],
-                    "explanation": "For multiplication, common logarithms change products into sums: \\(\\log(ab)=\\log a+\\log b\\).",
-                }
-            if "less than 1" in topic_text:
-                return {
-                    "text": "What is \\(\\log_{10}(0.01)\\)?",
-                    "correct": "\\(-2\\), because \\(0.01 = 10^{-2}\\).",
-                    "distractors": [
-                        "\\(2\\), because the decimal has two places.",
-                        "\\(0.2\\), because \\(0.01\\) has two zeros.",
-                        "\\(100\\), because \\(0.01\\) is one hundredth.",
-                    ],
-                    "explanation": "Numbers less than 1 have negative common logarithms when they are powers of 10.",
-                }
-            return {
-                "text": "If \\(\\log_{10}(1000)=x\\), what is \\(x\\)?",
-                "correct": "\\(3\\), because \\(1000=10^{3}\\).",
-                "distractors": [
-                    "\\(2\\), because 1000 has two zeros after the first digit.",
-                    "\\(10\\), because the base is 10.",
-                    "\\(100\\), because 1000 divided by 10 is 100.",
-                ],
-                "explanation": "A logarithm asks for the power needed on the base. Here, \\(10^{3}=1000\\).",
-            }
-        if "percent" in topic_text or "percentage" in topic_text:
-            return {
-                "text": "A price of \u20a65000 is reduced by 20%. What is the new price?",
-                "correct": "\u20a64000",
-                "distractors": ["\u20a61000", "\u20a64800", "\u20a65200"],
-                "explanation": "20% of \u20a65000 is \u20a61000, so the new price is \u20a64000.",
-            }
-        return {
-            "text": "Solve: \\(2x + 3 = 11\\).",
-            "correct": "\\(x = 4\\)",
-            "distractors": ["\\(x = 7\\)", "\\(x = 5.5\\)", "\\(x = 14\\)"],
-            "explanation": "Subtract 3 from both sides to get \\(2x=8\\), then divide by 2.",
-        }
 
-    if "physics" in subject_text or any(keyword in topic_text for keyword in ["force", "motion", "energy", "current", "voltage", "density", "pressure"]):
-        if "density" in topic_text:
-            return {
-                "text": "A block has mass \\(20\\,kg\\) and volume \\(4\\,m^{3}\\). What is its density?",
-                "correct": "\\(5\\,kg/m^{3}\\)",
-                "distractors": ["\\(80\\,kg/m^{3}\\)", "\\(16\\,kg/m^{3}\\)", "\\(24\\,kg/m^{3}\\)"],
-                "explanation": "Density is mass divided by volume: \\(20/4=5\\,kg/m^{3}\\).",
-            }
-        return {
-            "text": "A force of \\(10\\,N\\) acts on a mass of \\(2\\,kg\\). What is the acceleration?",
-            "correct": "\\(5\\,m/s^{2}\\)",
-            "distractors": ["\\(20\\,m/s^{2}\\)", "\\(12\\,m/s^{2}\\)", "\\(8\\,m/s^{2}\\)"],
-            "explanation": "Using \\(F=ma\\), acceleration is \\(a=F/m=10/2=5\\,m/s^{2}\\).",
-        }
+def placement_curriculum_hash(topic: Topic, subject: Optional[Subject]) -> str:
+    payload = {
+        "subject": subject.name if subject else "",
+        "education_level": placement_education_scope(subject),
+        "topic": topic.name or "",
+        "description": topic.description or "",
+        "term": topic.term or "",
+        "outcomes": topic.learning_outcomes or [],
+    }
+    raw = json.dumps(payload, sort_keys=True, ensure_ascii=True)
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
-    if "chem" in subject_text or any(keyword in topic_text for keyword in ["atom", "mole", "acid", "base", "salt", "bond", "reaction"]):
-        if "mole" in topic_text:
-            return {
-                "text": "How many moles are in \\(18\\,g\\) of \\(H_{2}O\\)? \\((H=1, O=16)\\)",
-                "correct": "\\(1\\,mol\\)",
-                "distractors": ["\\(18\\,mol\\)", "\\(9\\,mol\\)", "\\(2\\,mol\\)"],
-                "explanation": "The molar mass of \\(H_{2}O\\) is \\(18\\,g/mol\\), so \\(18\\,g\\) is \\(1\\,mol\\).",
-            }
-        return {
-            "text": "Which formula correctly represents carbon dioxide?",
-            "correct": "\\(CO_{2}\\)",
-            "distractors": ["\\(C_{2}O\\)", "\\(CO\\)", "\\(CaO_{2}\\)"],
-            "explanation": "Carbon dioxide has one carbon atom and two oxygen atoms, so its formula is \\(CO_{2}\\).",
-        }
 
-    if "biology" in subject_text or any(keyword in topic_text for keyword in ["cell", "photosynthesis", "respiration", "classification", "nutrition", "genetics"]):
-        if "photosynthesis" in topic_text:
-            return {
-                "text": "Which substances are the main products of photosynthesis?",
-                "correct": "Glucose and oxygen.",
-                "distractors": ["Carbon dioxide and water.", "Oxygen and water only.", "Protein and nitrogen."],
-                "explanation": "Plants use light energy to convert carbon dioxide and water into glucose and oxygen.",
-            }
-        return {
-            "text": "Which structure controls most activities of a typical animal cell?",
-            "correct": "The nucleus.",
-            "distractors": ["The cell wall.", "The vacuole only.", "The chloroplast."],
-            "explanation": "The nucleus contains genetic material and controls most cell activities.",
-        }
+def parse_json_object(raw: str) -> Dict[str, Any]:
+    try:
+        return json.loads(raw)
+    except Exception:
+        match = re.search(r"\{.*\}", raw or "", flags=re.DOTALL)
+        if not match:
+            raise ValueError("No JSON object found")
+        return json.loads(match.group(0))
 
-    if any(keyword in subject_text for keyword in ["account", "commerce", "business", "finance", "economics"]) or any(keyword in topic_text for keyword in ["ledger", "journal", "asset", "liability", "equity", "profit", "account"]):
-        if "profit" in topic_text:
-            return {
-                "text": "A business has sales of \u20a650000 and cost of goods sold of \u20a632000. What is gross profit?",
-                "correct": "\u20a618000",
-                "distractors": ["\u20a682000", "\u20a632000", "\u20a650000"],
-                "explanation": "Gross profit is sales minus cost of goods sold.",
-            }
-        return {
-            "text": "Which equation is the accounting equation?",
-            "correct": "\\(Assets = Liabilities + Equity\\)",
-            "distractors": [
-                "\\(Assets = Liabilities - Equity\\)",
-                "\\(Profit = Assets + Drawings\\)",
-                "\\(Capital = Sales - Expenses\\)",
-            ],
-            "explanation": "The accounting equation shows that assets are financed by liabilities and owner's equity.",
-        }
 
-    if any(keyword in subject_text for keyword in ["computer", "programming", "software", "data"]) or any(keyword in topic_text for keyword in ["algorithm", "program", "database", "network", "data"]):
-        return {
-            "text": "Which option best describes an algorithm?",
-            "correct": "A clear step-by-step procedure for solving a problem.",
-            "distractors": [
-                "A computer virus that changes program output.",
-                "Any paragraph written in a textbook.",
-                "A random guess made before coding.",
-            ],
-            "explanation": "An algorithm is a precise sequence of steps that can be followed to solve a problem.",
-        }
-
-    if any(keyword in subject_text for keyword in ["nursing", "medicine", "health", "pharmacy"]) or any(keyword in topic_text for keyword in ["patient", "diagnosis", "drug", "care", "infection"]):
-        return {
-            "text": "A patient-care question is unclear. What is the safest professional first step?",
-            "correct": "Clarify the instruction and verify the patient information before acting.",
-            "distractors": [
-                "Guess the missing detail and continue quickly.",
-                "Ignore the patient record if the ward is busy.",
-                "Ask another patient what should be done.",
-            ],
-            "explanation": "Technical health decisions require verification before action to protect the patient.",
-        }
-
+def normalize_question_spec(spec: Dict[str, Any]) -> Dict[str, Any]:
+    distractors = spec.get("distractors") or []
+    if isinstance(distractors, dict):
+        distractors = list(distractors.values())
     return {
-        "text": f"Which response shows real understanding of '{topic.name}'?",
-        "correct": "Applying the main idea correctly to a new example and explaining the reason.",
-        "distractors": [
-            "Repeating the lesson title without solving anything.",
-            "Choosing an answer only because one keyword looks familiar.",
-            "Memorizing one sentence without being able to use it.",
-        ],
-        "explanation": "Placement checks should measure usable understanding, not recognition of lesson metadata.",
+        "text": str(spec.get("text") or spec.get("question") or "").strip(),
+        "correct": str(spec.get("correct") or spec.get("answer") or "").strip(),
+        "distractors": [str(item).strip() for item in distractors if str(item).strip()][:3],
+        "explanation": str(spec.get("explanation") or "").strip(),
     }
 
 
-def build_placement_question(
+def validate_placement_question_spec(spec: Dict[str, Any], topic: Topic, subject: Optional[Subject]) -> None:
+    text = normalize_placement_text(spec.get("text"), spec.get("correct"), spec.get("explanation"))
+    topic_text = normalize_placement_text(topic.name, topic.description, " ".join(topic.learning_outcomes or []))
+    subject_text = normalize_placement_text(subject.name if subject else "", subject.education_level if subject else "")
+
+    if len(spec.get("text", "")) < 20 or len(spec.get("correct", "")) < 1:
+        raise ValueError("Placement question is too thin")
+    if len(spec.get("distractors") or []) != 3:
+        raise ValueError("Placement question must have exactly three distractors")
+    if len({spec["correct"], *spec["distractors"]}) != 4:
+        raise ValueError("Placement options must be distinct")
+
+    banned_phrases = [
+        "best matches the lesson",
+        "lesson title",
+        "metadata",
+        "repeating the lesson",
+        "real understanding of",
+        "which response shows",
+    ]
+    if any(phrase in text for phrase in banned_phrases):
+        raise ValueError("Placement question is metadata-recognition, not competence-based")
+
+    algebra_markers = ["2x", "x +", "x+", "x =", "solve for x", "linear equation", "quadratic"]
+    algebra_topic_markers = ["equation", "algebra", "linear", "quadratic", "factor", "simultaneous"]
+    if any(marker in text for marker in algebra_markers) and not any(marker in topic_text for marker in algebra_topic_markers):
+        raise ValueError("Algebra question generated for a non-algebra prerequisite")
+
+    if "math" in subject_text:
+        math_signals = [
+            r"\d",
+            r"\\\(",
+            r"\+",
+            r"-",
+            r"x",
+            r"\\times",
+            r"=",
+            r"count",
+            r"calculate",
+            r"solve",
+            r"what comes",
+            r"arrange",
+            r"compare",
+        ]
+        if not any(re.search(signal, text) for signal in math_signals):
+            raise ValueError("Mathematics placement question must involve calculation or numeric reasoning")
+
+    applied_subjects = {
+        "biology": ["cell", "plant", "animal", "organism", "body", "function", "process", "classify", "identify", "effect"],
+        "chem": ["substance", "element", "compound", "reaction", "atom", "molecule", "acid", "base", "formula", "property"],
+        "physics": ["force", "motion", "energy", "current", "voltage", "mass", "speed", "calculate", "effect"],
+        "account": ["transaction", "ledger", "asset", "liability", "capital", "debit", "credit", "profit", "balance"],
+    }
+    for subject_key, signals in applied_subjects.items():
+        if subject_key in subject_text and not any(signal in text for signal in signals):
+            raise ValueError(f"{subject_key} placement question is not sufficiently subject-applied")
+
+
+def build_placement_generation_prompt(topic: Topic, subject: Optional[Subject]) -> str:
+    grade_levels = ", ".join(subject.grade_levels or []) if subject else ""
+    outcomes = "; ".join(topic.learning_outcomes or [])
+    return f"""
+Create ONE multiple-choice placement question for EduNexus.
+
+Purpose:
+- Test whether a learner has usable prerequisite understanding of the exact curriculum lesson below.
+- The question will decide if the learner may unlock a later lesson, so it must be fair, answerable, and directly tied to this prerequisite.
+
+Curriculum context:
+- Subject: {subject.name if subject else "Unknown"}
+- Education level: {subject.education_level if subject else "Unknown"}
+- Grade/class scope: {grade_levels or "Not specified"}
+- Curriculum/track: {subject.curriculum_type if subject else "Not specified"}
+- Term: {topic.term or "Not specified"}
+- Prerequisite lesson: {topic.name}
+- Lesson description: {topic.description or "Not provided"}
+- Learning outcomes: {outcomes or "Not provided"}
+
+Rules:
+- Do not ask a generic algebra, science, or English question unless this exact lesson requires it.
+- Do not ask the learner to identify the lesson title or choose a statement that merely describes the lesson.
+- For Mathematics, the learner must calculate, count, compare, arrange, solve, or complete a numeric pattern from the lesson skill.
+- For Biology, test application of a living system, structure, process, classification, function, or cause-effect idea from the lesson.
+- For Chemistry, test substances, formulae, reactions, properties, particles, or laboratory reasoning from the lesson.
+- For Physics, use a measurable scenario, relationship, diagram-style reasoning, or calculation from the lesson.
+- For Accounting, Commerce, Economics, and professional subjects, use a realistic transaction, case, data point, or professional decision from the lesson.
+- For language/humanities subjects, use a short passage, example, interpretation, or applied classification task.
+- Match the depth to the class/level. Primary tasks should be simple and concrete; JSS/SS tasks should require curriculum-level reasoning; professional tasks should use workplace-level judgement.
+- If math or technical notation is needed, use LaTeX delimiters like \\( ... \\).
+- Ensure every wrong option is plausible but clearly wrong for the exact lesson.
+- Return JSON only with this shape:
+  {{"text":"question text","correct":"correct option text","distractors":["wrong option","wrong option","wrong option"],"explanation":"one-sentence explanation"}}
+""".strip()
+
+
+async def generate_cached_placement_spec(
+    db: AsyncSession,
+    topic: Topic,
+    subject: Optional[Subject],
+    user_id: Optional[uuid.UUID],
+) -> Dict[str, Any]:
+    if not subject:
+        raise HTTPException(status_code=400, detail="Subject context is required for placement questions")
+
+    education_level = placement_education_scope(subject)
+    curriculum_hash = placement_curriculum_hash(topic, subject)
+    cached_res = await db.execute(
+        select(PlacementQuestionCache).filter(
+            PlacementQuestionCache.subject_id == subject.id,
+            PlacementQuestionCache.topic_id == topic.id,
+            PlacementQuestionCache.education_level == education_level,
+            PlacementQuestionCache.curriculum_hash == curriculum_hash,
+            PlacementQuestionCache.status == "active",
+        )
+    )
+    cached = cached_res.scalars().first()
+    if cached:
+        spec = normalize_question_spec(cached.question_spec)
+        try:
+            validate_placement_question_spec(spec, topic, subject)
+            return spec
+        except ValueError as exc:
+            cached.status = "invalid"
+            cached.review_notes = str(exc)
+            await db.commit()
+
+    prompt = build_placement_generation_prompt(topic, subject)
+    last_error: Optional[Exception] = None
+    spec: Optional[Dict[str, Any]] = None
+    for attempt in range(2):
+        try:
+            retry_instruction = (
+                f"\n\nPrevious attempt failed validation: {last_error}. Regenerate a stronger, applied, class-appropriate question."
+                if last_error
+                else ""
+            )
+            raw = await llm_service.generate(
+                prompt=f"{prompt}{retry_instruction}",
+                temperature=0.2,
+                max_tokens=450,
+                format="json_object",
+                user_id=user_id,
+            )
+            candidate = normalize_question_spec(parse_json_object(raw))
+            validate_placement_question_spec(candidate, topic, subject)
+            spec = candidate
+            break
+        except Exception as exc:
+            last_error = exc
+            logger.warning(
+                "Placement question generation attempt %s failed for topic %s: %s",
+                attempt + 1,
+                topic.id,
+                exc,
+            )
+
+    if spec is None:
+        raise HTTPException(
+            status_code=503,
+            detail="EduNexus could not prepare a reliable placement question for this lesson yet. Please try again shortly.",
+        )
+
+    cache = PlacementQuestionCache(
+        subject_id=subject.id,
+        topic_id=topic.id,
+        education_level=education_level,
+        curriculum_hash=curriculum_hash,
+        question_spec=spec,
+        source="llm",
+        review_notes=None,
+    )
+    db.add(cache)
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        cached_res = await db.execute(
+            select(PlacementQuestionCache).filter(
+                PlacementQuestionCache.subject_id == subject.id,
+                PlacementQuestionCache.topic_id == topic.id,
+                PlacementQuestionCache.education_level == education_level,
+                PlacementQuestionCache.curriculum_hash == curriculum_hash,
+                PlacementQuestionCache.status == "active",
+            )
+        )
+        cached = cached_res.scalars().first()
+        if cached:
+            return normalize_question_spec(cached.question_spec)
+    except Exception:
+        await db.rollback()
+        logger.exception("Failed to cache placement question for topic %s", topic.id)
+    return spec
+
+
+async def build_placement_question(
+    db: AsyncSession,
     topic: Topic,
     idx: int,
     subject: Optional[Subject] = None,
     include_answer: bool = False,
     unlock_topic: Optional[Topic] = None,
+    user_id: Optional[uuid.UUID] = None,
 ) -> Dict[str, Any]:
     """Build a deterministic placement question tied to one prerequisite topic."""
     correct_option = placement_correct_option(topic)
-    spec = build_competency_question_spec(topic, subject)
+    spec = await generate_cached_placement_spec(db, topic, subject, user_id)
     option_keys = ["A", "B", "C", "D"]
     options: Dict[str, str] = {}
     distractor_index = 0
@@ -970,15 +1066,16 @@ async def start_placement_check(
 
     placement_scope = await build_placement_scope(db, subject_uuid, target_topic, prerequisite_topics)
     assessment_entries = placement_scope["assessment_entries"]
-    questions = [
-        build_placement_question(
+    questions = []
+    for idx, entry in enumerate(assessment_entries):
+        questions.append(await build_placement_question(
+            db,
             entry["assessment_topic"],
             idx + 1,
             subject=placement_scope.get("subject"),
             unlock_topic=entry["unlock_topic"],
-        )
-        for idx, entry in enumerate(assessment_entries)
-    ]
+            user_id=current_user.id,
+        ))
 
     response = {
         "target_topic": {

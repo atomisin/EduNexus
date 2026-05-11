@@ -63,6 +63,12 @@ export const normalizeAcademicTextForDisplay = (text: string) => {
   normalized = normalized.replace(/(^|\n)\s*:\s+(?=\S)/g, '$1');
 
   normalized = normalized.replace(
+    /(^|\n)(\s*)((?:(?:[\u{1F300}-\u{1FAFF}\u2600-\u27BF]\uFE0F?)\s*)+)(#{1,6})\s+/gu,
+    (_match, lineStart, spacing, emojiPrefix, headingMarks) =>
+      `${lineStart}${spacing}${headingMarks} ${emojiPrefix}`
+  );
+
+  normalized = normalized.replace(
     /\(\s*([A-Za-z])\s*[xX\u00d7]\s*10\s*([A-Za-z])\s*\1\s*[xX\u00d7]\s*10\s*\2\s*\)/gs,
     (_match, coefficient, exponent) => wrapInlineMath(`${coefficient} \\times 10^{${exponent}}`)
   );

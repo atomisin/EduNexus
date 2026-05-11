@@ -51,6 +51,10 @@ def generate_student_id() -> str:
     return f"EDU-{year}-{suffix}"
 
 
+def email_verification_required() -> bool:
+    return settings.VERIFICATION_ENABLED and not settings.VERIFICATION_BYPASS
+
+
 class UserCreate(BaseModel):
     email: EmailStr
     username: str
@@ -178,7 +182,8 @@ async def register(user_data: UserCreate, db: AsyncSession = Depends(get_async_d
 
     # Generate verification code if verification is enabled
     verification_code = None
-    if settings.VERIFICATION_ENABLED and not settings.VERIFICATION_BYPASS:
+    verification_required = email_verification_required()
+    if verification_required:
         verification_code = email_service.generate_verification_code()
 
     # DESIGN DECISION: Both students and teachers self-register
@@ -195,7 +200,7 @@ async def register(user_data: UserCreate, db: AsyncSession = Depends(get_async_d
         last_name=user_data.last_name,
         full_name=f"{user_data.first_name} {user_data.last_name}",
         role=assigned_role,
-        status=UserStatus.PENDING_APPROVAL,
+        status=UserStatus.UNVERIFIED if verification_required else UserStatus.PENDING,
         is_active=False,
         email_verified_at=None,
         force_password_change=False,
@@ -215,8 +220,7 @@ async def register(user_data: UserCreate, db: AsyncSession = Depends(get_async_d
     # Send verification email if enabled
     email_sent = False
     if (
-        settings.VERIFICATION_ENABLED
-        and not settings.VERIFICATION_BYPASS
+        verification_required
         and verification_code
     ):
         email_sent = email_service.send_verification_email(db_user, verification_code)
@@ -228,8 +232,7 @@ async def register(user_data: UserCreate, db: AsyncSession = Depends(get_async_d
         "user_id": str(db_user.id),
         "email": db_user.email,
         "role": user_data.role,
-        "verification_required": settings.VERIFICATION_ENABLED
-        and not settings.VERIFICATION_BYPASS,
+        "verification_required": verification_required,
         "verification_sent": email_sent,
     }
 
@@ -272,7 +275,8 @@ async def register_teacher(
 
     # Generate verification code if verification is enabled
     verification_code = None
-    if settings.VERIFICATION_ENABLED and not settings.VERIFICATION_BYPASS:
+    verification_required = email_verification_required()
+    if verification_required:
         verification_code = email_service.generate_verification_code()
 
     # Create user
@@ -285,7 +289,7 @@ async def register_teacher(
         last_name=teacher_data.last_name,
         full_name=f"{teacher_data.first_name} {teacher_data.last_name}",
         role=UserRole.TEACHER,
-        status=UserStatus.PENDING_APPROVAL,
+        status=UserStatus.UNVERIFIED if verification_required else UserStatus.PENDING,
         is_active=False,
         email_verified_at=None,
         force_password_change=False,
@@ -321,8 +325,7 @@ async def register_teacher(
     # Send verification email if enabled
     email_sent = False
     if (
-        settings.VERIFICATION_ENABLED
-        and not settings.VERIFICATION_BYPASS
+        verification_required
         and verification_code
     ):
         email_sent = email_service.send_verification_email(db_user, verification_code)
@@ -335,8 +338,7 @@ async def register_teacher(
         "email": db_user.email,
         "role": "teacher",
         "verification_status": "pending",
-        "verification_required": settings.VERIFICATION_ENABLED
-        and not settings.VERIFICATION_BYPASS,
+        "verification_required": verification_required,
         "verification_sent": email_sent,
         "email_verification_sent": email_sent,
     }
@@ -382,7 +384,8 @@ async def register_student(
 
     # Generate verification code if verification is enabled
     verification_code = None
-    if settings.VERIFICATION_ENABLED and not settings.VERIFICATION_BYPASS:
+    verification_required = email_verification_required()
+    if verification_required:
         verification_code = email_service.generate_verification_code()
 
     # Create user
@@ -395,7 +398,7 @@ async def register_student(
         last_name=student_data.last_name,
         full_name=f"{student_data.first_name} {student_data.last_name}",
         role=UserRole.STUDENT,
-        status=UserStatus.PENDING_APPROVAL,
+        status=UserStatus.UNVERIFIED if verification_required else UserStatus.PENDING,
         is_active=False,
         email_verified_at=None,
         force_password_change=False,
@@ -443,8 +446,7 @@ async def register_student(
     # Send verification email if enabled
     email_sent = False
     if (
-        settings.VERIFICATION_ENABLED
-        and not settings.VERIFICATION_BYPASS
+        verification_required
         and verification_code
     ):
         email_sent = email_service.send_verification_email(db_user, verification_code)
@@ -507,8 +509,7 @@ async def register_student(
         "user_id": str(db_user.id),
         "email": db_user.email,
         "role": "student",
-        "verification_required": settings.VERIFICATION_ENABLED
-        and not settings.VERIFICATION_BYPASS,
+        "verification_required": verification_required,
         "verification_sent": email_sent,
     }
 
@@ -538,7 +539,12 @@ async def login(
 
     # Single Source of Truth: Check status, NOT is_active (C-04-B)
     # The frontend expects specific error codes to show unique messages
-    if user.status == UserStatus.UNVERIFIED:
+    if (
+        email_verification_required()
+        and user.role != UserRole.ADMIN
+        and not user.email_verified_at
+        and user.status in [UserStatus.UNVERIFIED, UserStatus.PENDING, UserStatus.PENDING_APPROVAL]
+    ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={

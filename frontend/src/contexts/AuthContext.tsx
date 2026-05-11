@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useEffect, useCallback } from 'rea
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import type { ReactNode } from 'react';
-import { authAPI, userAPI } from '@/services/api';
+import { authAPI, userAPI, warmUpServer } from '@/services/api';
 
 export interface User {
   id: string;
@@ -249,6 +249,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     try {
       let response;
+      await warmUpServer().catch(() => false);
       const generateUsername = (firstName: string, lastName: string) => {
         const base = `${firstName.toLowerCase()}${lastName.toLowerCase()}`.replace(/[^a-z0-9]/g, '');
         const suffix = Math.floor(1000 + Math.random() * 9000);

@@ -9,7 +9,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Loader2, CheckCircle2, AlertCircle, GraduationCap } from 'lucide-react';
+import { Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 import { 
   EDUCATION_CATEGORIES, 
   EDUCATION_LEVELS, 
@@ -216,16 +216,11 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSuccess, o
         <div className="h-1 bg-primary" />
         <CardHeader className="border-b bg-background px-4 py-5 sm:px-6">
           <div className="space-y-4">
-            <div className="flex items-center gap-3 text-left">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-primary">
-                <GraduationCap className="h-5 w-5" />
-              </div>
-              <div className="min-w-0">
-                <CardTitle className="text-xl sm:text-2xl leading-tight">Create your EduNexus account</CardTitle>
-                <CardDescription className="text-sm">
-                  Choose the account type that matches how you will use the platform.
-                </CardDescription>
-              </div>
+            <div className="text-left">
+              <CardTitle className="text-xl sm:text-2xl leading-tight">Create your EduNexus account</CardTitle>
+              <CardDescription className="mt-1 text-sm">
+                Choose the account type that matches how you will use the platform.
+              </CardDescription>
             </div>
             <div className="grid grid-cols-2 rounded-lg border border-border bg-muted p-1 text-sm font-semibold">
               <button

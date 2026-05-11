@@ -124,8 +124,40 @@ export const StudentDashboard = ({
           proficiency: Math.round(proficiency * 100)
         };
       })
-      .filter((d): d is { subject: string; proficiency: number } => d !== null);
+      .filter((d): d is { subject: string; proficiency: number } => d !== null && d.proficiency > 0);
   }, [profile?.subject_proficiency, enrolledSubjects, subjects]);
+
+  const progressForView = useMemo(() => {
+    const subjectRows = Array.isArray((progress as any)?.progress) ? (progress as any).progress : [];
+    const completedLessons = subjectRows.reduce((sum: number, row: any) => sum + (Array.isArray(row.topics_completed) ? row.topics_completed.length : 0), 0);
+    const progressSummary = subjectRows.reduce(
+      (acc: any, row: any) => ({
+        total_quizzes: acc.total_quizzes + Number(row.total_quizzes || 0),
+        total_time_spent: acc.total_time_spent + Number(row.total_time_spent || 0),
+        average_score_sum: acc.average_score_sum + Number(row.average_quiz_score || row.mastery_percentage || 0),
+        average_score_count: acc.average_score_count + (Number(row.average_quiz_score || row.mastery_percentage || 0) > 0 ? 1 : 0),
+      }),
+      { total_quizzes: 0, total_time_spent: 0, average_score_sum: 0, average_score_count: 0 }
+    );
+    const fallbackAverage = progressSummary.average_score_count
+      ? progressSummary.average_score_sum / progressSummary.average_score_count
+      : 0;
+
+    return {
+      ...(progress || {}),
+      ...(analytics || {}),
+      summary: {
+        ...((progress as any)?.summary || {}),
+        ...((analytics as any)?.summary || {}),
+        total_quizzes: (analytics as any)?.summary?.total_quizzes ?? progressSummary.total_quizzes,
+        total_time_spent: (analytics as any)?.summary?.total_time_spent ?? progressSummary.total_time_spent,
+        average_score: (analytics as any)?.summary?.average_score ?? fallbackAverage,
+        total_lessons: (analytics as any)?.summary?.total_lessons ?? completedLessons,
+        ai_chats: (analytics as any)?.summary?.ai_chats ?? 0,
+      },
+      subject_progress_rows: subjectRows,
+    };
+  }, [analytics, progress]);
 
   const handleGenerateCustomCourse = async (name?: string) => {
     const courseName = name || customCourseName;
@@ -255,7 +287,7 @@ export const StudentDashboard = ({
                    handleGenerateCustomCourse={handleGenerateCustomCourse} isEditingProfile={isEditingProfile}
                    setIsEditingProfile={setIsEditingProfile} profileFormData={profileFormData}
                    setProfileFormData={setProfileFormData} setAvatarUrl={setAvatarUrl} startAssessment={startAssessment}
-                   progress={analytics || progress} radarData={radarData} searchQuery={searchQuery} setSearchQuery={setSearchQuery}
+                   progress={progressForView} radarData={radarData} searchQuery={searchQuery} setSearchQuery={setSearchQuery}
                 />
               </div>
             ) : (
@@ -288,7 +320,7 @@ export const StudentDashboard = ({
                      handleGenerateCustomCourse={handleGenerateCustomCourse} isEditingProfile={isEditingProfile}
                      setIsEditingProfile={setIsEditingProfile} profileFormData={profileFormData}
                      setProfileFormData={setProfileFormData} setAvatarUrl={setAvatarUrl} startAssessment={startAssessment}
-                     progress={analytics || progress} radarData={radarData} searchQuery={searchQuery} setSearchQuery={setSearchQuery}
+                     progress={progressForView} radarData={radarData} searchQuery={searchQuery} setSearchQuery={setSearchQuery}
                   />
                 </div>
               </ScrollArea>

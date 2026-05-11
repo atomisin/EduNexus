@@ -89,8 +89,11 @@ function App() {
     
     const handleFetchFailed = (e: any) => {
       const url = e.detail?.url || 'Unknown';
-      toast.error('Connection Failed', {
-        description: `Could not reach ${url}. Please check your internet or if the backend is online.`,
+      const isRegistration = String(url).includes('/auth/register');
+      toast.error(isRegistration ? 'Server is taking longer than usual' : 'Connection Failed', {
+        description: isRegistration
+          ? 'Please wait a moment, then submit again. Free hosting can take a little time to wake during account creation.'
+          : `Could not reach the server. Please check your internet or if the backend is online.`,
         duration: 10000,
       });
     };

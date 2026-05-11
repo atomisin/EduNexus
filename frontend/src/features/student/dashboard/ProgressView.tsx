@@ -16,10 +16,27 @@ const metricCards = [
 ];
 
 export const ProgressView: React.FC<ProgressViewProps> = ({ progress, radarData }) => {
+  const summary = progress?.summary || {};
+  const totalTime = Number(summary.total_time_spent || 0);
+  const totalQuizzes = Number(summary.total_quizzes || 0);
+  const averageScore = Number(summary.average_score || 0);
+  const totalLessons = Number(summary.total_lessons || 0);
+  const aiChats = Number(summary.ai_chats || 0);
+  const hasMasteryData = radarData.some((item) => Number(item.proficiency || 0) > 0);
+  const hasEngagementData = totalQuizzes + totalLessons + aiChats > 0;
+  const scoredTrend = (progress?.chart_data || []).filter((point: any) => typeof point.score === 'number' && point.score > 0);
+  const recommendedAction = averageScore >= 80
+    ? 'Great progress. Continue with the next unlocked lesson, then take the mastery check while the idea is still fresh.'
+    : totalQuizzes > 0
+      ? 'Review the weakest recent quiz area, then try one guided practice before the next mastery check.'
+      : totalLessons > 0
+        ? 'You have started learning. Complete one mastery quiz so EduNexus can measure your understanding more accurately.'
+        : 'Complete one guided lesson or mastery quiz to make the analytics more accurate.';
+
   const values: Record<string, string | number> = {
-    time: progress?.summary?.total_time_spent || 0,
-    quizzes: progress?.summary?.total_quizzes || 0,
-    mastery: `${progress?.summary?.average_score ? Math.round(progress.summary.average_score) : 0}%`,
+    time: totalTime,
+    quizzes: totalQuizzes,
+    mastery: `${averageScore ? Math.round(averageScore) : 0}%`,
   };
 
   return (
@@ -61,7 +78,7 @@ export const ProgressView: React.FC<ProgressViewProps> = ({ progress, radarData 
           <div>
             <p className="text-sm font-semibold">Recommended next action</p>
             <p className="text-sm text-muted-foreground">
-              Complete one guided lesson or mastery quiz to make the analytics more accurate.
+              {recommendedAction}
             </p>
           </div>
           <Badge variant="secondary" className="w-fit">Updates automatically</Badge>
@@ -76,7 +93,7 @@ export const ProgressView: React.FC<ProgressViewProps> = ({ progress, radarData 
             </CardTitle>
           </CardHeader>
           <CardContent className="p-4">
-            {radarData.length > 0 ? (
+            {radarData.length > 0 && hasMasteryData ? (
               <MasteryRadar data={radarData} />
             ) : (
               <div className="flex flex-col items-center justify-center h-[260px] text-muted-foreground text-center">
@@ -95,8 +112,8 @@ export const ProgressView: React.FC<ProgressViewProps> = ({ progress, radarData 
             </CardTitle>
           </CardHeader>
           <CardContent className="p-4">
-            {progress?.summary ? (
-              <EngagementMix summary={progress.summary} />
+            {hasEngagementData ? (
+              <EngagementMix summary={summary} />
             ) : (
               <div className="flex flex-col items-center justify-center h-[260px] text-muted-foreground text-center">
                 <Activity className="w-10 h-10 opacity-20 mb-3" />
@@ -116,8 +133,8 @@ export const ProgressView: React.FC<ProgressViewProps> = ({ progress, radarData 
             </CardTitle>
           </CardHeader>
           <CardContent className="p-4">
-            {progress?.chart_data?.length > 0 ? (
-              <PerformanceTimeline data={progress.chart_data} />
+            {scoredTrend.length > 0 ? (
+              <PerformanceTimeline data={scoredTrend} />
             ) : (
               <div className="flex flex-col items-center justify-center h-[260px] text-muted-foreground text-center">
                 <div className="w-14 h-1 bg-muted rounded-full mb-3" />

@@ -170,6 +170,9 @@ async def get_student_progress(
                 "mastery_percentage": p.mastery_percentage,
                 "strength_areas": p.strength_areas,
                 "weakness_areas": p.weakness_areas,
+                "topics_completed": [str(t) for t in (p.topics_completed or [])],
+                "topics_in_progress": [str(t) for t in (p.topics_in_progress or [])],
+                "total_time_spent": p.total_time_spent_minutes,
             }
             for p in progress
         ]
@@ -372,6 +375,8 @@ async def get_performance_analytics(
 
     quiz_scores = [a for a in activities if a.activity_type == "quiz"]
     session_activities = [a for a in activities if a.activity_type == "session"]
+    lesson_activities = [a for a in activities if a.activity_type in {"lesson", "topic", "material"}]
+    ai_chat_activities = [a for a in activities if a.activity_type in {"ai_chat", "chat", "tutor"}]
 
     if quiz_scores:
         avg_score = sum(a.score or 0 for a in quiz_scores) / len(quiz_scores)
@@ -379,17 +384,39 @@ async def get_performance_analytics(
         avg_score = 0
 
     if session_activities:
-        attended = sum(1 for a in session_activities if a.metadata.get("attended"))
+        attended = sum(1 for a in session_activities if (a.extra_data or {}).get("attended"))
         attendance_pct = (attended / len(session_activities)) * 100
     else:
         attendance_pct = 0
 
+    res_subject_progress = await db.execute(
+        select(StudentSubjectProgress).filter(
+            StudentSubjectProgress.student_id == current_user.id
+        )
+    )
+    subject_progress = res_subject_progress.scalars().all()
+    completed_topic_ids = {
+        str(topic_id)
+        for progress in subject_progress
+        for topic_id in (progress.topics_completed or [])
+    }
+    subject_quiz_total = sum(p.total_quizzes_taken or 0 for p in subject_progress)
+    subject_time_total = sum(p.total_time_spent_minutes or 0 for p in subject_progress)
+    subject_scores = [
+        p.average_quiz_score or p.mastery_percentage or 0
+        for p in subject_progress
+        if (p.average_quiz_score or p.mastery_percentage or 0) > 0
+    ]
+    subject_avg_score = (sum(subject_scores) / len(subject_scores)) if subject_scores else 0
+
     return {
         "summary": {
-            "average_score": round(avg_score, 1),
-            "total_quizzes": len(quiz_scores),
+            "average_score": round(avg_score or subject_avg_score, 1),
+            "total_quizzes": len(quiz_scores) or subject_quiz_total,
             "attendance_percentage": round(attendance_pct, 1),
-            "total_time_spent": sum(a.time_spent_minutes for a in activities),
+            "total_time_spent": sum(a.time_spent_minutes for a in activities) or subject_time_total,
+            "total_lessons": len(completed_topic_ids) or len(lesson_activities),
+            "ai_chats": len(ai_chat_activities),
         },
         "chart_data": [
             {
@@ -397,7 +424,7 @@ async def get_performance_analytics(
                 "score": a.score or 0,
                 "type": a.activity_type,
                 "name": a.activity_name
-            } for a in reversed(activities[-10:])
+            } for a in reversed([a for a in activities if a.score is not None][-10:])
         ],
         "recent_activities": [
             {

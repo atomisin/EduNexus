@@ -12,6 +12,7 @@ const API_BASE_URL = raw_api_url.includes('/api/v1')
 // on Render free-tier cold starts (30-60s wake-up time).
 const FETCH_TIMEOUT_MS = 25000; // 25 seconds
 const AI_CHAT_TIMEOUT_MS = 60000; // AI tutoring can take longer on cold starts or larger prompts
+const REGISTER_TIMEOUT_MS = 60000; // Registration may wake Render and seed student profile data
 const LOGIN_TIMEOUT_MS = 45000; // 45 seconds — Render cold starts can take 30-60s
 
 function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number = FETCH_TIMEOUT_MS): Promise<Response> {
@@ -143,6 +144,7 @@ export const authAPI = {
   }) => fetchWithAuth('/auth/register', {
     method: 'POST',
     body: JSON.stringify(userData),
+    timeoutMs: REGISTER_TIMEOUT_MS,
   }),
 
   // Teacher registration
@@ -161,6 +163,7 @@ export const authAPI = {
   }) => fetchWithAuth('/auth/register/teacher', {
     method: 'POST',
     body: JSON.stringify(teacherData),
+    timeoutMs: REGISTER_TIMEOUT_MS,
   }),
 
   // Student registration
@@ -188,6 +191,7 @@ export const authAPI = {
   }) => fetchWithAuth('/auth/register/student', {
     method: 'POST',
     body: JSON.stringify(studentData),
+    timeoutMs: REGISTER_TIMEOUT_MS,
   }),
 
   // Login (Sets HttpOnly cookies via backend)

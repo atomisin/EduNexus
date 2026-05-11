@@ -17,7 +17,7 @@ import { useTopicProgress } from '@/features/student/hooks/useTopicProgress';
 import { useTTS } from '@/features/student/hooks/useTTS';
 import { useSpeechRecognition } from '@/features/student/hooks/useSpeechRecognition';
 import { getPersonaName } from '@/features/student/utils/personaUtils';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 
 const renderRichText = (value: string) => {
   const parts = value.split(/(\+\+[^+]+\+\+)/g);
@@ -248,6 +248,63 @@ export const AIChatSection = ({
     { label: 'Quiz me', icon: Target, prompt: `Quiz me on ${focusTopicLabel}. Ask exactly one question first and wait for my answer before explaining.` },
     { label: 'Summarize', icon: FileText, prompt: `Summarize what I need to remember about ${focusTopicLabel} in a short study note with three key points.` },
   ];
+
+  const actionableSuggestedTopics = useMemo(() => {
+    const explicit = (suggestedTopics || [])
+      .filter(Boolean)
+      .map((topic: any) => (typeof topic === 'string' ? { name: topic, subject_id: selectedSubject?.id } : topic));
+    if (explicit.length > 0) return explicit.slice(0, 4);
+
+    const currentIdx = topicsForCurrentSubject.findIndex((topic: any) => topic.id === selectedTopic?.id);
+    const candidates = topicsForCurrentSubject.filter((topic: any, idx: number) => {
+      const status = String(topic.status || '').toLowerCase();
+      if (status === 'locked' || status === 'completed') return false;
+      if (selectedTopic?.id && topic.id === selectedTopic.id) return false;
+      return currentIdx < 0 || idx >= currentIdx;
+    });
+
+    return candidates.slice(0, 4);
+  }, [selectedSubject?.id, selectedTopic?.id, suggestedTopics, topicsForCurrentSubject]);
+
+  const actionableWeaknessAreas = useMemo(() => {
+    const profileWeaknesses = [
+      ...(Array.isArray(profile?.weakness_areas) ? profile.weakness_areas : []),
+      ...(Array.isArray(profile?.suggested_focus_areas) ? profile.suggested_focus_areas : []),
+    ];
+    const explicit = [...(weaknessAreas || []), ...profileWeaknesses]
+      .filter(Boolean)
+      .map((area: any) => String(area).trim())
+      .filter((area: string, idx: number, list: string[]) => area && list.indexOf(area) === idx);
+    if (explicit.length > 0) return explicit.slice(0, 4);
+
+    return topicsForCurrentSubject
+      .filter((topic: any) => {
+        const pct = Number(topic.progress_pct || 0);
+        const status = String(topic.status || '').toLowerCase();
+        return status !== 'locked' && status !== 'completed' && pct > 0 && pct < 70;
+      })
+      .map((topic: any) => formatTopicLike(topic))
+      .slice(0, 3);
+  }, [profile?.suggested_focus_areas, profile?.weakness_areas, topicsForCurrentSubject, weaknessAreas]);
+
+  const learningGoal = useMemo(() => {
+    const badges = Array.isArray(profile?.badges) ? profile.badges : [];
+    const quizBadgeEarned = badges.some((badge: any) => /quiz/i.test(String(badge?.name || badge)));
+    const quizzesTaken = Number(profile?.total_quizzes || profile?.quiz_count || 0);
+    const completedLessons = topicsForCurrentSubject.filter((topic: any) => topic.status === 'completed').length;
+    const streak = Number(profile?.current_streak || 0);
+
+    if (!quizBadgeEarned && quizzesTaken < 3) {
+      return { title: 'Next Badge: Quiz Whiz', progress: Math.min(100, Math.round((quizzesTaken / 3) * 100)), note: `${Math.max(1, 3 - quizzesTaken)} more quizzes to unlock` };
+    }
+    if (completedLessons < 3) {
+      return { title: 'Next Badge: Lesson Builder', progress: Math.min(100, Math.round((completedLessons / 3) * 100)), note: `${Math.max(1, 3 - completedLessons)} more lessons to unlock` };
+    }
+    if (streak < 3) {
+      return { title: 'Next Badge: Consistency Star', progress: Math.min(100, Math.round((streak / 3) * 100)), note: `${Math.max(1, 3 - streak)} more study days to unlock` };
+    }
+    return { title: 'Next Badge: Mastery Builder', progress: Math.max(65, pathProgress), note: 'Keep learning to raise your mastery' };
+  }, [pathProgress, profile?.badges, profile?.current_streak, profile?.quiz_count, profile?.total_quizzes, topicsForCurrentSubject]);
 
   const submitChatInput = useCallback(async () => {
     const message = chatInput.trim();
@@ -1262,12 +1319,12 @@ export const AIChatSection = ({
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
-                  {suggestedTopics.length > 0 ? suggestedTopics.map((topic, idx) => (
+                  {actionableSuggestedTopics.length > 0 ? actionableSuggestedTopics.map((topic, idx) => (
                     <Button key={idx} variant="ghost" className="w-full justify-start text-sm hover:bg-amber-50 dark:hover:bg-amber-950/20 group" onClick={() => {
-                      const subject = subjects.find(s => s.id === topic.subject_id);
+                      const subject = subjects.find(s => s.id === topic.subject_id) || selectedSubject;
                       if (subject) {
                         handleSubjectSelect(subject);
-                        handleTopicSelect(topic);
+                        if (typeof topic !== 'string') handleTopicSelect(topic);
                       }
                     }}>
                       <div className="w-2 h-2 rounded-full bg-amber-400 mr-3 group-hover:scale-150 transition-transform" />
@@ -1293,7 +1350,7 @@ export const AIChatSection = ({
               </CardHeader>
               <CardContent>
                 <div className="flex flex-wrap gap-2">
-                  {weaknessAreas.length > 0 ? weaknessAreas.map((area, idx) => (
+                  {actionableWeaknessAreas.length > 0 ? actionableWeaknessAreas.map((area, idx) => (
                     <Badge key={idx} variant="destructive" className="rounded-lg px-2.5 py-1">{area}</Badge>
                   )) : (
                     <p className="text-xs text-muted-foreground italic">You're doing great! No specific weaknesses identified.</p>
@@ -1310,13 +1367,13 @@ export const AIChatSection = ({
                   </div>
                   <div>
                     <p className="text-xs text-teal-600 dark:text-teal-400 font-bold uppercase tracking-wider">Learning Goal</p>
-                    <p className="font-semibold text-slate-800 dark:text-slate-100">Next Badge: Quiz Whiz</p>
+                    <p className="font-semibold text-slate-800 dark:text-slate-100">{learningGoal.title}</p>
                   </div>
                 </div>
                 <div className="mt-4 h-2 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
-                  <div className="h-full bg-teal-500 rounded-full" style={{ width: '65%' }} />
+                  <div className="h-full bg-teal-500 rounded-full" style={{ width: `${learningGoal.progress}%` }} />
                 </div>
-                <p className="text-[10px] text-muted-foreground mt-2 text-right">3 more quizzes to unlock</p>
+                <p className="text-[10px] text-muted-foreground mt-2 text-right">{learningGoal.note}</p>
               </CardContent>
             </Card>
           </div>

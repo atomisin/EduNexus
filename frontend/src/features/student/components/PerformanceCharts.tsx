@@ -48,7 +48,7 @@ const CustomTooltip: React.FC<CustomTooltipProps> = ({ active, payload, label })
             <div key={index} className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color || entry.fill }} />
               <p className="text-sm font-bold">
-                {entry.name}: <span className="text-primary">{entry.value}%</span>
+                {entry.name}: <span className="text-primary">{entry.value}{entry.dataKey === 'score' || entry.dataKey === 'proficiency' ? '%' : ''}</span>
               </p>
             </div>
           ))}
@@ -122,6 +122,8 @@ export const PerformanceTimeline: React.FC<{ data: any[] }> = ({ data }) => {
             name="Score"
             stroke={COLORS.primary}
             strokeWidth={3}
+            dot={{ r: 4, strokeWidth: 2, fill: '#fff' }}
+            activeDot={{ r: 6 }}
             fillOpacity={1}
             fill="url(#colorScore)"
             animationBegin={500}

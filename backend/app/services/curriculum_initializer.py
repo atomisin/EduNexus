@@ -7,6 +7,7 @@ from app.models.student import StudentProfile
 from app.models.subject import Subject, Topic
 from app.models.junction_tables import StudentTopicProgress
 from app.services.llm_service import llm_service
+from app.utils.topic_filters import filter_learning_topics
 
 logger = logging.getLogger(__name__)
 
@@ -82,9 +83,8 @@ async def initialize_professional_curriculum(user_id: str, course_name: str):
                         select(Topic)
                         .filter(Topic.subject_id == new_subject_id)
                         .order_by(Topic.sort_order.asc())
-                        .limit(1)
                     )
-                    first_topic = res_topic.scalars().first()
+                    first_topic = next(iter(filter_learning_topics(res_topic.scalars().all())), None)
                     if first_topic:
                         progress = StudentTopicProgress(
                             student_id=uuid.UUID(user_id),
@@ -231,9 +231,8 @@ async def initialize_standard_curriculum(user_id: str, education_level: str, cur
                         select(Topic)
                         .filter(Topic.subject_id == subject.id)
                         .order_by(Topic.sort_order.asc())
-                        .limit(1)
                     )
-                    first_topic = res_topic.scalars().first()
+                    first_topic = next(iter(filter_learning_topics(res_topic.scalars().all())), None)
                     if first_topic:
                         res_prog = await db.execute(
                             select(StudentTopicProgress).filter(

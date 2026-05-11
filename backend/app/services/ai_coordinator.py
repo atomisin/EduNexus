@@ -318,6 +318,20 @@ def strip_thinking_tags(text: str) -> str:
     return cleaned.strip()
 
 
+def strip_persona_decorations(text: str) -> str:
+    """Remove persona emojis/name prefixes that break markdown rendering."""
+    if not text:
+        return text
+    cleaned = text.strip()
+    emoji_prefix = r"[\U0001F300-\U0001FAFF\u2600-\u27BF\uFE0F\u200D]+"
+    cleaned = re.sub(rf"(?m)^\s*(?:{emoji_prefix}\s*)+(?=#{{1,6}}\s+)", "", cleaned)
+    cleaned = re.sub(rf"(?m)^\s*(?:{emoji_prefix}\s*)+\*\*[^*\n]+?\*\*\s*:\s*", "", cleaned)
+    cleaned = re.sub(rf"(?m)^\s*(?:{emoji_prefix}\s*)+[A-Za-z][A-Za-z .'-]{{1,30}}\s*:\s*", "", cleaned)
+    cleaned = re.sub(r"(?m)^\s*\*\*(Sparky|Bello|Zara|Coach Rex|Dr\. Ade)\*\*\s*:\s*", "", cleaned)
+    cleaned = re.sub(r"(?m)^\s*(Sparky|Bello|Zara|Coach Rex|Dr\. Ade)\s*:\s*", "", cleaned)
+    return cleaned.strip()
+
+
 def polish_tutor_response(text: str, subject_name: Optional[str] = None) -> str:
     """
     Clean obvious student-facing wording slips that are common in AI output.
@@ -326,7 +340,7 @@ def polish_tutor_response(text: str, subject_name: Optional[str] = None) -> str:
     if not text:
         return text
 
-    cleaned = text
+    cleaned = strip_persona_decorations(text)
     if subject_name and "mathematics" in subject_name.strip().lower():
         cleaned = re.sub(
             r"\blogarithm numbers\b",
@@ -364,6 +378,11 @@ def polish_tutor_response(text: str, subject_name: Optional[str] = None) -> str:
             cleaned,
             flags=re.IGNORECASE,
         )
+    cleaned = re.sub(
+        r"(?m)^\s*([\U0001F300-\U0001FAFF\u2600-\u27BF\uFE0F\u200D]+\s*)+(?=#{1,6}\s+)",
+        "",
+        cleaned,
+    )
     return cleaned.strip()
 
 
@@ -1057,11 +1076,11 @@ Format your response using markdown:
                     "persona": None,
                 }
             gibberish_response = (
-                f"Oops! Looks like your fingers slipped! \ud83d\ude04 "
+                "Oops, it looks like your fingers slipped. "
                 f"No worries, let's try again. What would you like to know?"
             )
             return {
-                "response": f"{persona.emoji} **{persona.name}**: {gibberish_response}",
+                "response": gibberish_response,
                 "needs_tts": persona.use_tts,
                 "persona": persona.__dict__,
             }
@@ -1093,6 +1112,12 @@ CONVERSION STYLE:
         else:
             system_prompt = persona.system_prompt + LEARNING_TURN_PROMPT
             system_prompt += SUBJECT_RIGOR_PROMPT
+            system_prompt += (
+                "\n\nFORMAT RULE:"
+                "\n- Do not prefix replies with persona names, emojis, role labels, JSON, or objects."
+                "\n- Start directly with the lesson content."
+                "\n- Use Markdown headings without emojis, for example `### Goal`, `### Core idea`, and `### Try this`."
+            )
 
             if student_name:
                 system_prompt += f"\n\nSTUDENT NAME: {student_name}\nGREETING RULE: Greet the student by their name '{student_name}' if appropriate for the conversation state. Do NOT use generic terms like 'young friend' or 'dear student' if you know their actual name."
@@ -1182,17 +1207,6 @@ If you have fully taught ALL the required concepts for the current topic or the 
                 marker_triggered=should_start_mastery_quiz,
             )
 
-        # 6. Post-process response (Prefix for young learners)
-        if mode != "generalist" and persona.use_emoji and persona.name:
-            # Smarter check to prevent double prefixing: if name or prefix is already in start of response
-            prefix_plain = f"**{persona.name}**"
-            if (
-                prefix_plain not in response[:35]
-                and f"{persona.name}:" not in response[:35]
-            ):
-                response = f"{persona.emoji} **{persona.name}**: {response}"
-
-
         return {
             "response": response,
             "ui_action": lesson_control["ui_action"],
@@ -1203,7 +1217,7 @@ If you have fully taught ALL the required concepts for the current topic or the 
             "needs_tts": persona.use_tts,
             "persona": {
                 "name": persona.name,
-                "emoji": persona.emoji,
+                "emoji": "",
                 "education_level": education_level,
             },
         }

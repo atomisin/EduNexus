@@ -29,6 +29,7 @@ from app.services.brain_power import (
     estimate_message_tokens,
     estimate_text_tokens,
 )
+from app.utils.topic_filters import filter_learning_topics
 import logging
 
 logger = logging.getLogger(__name__)
@@ -62,13 +63,6 @@ def handle_api_error(
 
 router = APIRouter()
 
-PLACEHOLDER_TOPIC_NAMES = {"CLASS", "SUBJECT", "TERM", "TOPIC", "TOPICS"}
-
-
-def is_real_learning_topic(topic: Topic) -> bool:
-    return (topic.name or "").strip().upper() not in PLACEHOLDER_TOPIC_NAMES
-
-
 async def ensure_ai_topic_unlocked(
     db: AsyncSession,
     student_id: uuid.UUID,
@@ -87,7 +81,7 @@ async def ensure_ai_topic_unlocked(
         .filter(Topic.subject_id == subject_uuid)
         .order_by(Topic.sort_order.asc(), Topic.name.asc())
     )
-    topics = [topic for topic in res_topics.scalars().all() if is_real_learning_topic(topic)]
+    topics = filter_learning_topics(res_topics.scalars().all())
     if not topics or topic_uuid not in {topic.id for topic in topics}:
         return
 

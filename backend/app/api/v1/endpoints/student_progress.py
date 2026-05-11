@@ -34,16 +34,12 @@ from app.services.revision_context import (
     get_revision_context,
     is_revision_topic,
 )
+from app.utils.topic_filters import filter_learning_topics
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-PLACEHOLDER_TOPIC_NAMES = {"CLASS", "SUBJECT", "TERM", "TOPIC", "TOPICS"}
 PLACEMENT_QUESTIONS_PER_LESSON = 5
-
-
-def is_real_learning_topic(topic: Topic) -> bool:
-    return (topic.name or "").strip().upper() not in PLACEHOLDER_TOPIC_NAMES
 
 
 async def complete_topic_progression(
@@ -93,12 +89,10 @@ async def complete_topic_progression(
         .filter(
             Topic.subject_id == topic.subject_id,
             getattr(Topic, "sort_order", Topic.display_order) > current_order,
-            Topic.name.notin_(PLACEHOLDER_TOPIC_NAMES),
         )
         .order_by(Topic.sort_order.asc())
-        .limit(1)
     )
-    next_topic = res_next.scalars().first()
+    next_topic = next(iter(filter_learning_topics(res_next.scalars().all())), None)
 
     next_topic_id = None
     if next_topic:
@@ -1237,7 +1231,7 @@ async def get_ordered_subject_topics(
         .filter(Topic.subject_id == subject_uuid)
         .order_by(Topic.sort_order.asc(), Topic.name.asc())
     )
-    topics = [topic for topic in res_topics.scalars().all() if is_real_learning_topic(topic)]
+    topics = filter_learning_topics(res_topics.scalars().all())
     target_topic = next((topic for topic in topics if topic.id == target_uuid), None)
 
     if not target_topic:
@@ -1647,7 +1641,7 @@ async def get_subject_topics_progress(
         .filter(Topic.subject_id == subject_uuid)
         .order_by(Topic.sort_order.asc())
     )
-    topics = [topic for topic in res_topics.scalars().all() if is_real_learning_topic(topic)]
+    topics = filter_learning_topics(res_topics.scalars().all())
 
     if not topics:
         return {"topics": []}

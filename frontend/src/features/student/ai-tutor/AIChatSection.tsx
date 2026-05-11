@@ -63,18 +63,50 @@ const mathMarkdownComponents = {
 
 const PLACEHOLDER_TOPIC_NAMES = new Set(['CLASS', 'SUBJECT', 'TERM', 'TOPIC', 'TOPICS']);
 
-const prepareTutorMarkdown = (content: string) =>
-  normalizeAcademicTextForDisplay(
-    (content || '')
-      .replace(/(^|\n)\s*(?:[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]\ufe0f?\s*)+#{1,6}\s+/gu, '$1### ')
-  )
-    .replace(/(^|\n)#{1,6}\s+(?:[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]\ufe0f?\s*)+/gu, '$1### ')
-    .replace(/^(#{1,6}\s+(?:Goal|Core idea|Try this|Example|Practice|Summary|Step\s+\d+))\s+(.+)$/gim, '$1\n$2');
+const normalizeTopicKey = (value: string) => value.toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim();
+
+const isPlaceholderOrHeaderTopicName = (name: string) => {
+  const key = normalizeTopicKey(name);
+  if (!key || PLACEHOLDER_TOPIC_NAMES.has(key)) return true;
+  if (key.includes('LAGOS STATE GOVERNMENT MINISTRY OF EDUCATION')) return true;
+  if (key.includes('UNIFIED SCHEMES OF WORK FOR PRIMARY SCHOOLS')) return true;
+  if (key.startsWith('SUBJECTS ')) return true;
+  return false;
+};
+
+const isWarmupRevisionTopicName = (name: string) => {
+  const key = normalizeTopicKey(name);
+  if (!key) return false;
+  if (['REVISION', 'GENERAL REVISION', 'READINESS TEST', 'REDINESS TEST'].includes(key)) return true;
+  if (/^(REVISION|READINESS|REDINESS|RESUMPTION|RESUMOTION|READING TEST)\b/.test(key)) return true;
+  return /^(REVISION|READINESS|REDINESS|RESUMPTION|RESUMOTION)\b.*\b(TEST|WORK|TERM|LESSON)\b/.test(key);
+};
 
 const isRealLearningTopic = (topic: any) => {
   const name = String(topic?.name || '').trim();
-  return Boolean(name) && !PLACEHOLDER_TOPIC_NAMES.has(name.toUpperCase());
+  return Boolean(name) && !isPlaceholderOrHeaderTopicName(name);
 };
+
+const filterLearningTopics = (topicList: any[]) => {
+  const visible = topicList.filter(isRealLearningTopic);
+  while (visible.length && isWarmupRevisionTopicName(String(visible[0]?.name || ''))) {
+    visible.shift();
+  }
+  return visible;
+};
+
+const stripTutorDecorations = (content: string) =>
+  (content || '')
+    .replace(/(^|\n)\s*(?:[\p{Extended_Pictographic}\uFE0F\u200D]\s*)+(?=#{1,6}\s+)/gu, '$1')
+    .replace(/(^|\n)\s*(?:[\p{Extended_Pictographic}\uFE0F\u200D]\s*)+\*\*[^*\n]+?\*\*:\s*/gu, '$1')
+    .replace(/(^|\n)\s*\*\*(Sparky|Bello|Zara|Coach Rex|Dr\. Ade)\*\*:\s*/g, '$1')
+    .replace(/(^|\n)\s*(Sparky|Bello|Zara|Coach Rex|Dr\. Ade):\s*/g, '$1')
+    .replace(/(^|\n)\s*(?:[\p{Extended_Pictographic}\uFE0F\u200D]\s*)+(?=(Goal|Core idea|Try this|Example|Practice|Summary)\b)/giu, '$1### ');
+
+const prepareTutorMarkdown = (content: string) =>
+  normalizeAcademicTextForDisplay(stripTutorDecorations(content))
+    .replace(/(^|\n)#{1,6}\s+(?:[\p{Extended_Pictographic}\uFE0F\u200D]\s*)+/gu, '$1### ')
+    .replace(/^(#{1,6}\s+(?:Goal|Core idea|Try this|Example|Practice|Summary|Step\s+\d+))\s+(.+)$/gim, '$1\n$2');
 
 const openTutorFromSelection = (
   selectedTopic: any,
@@ -210,10 +242,10 @@ export const AIChatSection = ({
     toggleListening,
   } = useSpeechRecognition({ onTranscript: appendVoiceTranscript });
 
-  const topicsForCurrentSubject = structuredTopics.filter(
-    (t: any) => isRealLearningTopic(t) && (!selectedSubject || !t.subject_id || t.subject_id === selectedSubject.id)
+  const topicsForCurrentSubject = filterLearningTopics(
+    structuredTopics.filter((t: any) => !selectedSubject || !t.subject_id || t.subject_id === selectedSubject.id)
   );
-  const visibleTopics = topics.filter(isRealLearningTopic);
+  const visibleTopics = filterLearningTopics(topics);
 
   const selectedTopicName = formatTopicLike(selectedTopic);
   const isCurrentTopicCompleted = topicsForCurrentSubject.find((st: any) => st.id === selectedTopic?.id)?.status === 'completed';

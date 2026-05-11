@@ -5,6 +5,7 @@ import logging
 from app.models.subject import Subject, Topic
 from app.models.student import StudentProfile
 from app.models.junction_tables import StudentTopicProgress
+from app.utils.topic_filters import filter_learning_topics
 from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
@@ -105,9 +106,8 @@ class CurriculumService:
                         select(Topic)
                         .filter(Topic.subject_id == subject.id)
                         .order_by(Topic.sort_order.asc(), Topic.id.asc())
-                        .limit(1)
                     )
-                    first_topic = topic_res.scalars().first()
+                    first_topic = next(iter(filter_learning_topics(topic_res.scalars().all())), None)
                     if first_topic:
                         # Check if progress exists
                         prog_res = await db.execute(

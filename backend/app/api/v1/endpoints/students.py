@@ -22,6 +22,7 @@ from app.models.junction_tables import StudentTopicProgress
 from app.services.storage_service import storage_service
 from app.services.brain_power import brain_power_budget_summary
 from app.services.curriculum_service import curriculum_service
+from app.utils.topic_filters import filter_learning_topics
 
 router = APIRouter()
 
@@ -457,9 +458,8 @@ async def enroll_in_subject(
                 select(Topic)
                 .filter(Topic.subject_id == enrollment_data.subject_id)
                 .order_by(getattr(Topic, "sort_order", Topic.display_order).asc())
-                .limit(1)
             )
-            first_topic = res_topic.scalars().first()
+            first_topic = next(iter(filter_learning_topics(res_topic.scalars().all())), None)
 
             if first_topic:
                 # Check if progress already exists
@@ -585,9 +585,8 @@ async def enroll_custom_professional(
                     select(Topic)
                     .filter(Topic.subject_id == new_subject_id)
                     .order_by(Topic.display_order.asc())
-                    .limit(1)
                 )
-                first_topic = res_topic.scalars().first()
+                first_topic = next(iter(filter_learning_topics(res_topic.scalars().all())), None)
                 if first_topic:
                     progress = StudentTopicProgress(
                         student_id=current_user.id,

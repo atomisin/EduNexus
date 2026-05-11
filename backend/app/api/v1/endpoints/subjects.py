@@ -12,6 +12,7 @@ from app.db.database import get_async_db
 from app.api.v1.endpoints.auth import get_current_user
 from app.models.user import User
 from app.models.subject import Subject, Topic, Lesson
+from app.utils.topic_filters import filter_learning_topics
 import logging
 
 logger = logging.getLogger(__name__)
@@ -612,11 +613,7 @@ async def get_subject(
     )
     topics = res_exec.scalars().all()
 
-    placeholder_topic_names = {"CLASS", "SUBJECT", "TERM", "TOPIC", "TOPICS"}
-    visible_topics = [
-        t for t in topics
-        if (t.name or "").strip().upper() not in placeholder_topic_names
-    ]
+    visible_topics = filter_learning_topics(topics)
 
     return {
         "id": str(subject.id),
@@ -662,11 +659,7 @@ async def get_topics(
     )
     topics = res_exec.scalars().all()
 
-    placeholder_topic_names = {"CLASS", "SUBJECT", "TERM", "TOPIC", "TOPICS"}
-    visible_topics = [
-        t for t in topics
-        if (t.name or "").strip().upper() not in placeholder_topic_names
-    ]
+    visible_topics = filter_learning_topics(topics)
 
     return {
         "topics": [

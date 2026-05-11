@@ -243,7 +243,7 @@ export const StudentDashboard = ({
                    suggestedVideos={suggestedVideos} setSelectedVideo={setSelectedVideo} setProfile={setProfile}
                    suggestedTopics={suggestedTopics} weaknessAreas={weaknessAreas} topics={topics}
                    roadmapLoading={roadmapLoading} structuredTopics={structuredTopics} isStructuredLoading={isStructuredLoading}
-                   scrollAreaRef={scrollAreaRef} onMasteryTestComplete={async (r) => { await onMasteryTestComplete(r); refetchStructured(); }}
+                   scrollAreaRef={scrollAreaRef} onMasteryTestComplete={async (r) => { await onMasteryTestComplete(r); await refetchStructured(); }}
                    startQuiz={startQuiz} dismissQuizConfirm={dismissQuizConfirm}
                    placementState={placementState} startPlacementCheck={startPlacementCheck}
                    submitPlacementCheck={submitPlacementCheck} acceptPlacementRecommendation={acceptPlacementRecommendation}
@@ -276,7 +276,7 @@ export const StudentDashboard = ({
                      suggestedVideos={suggestedVideos} setSelectedVideo={setSelectedVideo} setProfile={setProfile}
                      suggestedTopics={suggestedTopics} weaknessAreas={weaknessAreas} topics={topics}
                      roadmapLoading={roadmapLoading} structuredTopics={structuredTopics} isStructuredLoading={isStructuredLoading}
-                     scrollAreaRef={scrollAreaRef} onMasteryTestComplete={async (r) => { await onMasteryTestComplete(r); refetchStructured(); }}
+                     scrollAreaRef={scrollAreaRef} onMasteryTestComplete={async (r) => { await onMasteryTestComplete(r); await refetchStructured(); }}
                      startQuiz={startQuiz} dismissQuizConfirm={dismissQuizConfirm}
                      placementState={placementState} startPlacementCheck={startPlacementCheck}
                      submitPlacementCheck={submitPlacementCheck} acceptPlacementRecommendation={acceptPlacementRecommendation}

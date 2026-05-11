@@ -26,6 +26,7 @@ function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number =
 // This function pings /health to wake it up BEFORE the user tries to log in.
 let _serverWarm = false;
 let _warmUpPromise: Promise<boolean> | null = null;
+let _refreshPromise: Promise<boolean> | null = null;
 
 export function warmUpServer(): Promise<boolean> {
   if (_serverWarm) return Promise.resolve(true);
@@ -47,14 +48,30 @@ export function warmUpServer(): Promise<boolean> {
   return _warmUpPromise;
 }
 
+async function refreshAccessToken(): Promise<boolean> {
+  if (_refreshPromise) return _refreshPromise;
+
+  _refreshPromise = fetchWithTimeout(`${API_BASE_URL}/auth/refresh`, {
+    method: 'POST',
+    credentials: 'include',
+  }, FETCH_TIMEOUT_MS)
+    .then(response => response.ok)
+    .catch(() => false)
+    .finally(() => {
+      _refreshPromise = null;
+    });
+
+  return _refreshPromise;
+}
+
 // Auto-trigger warmup on module load (fires when any page imports api.ts)
 if (typeof window !== 'undefined' && !window.location.hostname.includes('localhost')) {
   warmUpServer();
 }
 
 // Generic fetch wrapper with credentials (HttpOnly Cookies)
-export async function fetchWithAuth(endpoint: string, options: RequestInit & { silentAuth?: boolean; timeoutMs?: number } = {}) {
-  const { silentAuth, timeoutMs, ...fetchOptions } = options;
+export async function fetchWithAuth(endpoint: string, options: RequestInit & { silentAuth?: boolean; timeoutMs?: number; skipAuthRefresh?: boolean } = {}) {
+  const { silentAuth, timeoutMs, skipAuthRefresh, ...fetchOptions } = options;
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(fetchOptions.headers as Record<string, string>),
@@ -62,11 +79,22 @@ export async function fetchWithAuth(endpoint: string, options: RequestInit & { s
 
   const targetUrl = `${API_BASE_URL}${endpoint}`;
   try {
-    const response = await fetchWithTimeout(targetUrl, {
+    let response = await fetchWithTimeout(targetUrl, {
       ...fetchOptions,
       headers,
       credentials: 'include', // CRITICAL: Send cookies with request
     }, timeoutMs);
+
+    if (response.status === 401 && endpoint !== '/auth/refresh' && !skipAuthRefresh) {
+      const refreshed = await refreshAccessToken();
+      if (refreshed) {
+        response = await fetchWithTimeout(targetUrl, {
+          ...fetchOptions,
+          headers,
+          credentials: 'include',
+        }, timeoutMs);
+      }
+    }
 
     if (!response.ok) {
       if (response.status === 401 && !silentAuth) {
@@ -234,7 +262,7 @@ export const authAPI = {
   },
 
   // Logout (Clears HttpOnly cookies via backend)
-  logout: () => fetchWithAuth('/auth/logout', { method: 'POST' }),
+  logout: () => fetchWithAuth('/auth/logout', { method: 'POST', skipAuthRefresh: true }),
 
   // Verify email with code
   verifyEmail: (data: { email: string; code: string }) =>

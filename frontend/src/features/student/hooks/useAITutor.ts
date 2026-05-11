@@ -2,7 +2,6 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { aiAPI, subjectsAPI, studentAPI, progressAPI } from '@/services/api';
 import type { Subject } from '../types';
-import { getPersonaName, getPersonaEmoji } from '../utils/personaUtils';
 
 export interface Message {
   role: 'user' | 'ai';
@@ -421,8 +420,14 @@ export const useAITutor = (profile?: any, getFullName?: () => string) => {
       masteryReady: false,
       nextActions: result?.passed ? ['next_topic', 'summary'] : ['review_missed', 'try_practice', 'simplify'],
     }));
+    if (result?.passed) {
+      await refetchStructured();
+      if (currentSubject?.id) {
+        queryClient.invalidateQueries({ queryKey: ['topic-progress', currentSubject.id] });
+      }
+    }
     queryClient.invalidateQueries({ queryKey: ['student', 'brain-power'] });
-  }, [queryClient]);
+  }, [currentSubject?.id, queryClient, refetchStructured]);
 
   const startQuiz = useCallback((topic?: any, subject?: any) => {
     setAiState({ 

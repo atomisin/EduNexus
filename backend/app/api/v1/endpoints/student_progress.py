@@ -565,6 +565,25 @@ def make_placement_token(
     })
 
 
+def make_placement_token_from_ids(
+    student_id: uuid.UUID,
+    subject_id: uuid.UUID,
+    target_topic_id: str,
+    recommended_topic_id: str,
+    prerequisite_topic_ids: List[str],
+    score: float,
+) -> str:
+    return sign_placement_payload({
+        "student_id": str(student_id),
+        "subject_id": str(subject_id),
+        "target_topic_id": target_topic_id,
+        "recommended_topic_id": recommended_topic_id,
+        "prerequisite_topic_ids": prerequisite_topic_ids,
+        "score": score,
+        "exp": int(time.time()) + 15 * 60,
+    })
+
+
 def placement_correct_option(topic: Topic, question_index: int = 0) -> str:
     return placement_correct_option_for_id(str(topic.id), question_index)
 
@@ -1050,11 +1069,19 @@ async def build_placement_questions(
     user_id: Optional[uuid.UUID] = None,
 ) -> List[Dict[str, Any]]:
     """Build deterministic placement questions tied to one prerequisite topic."""
+    topic_id = topic.id
+    topic_id_str = str(topic_id)
+    topic_name = topic.name
+    unlock_topic_id = unlock_topic.id if unlock_topic else topic_id
+    unlock_topic_id_str = str(unlock_topic_id)
+    unlock_topic_name = unlock_topic.name if unlock_topic else topic_name
+    question_source = "revision" if unlock_topic and unlock_topic_id != topic_id else "prerequisite"
+
     specs = await generate_cached_placement_specs(db, topic, subject, user_id)
     option_keys = ["A", "B", "C", "D"]
     questions = []
     for question_index, spec in enumerate(specs, start=1):
-        correct_option = placement_correct_option(topic, question_index)
+        correct_option = placement_correct_option_for_id(topic_id_str, question_index)
         options: Dict[str, str] = {}
         distractor_index = 0
         for key in option_keys:
@@ -1065,13 +1092,13 @@ async def build_placement_questions(
                 distractor_index += 1
 
         question = {
-            "id": f"{topic.id}:{idx}:{question_index}",
-            "topic_id": str(topic.id),
-            "topic_name": topic.name,
+            "id": f"{topic_id_str}:{idx}:{question_index}",
+            "topic_id": topic_id_str,
+            "topic_name": topic_name,
             "question_index": question_index,
-            "unlock_topic_id": str(unlock_topic.id) if unlock_topic else str(topic.id),
-            "unlock_topic_name": unlock_topic.name if unlock_topic else topic.name,
-            "source": "revision" if unlock_topic and unlock_topic.id != topic.id else "prerequisite",
+            "unlock_topic_id": unlock_topic_id_str,
+            "unlock_topic_name": unlock_topic_name,
+            "source": question_source,
             "text": spec["text"],
             "options": options,
             "explanation": spec["explanation"],
@@ -1082,10 +1109,18 @@ async def build_placement_questions(
     return questions
 
 
+def topic_snapshot(topic: Topic) -> Dict[str, Any]:
+    return {
+        "id": topic.id,
+        "name": topic.name,
+        "sort_order": topic.sort_order,
+    }
+
+
 def summarize_placement(
-    recommendation_topics: List[Topic],
+    recommendation_topics: List[Dict[str, Any]],
     answers: List[Dict[str, Any]],
-    target_topic: Topic,
+    target_topic: Dict[str, Any],
 ) -> Dict[str, Any]:
     total = len(answers)
     correct = sum(1 for answer in answers if answer.get("is_correct"))
@@ -1123,8 +1158,8 @@ def summarize_placement(
     elif score >= 80:
         if weak_topics:
             weak_topic_id = uuid.UUID(weak_topics[0]["topic_id"])
-            recommended_topic = next((topic for topic in recommendation_topics if topic.id == weak_topic_id), target_topic)
-            reason = f"You scored well overall, but the missed questions point mostly to '{recommended_topic.name}'. Start there briefly, then continue forward."
+            recommended_topic = next((topic for topic in recommendation_topics if topic["id"] == weak_topic_id), target_topic)
+            reason = f"You scored well overall, but the missed questions point mostly to '{recommended_topic['name']}'. Start there briefly, then continue forward."
         else:
             recommended_topic = target_topic
             reason = "You showed strong understanding of the earlier lessons, so the requested lesson can be unlocked."
@@ -1132,7 +1167,7 @@ def summarize_placement(
         if weak_topics:
             ordered_weak = [
                 topic for topic in recommendation_topics
-                if str(topic.id) in {item["topic_id"] for item in weak_topics}
+                if str(topic["id"]) in {item["topic_id"] for item in weak_topics}
             ]
             recommended_topic = ordered_weak[0] if ordered_weak else recommendation_topics[0]
         else:
@@ -1146,14 +1181,14 @@ def summarize_placement(
         "passed_for_target": score >= 80 and not weak_topics,
         "weak_topics": weak_topics,
         "recommended_topic": {
-            "id": str(recommended_topic.id),
-            "name": recommended_topic.name,
-            "sort_order": recommended_topic.sort_order,
+            "id": str(recommended_topic["id"]),
+            "name": recommended_topic["name"],
+            "sort_order": recommended_topic["sort_order"],
         },
         "target_topic": {
-            "id": str(target_topic.id),
-            "name": target_topic.name,
-            "sort_order": target_topic.sort_order,
+            "id": str(target_topic["id"]),
+            "name": target_topic["name"],
+            "sort_order": target_topic["sort_order"],
         },
         "reason": reason,
     }
@@ -1296,6 +1331,20 @@ async def start_placement_check(
 
     placement_scope = await build_placement_scope(db, subject_uuid, target_topic, prerequisite_topics)
     assessment_entries = placement_scope["assessment_entries"]
+    target_topic_payload = {
+        "id": str(target_topic.id),
+        "name": target_topic.name,
+        "sort_order": target_topic.sort_order,
+    }
+    prerequisite_topic_payload = [
+        {
+            "id": str(topic.id),
+            "name": topic.name,
+            "sort_order": topic.sort_order,
+        }
+        for topic in prerequisite_topics
+    ]
+    prerequisite_topic_ids = [item["id"] for item in prerequisite_topic_payload]
     questions = []
     for idx, entry in enumerate(assessment_entries):
         questions.extend(await build_placement_questions(
@@ -1308,31 +1357,20 @@ async def start_placement_check(
         ))
 
     response = {
-        "target_topic": {
-            "id": str(target_topic.id),
-            "name": target_topic.name,
-            "sort_order": target_topic.sort_order,
-        },
-        "prerequisite_topics": [
-            {
-                "id": str(topic.id),
-                "name": topic.name,
-                "sort_order": topic.sort_order,
-            }
-            for topic in prerequisite_topics
-        ],
+        "target_topic": target_topic_payload,
+        "prerequisite_topics": prerequisite_topic_payload,
         "revision_contexts": placement_scope["revision_contexts"],
         "questions": questions,
         "questions_per_lesson": PLACEMENT_QUESTIONS_PER_LESSON,
         "message": "Answer this quick placement check so EduNexus can recommend the right lesson to start from.",
     }
     if not assessment_entries:
-        response["placement_token"] = make_placement_token(
+        response["placement_token"] = make_placement_token_from_ids(
             current_user.id,
             subject_uuid,
-            target_topic,
-            str(target_topic.id),
-            prerequisite_topics,
+            target_topic_payload["id"],
+            target_topic_payload["id"],
+            prerequisite_topic_ids,
             100.0,
         )
     return response
@@ -1358,6 +1396,9 @@ async def submit_placement_check(
     placement_scope = await build_placement_scope(db, subject_uuid, target_topic, prerequisite_topics)
     assessment_entries = placement_scope["assessment_entries"]
     recommendation_topics = placement_scope["recommendation_topics"]
+    target_topic_snapshot = topic_snapshot(target_topic)
+    recommendation_topic_snapshots = [topic_snapshot(topic) for topic in recommendation_topics]
+    prerequisite_topic_ids = [str(topic.id) for topic in prerequisite_topics]
     expected_questions = []
     for idx, entry in enumerate(assessment_entries):
         expected_questions.extend(await build_placement_questions(
@@ -1403,14 +1444,14 @@ async def submit_placement_check(
         raise HTTPException(status_code=400, detail="Answer every prerequisite question")
 
     answers = [answers_by_question[str(question["id"])] for question in expected_questions]
-    summary = summarize_placement(recommendation_topics, answers, target_topic)
+    summary = summarize_placement(recommendation_topic_snapshots, answers, target_topic_snapshot)
     summary["revision_contexts"] = placement_scope["revision_contexts"]
-    summary["placement_token"] = make_placement_token(
+    summary["placement_token"] = make_placement_token_from_ids(
         current_user.id,
         subject_uuid,
-        target_topic,
+        str(target_topic_snapshot["id"]),
         summary["recommended_topic"]["id"],
-        prerequisite_topics,
+        prerequisite_topic_ids,
         summary["score"],
     )
     return summary

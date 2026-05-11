@@ -2,6 +2,7 @@ import React from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { FileText, Sparkles, BookMarked, Target, Trophy } from 'lucide-react';
+import { formatTopicLike } from '@/utils/topicText';
 
 interface QuizViewProps {
   selectedTopic: any;
@@ -42,10 +43,10 @@ export const QuizView: React.FC<QuizViewProps> = ({
         </h2>
         {selectedTopic && (
           <Button
-            onClick={() => handleAIContinue(`Give me a 5-question quiz on ${selectedTopic.name}`)}
+            onClick={() => handleAIContinue(`Give me a 5-question quiz on ${formatTopicLike(selectedTopic)}`)}
             className="w-full sm:w-auto bg-teal-600 hover:bg-teal-700 gap-2"
           >
-            <Sparkles className="w-4 h-4" /> <span className="truncate">Generate Quiz for {selectedTopic.name}</span>
+            <Sparkles className="w-4 h-4" /> <span className="truncate">Generate Quiz for {formatTopicLike(selectedTopic)}</span>
           </Button>
         )}
       </div>
@@ -86,7 +87,7 @@ export const QuizView: React.FC<QuizViewProps> = ({
                         : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-teal-400'}`}
                       onClick={() => setSelectedTopic(topic)}
                     >
-                      {topic.name}
+                      {formatTopicLike(topic)}
                     </button>
                   ))}
                 </div>

@@ -327,6 +327,13 @@ def normalize_mastery_questions(questions: List[Dict[str, Any]]) -> List[Dict[st
         elif correct_option not in cleaned_options:
             continue
 
+        if not explanation:
+            correct_answer = cleaned_options.get(correct_option, "the selected answer")
+            explanation = (
+                f"The correct answer is {correct_answer}. It follows from applying the lesson idea "
+                "directly to the question, then checking that the result matches the option."
+            )
+
         normalized.append({
             "id": str(raw_question.get("id") or f"q{idx}"),
             "text": str(raw_question.get("text") or "").strip(),

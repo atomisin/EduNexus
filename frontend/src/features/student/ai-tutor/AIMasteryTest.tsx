@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import {
     ArrowRight,
@@ -240,6 +238,9 @@ export const AIMasteryTest: React.FC<AIMasteryTestProps> = ({ topic, topicId, su
                                     <div className="space-y-4 sm:max-h-[360px] sm:overflow-y-auto sm:pr-2 no-scrollbar">
                                         {evaluation.detailed_results.map((r: any, idx: number) => {
                                             const question = questions.find(q => q.id === r.question_id);
+                                            const correctAnswer = question?.options?.[question.correct_option] || question?.correct_option || 'the correct option';
+                                            const explanation = question?.explanation?.trim()
+                                                || `The correct answer is ${correctAnswer}. Review the lesson idea and check how the answer follows from the question.`;
                                             return (
                                                 <div key={idx} className={`p-4 rounded-lg border-l-[5px] ${r.is_correct ? 'border-teal-500 bg-teal-50/30' : 'border-amber-500 bg-amber-50/30'}`}>
                                                     <p className="font-semibold text-slate-800 mt-1">{idx + 1}. <MathText>{question?.text || ''}</MathText></p>
@@ -257,7 +258,7 @@ export const AIMasteryTest: React.FC<AIMasteryTestProps> = ({ topic, topicId, su
                                                             </div>
                                                         )}
                                                         <div className="bg-white p-3 rounded-lg border border-slate-100 text-slate-600 mt-2 text-sm">
-                                                            <span className="font-bold text-slate-700">Explanation:</span> <MathText>{question?.explanation || ''}</MathText>
+                                                            <span className="font-bold text-slate-700">Explanation:</span> <MathText>{explanation}</MathText>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -352,29 +353,34 @@ export const AIMasteryTest: React.FC<AIMasteryTestProps> = ({ topic, topicId, su
                     </h2>
                 </div>
 
-                <RadioGroup
-                    value={selectedOption}
-                    onValueChange={setSelectedOption}
-                    className="space-y-3"
-                >
-                    {Object.entries(currentQuestion.options).map(([key, value]) => (
-                        <div key={key}>
-                            <RadioGroupItem value={key} id={`opt-${key}`} className="peer sr-only" />
-                            <Label
-                                htmlFor={`opt-${key}`}
-                                className="flex items-center gap-3 p-4 sm:p-5 rounded-lg border-2 border-slate-100 hover:border-primary/30 bg-white hover:bg-slate-50/30 cursor-pointer transition-all duration-200 peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 relative overflow-hidden group shadow-sm"
+                <div className="space-y-3">
+                    {Object.entries(currentQuestion.options).map(([key, value]) => {
+                        const isSelected = selectedOption === key;
+                        return (
+                            <button
+                                key={key}
+                                type="button"
+                                onClick={() => setSelectedOption(key)}
+                                className={`flex w-full items-center gap-3 rounded-lg border-2 p-4 text-left shadow-sm transition-all duration-200 sm:p-5 ${
+                                    isSelected
+                                        ? 'border-teal-500 bg-teal-50 text-teal-950 dark:border-teal-700 dark:bg-teal-950/30 dark:text-teal-100'
+                                        : 'border-slate-100 bg-white text-slate-800 hover:border-teal-300 hover:bg-teal-50/50 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100 dark:hover:bg-teal-950/20'
+                                }`}
                             >
-                                <div className="shrink-0 w-10 h-10 rounded-lg bg-slate-50 group-hover:bg-primary/10 text-slate-500 group-hover:text-primary peer-data-[state=checked]:bg-primary peer-data-[state=checked]:text-white flex items-center justify-center font-black text-lg border border-slate-100 group-hover:border-primary/20 transition-colors">
+                                <div className={`shrink-0 w-10 h-10 rounded-lg flex items-center justify-center font-black text-lg border transition-colors ${
+                                    isSelected
+                                        ? 'border-teal-500 bg-teal-600 text-white'
+                                        : 'border-slate-100 bg-slate-50 text-slate-500'
+                                }`}>
                                     {key}
                                 </div>
-                                <div className="min-w-0 flex-1 font-semibold text-base sm:text-lg text-slate-800"><MathText>{value}</MathText></div>
-                                <div className="shrink-0 w-7 h-7 rounded-full border-2 border-slate-200 peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary flex items-center justify-center transition-all">
-                                    <div className="w-2.5 h-2.5 rounded-full bg-white scale-0 peer-data-[state=checked]:scale-100 transition-transform" />
+                                <div className="min-w-0 flex-1 text-base font-semibold sm:text-lg">
+                                    <MathText>{value}</MathText>
                                 </div>
-                            </Label>
-                        </div>
-                    ))}
-                </RadioGroup>
+                            </button>
+                        );
+                    })}
+                </div>
             </CardContent>
 
             <CardFooter className="p-4 sm:p-6 bg-slate-50/80 backdrop-blur-sm border-t border-slate-100">

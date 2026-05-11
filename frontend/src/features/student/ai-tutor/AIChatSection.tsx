@@ -1,4 +1,4 @@
-import { Sparkles, Brain, X, Target, CheckCircle2, Lock, Play, RefreshCw, Trophy, Zap, Star, Video, BookMarked, Loader2, Layers, Repeat, FileText, Activity, BookOpen, Clock, Mic, MicOff, Volume2, VolumeX } from 'lucide-react';
+import { Sparkles, Brain, X, Target, CheckCircle2, Lock, Play, RefreshCw, Trophy, Zap, Star, Video, BookMarked, Loader2, Layers, Repeat, FileText, Activity, BookOpen, Clock, Mic, MicOff, Volume2, VolumeX, ArrowRight } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import ReactMarkdown from 'react-markdown';
 import MathText from '@/components/MathText';
 import { normalizeAcademicTextForDisplay } from '@/utils/academicText';
+import { formatTopicName, formatTopicLike } from '@/utils/topicText';
 import { AIMasteryTest } from './AIMasteryTest';
 import { BrainPowerCard } from '@/features/student/learning/BrainPowerCard';
 import type { BrainPowerCardData } from '@/features/student/learning/BrainPowerCard';
@@ -15,7 +16,7 @@ import { useReadingRecommendations } from '@/features/student/hooks/useReadingRe
 import { useTopicProgress } from '@/features/student/hooks/useTopicProgress';
 import { useTTS } from '@/features/student/hooks/useTTS';
 import { useSpeechRecognition } from '@/features/student/hooks/useSpeechRecognition';
-import { getPersonaEmoji, getPersonaName } from '@/features/student/utils/personaUtils';
+import { getPersonaName } from '@/features/student/utils/personaUtils';
 import React, { useCallback, useEffect, useState } from 'react';
 
 const renderRichText = (value: string) => {
@@ -62,6 +63,11 @@ const mathMarkdownComponents = {
 
 const PLACEHOLDER_TOPIC_NAMES = new Set(['CLASS', 'SUBJECT', 'TERM', 'TOPIC', 'TOPICS']);
 
+const prepareTutorMarkdown = (content: string) =>
+  normalizeAcademicTextForDisplay(content || '')
+    .replace(/(^|\n)\s*(?:[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]\ufe0f?\s*)+(?=#{1,6}\s+)/gu, '$1')
+    .replace(/^(#{1,6}\s+(?:Goal|Core idea|Try this|Example|Practice|Summary|Step\s+\d+))\s+(.+)$/gim, '$1\n$2');
+
 const isRealLearningTopic = (topic: any) => {
   const name = String(topic?.name || '').trim();
   return Boolean(name) && !PLACEHOLDER_TOPIC_NAMES.has(name.toUpperCase());
@@ -76,7 +82,7 @@ const openTutorFromSelection = (
   if (!selectedTopic) return;
   setShowAIPanel(true);
   if (aiChatMessages.length === 0) {
-    void handleAIContinue(`Start tutoring me on ${selectedTopic.name}. Give me the goal, the core idea, and one quick check question.`);
+    void handleAIContinue(`Start tutoring me on ${formatTopicLike(selectedTopic)}. Give me the goal, the core idea, and one quick check question.`);
   }
 };
 
@@ -206,13 +212,24 @@ export const AIChatSection = ({
   );
   const visibleTopics = topics.filter(isRealLearningTopic);
 
+  const selectedTopicName = formatTopicLike(selectedTopic);
   const isCurrentTopicCompleted = topicsForCurrentSubject.find((st: any) => st.id === selectedTopic?.id)?.status === 'completed';
-  const focusTopicLabel = (typeof viewingSubtopic === 'object' ? (viewingSubtopic as any)?.name : viewingSubtopic) || activeSubtopic || selectedTopic?.name || 'this topic';
+  const masteryPassed = aiState?.status === 'quiz_completed' && aiState?.result?.passed;
+  const isLessonCompleted = Boolean(isCurrentTopicCompleted || masteryPassed || lessonController?.stage === 'completed');
+  const focusTopicLabel = formatTopicName((typeof viewingSubtopic === 'object' ? (viewingSubtopic as any)?.name : viewingSubtopic) || activeSubtopic || selectedTopic?.name || 'this topic');
   const conversationTurns = aiChatMessages.filter((m: any) => m.role === 'user').length;
   const lessonStageLabel = (lessonController?.stage || 'intro').replace(/_/g, ' ');
   const pathProgress = topicsForCurrentSubject.length
     ? Math.round((topicsForCurrentSubject.filter((s: any) => s.status === 'completed').length / topicsForCurrentSubject.length) * 100)
     : 0;
+  const currentTopicIndex = topicsForCurrentSubject.findIndex((topic: any) => topic.id === selectedTopic?.id);
+  const unlockedNextTopicId = aiState?.result?.next_topic_unlocked;
+  const nextLessonCandidate =
+    topicsForCurrentSubject.find((topic: any) => topic.id === unlockedNextTopicId) ||
+    topicsForCurrentSubject
+      .slice(currentTopicIndex >= 0 ? currentTopicIndex + 1 : 0)
+      .find((topic: any) => topic.status !== 'completed' && topic.status !== 'locked') ||
+    topicsForCurrentSubject.find((topic: any) => topic.status === 'unlocked' || topic.status === 'in_progress' || topic.status === 'active');
   const stageGuidance: Record<string, string> = {
     intro: `Start ${focusTopicLabel} with a clear goal, the core idea, and one quick check.`,
     teach: `Continue ${focusTopicLabel} with one focused explanation and a small task.`,
@@ -234,10 +251,15 @@ export const AIChatSection = ({
 
   const submitChatInput = useCallback(async () => {
     const message = chatInput.trim();
-    if (!message || showMasteryTest || aiLoading || isCurrentTopicCompleted) return;
+    if (!message || showMasteryTest || aiLoading || isLessonCompleted) return;
     setChatInput('');
     await handleAIContinue(message);
-  }, [aiLoading, chatInput, handleAIContinue, isCurrentTopicCompleted, showMasteryTest]);
+  }, [aiLoading, chatInput, handleAIContinue, isLessonCompleted, showMasteryTest]);
+
+  const handleContinueToNextLesson = useCallback(async () => {
+    if (!nextLessonCandidate) return;
+    await handleTopicSelect(nextLessonCandidate);
+  }, [handleTopicSelect, nextLessonCandidate]);
 
   const displaySubjects = enrolledSubjects.length > 0
     ? subjects.filter(s => enrolledSubjects.some((e: any) => (e.id || e) === s.id))
@@ -308,7 +330,7 @@ export const AIChatSection = ({
                 </Avatar>
                 <div className="min-w-0 max-w-[4.8rem] min-[360px]:max-w-[6rem] sm:max-w-none flex flex-col">
                   <CardTitle className="block text-sm sm:text-xl font-bold text-slate-800 dark:text-slate-100 leading-none mb-0.5 truncate whitespace-nowrap">
-                    {getPersonaName(profile?.education_level)} {getPersonaEmoji(profile?.education_level)}
+                    {getPersonaName(profile?.education_level)}
                   </CardTitle>
                   <p className="text-[10px] sm:text-sm font-medium text-muted-foreground flex items-center gap-1.5 leading-none truncate">
                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
@@ -333,7 +355,7 @@ export const AIChatSection = ({
                 </div>
                 {selectedTopic && (
                   <Badge variant="outline" className="bg-teal-50 text-teal-700 border-teal-100 hidden md:flex h-7">
-                    Learning: {selectedTopic.name}
+                    Learning: {selectedTopicName}
                   </Badge>
                 )}
                 {topicsForCurrentSubject.length > 0 && (
@@ -355,20 +377,37 @@ export const AIChatSection = ({
           </CardHeader>
 
           {showMobilePath && topicsForCurrentSubject.length > 0 && (
-            <div className="md:hidden shrink-0 border-b border-slate-100 bg-white dark:bg-slate-950">
-              <div className="px-4 py-3">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-xs font-black uppercase tracking-widest text-slate-500 flex items-center gap-2">
-                    <Target className="w-3.5 h-3.5 text-teal-600" /> Learning Path
-                  </p>
-                  <span className="text-xs font-black text-teal-700">{pathProgress}%</span>
+            <>
+              <button
+                type="button"
+                aria-label="Close learning path"
+                className="fixed inset-0 z-[70] bg-slate-950/25 md:hidden"
+                onClick={() => setShowMobilePath(false)}
+              />
+              <div className="fixed inset-x-3 top-32 bottom-24 z-[80] md:hidden rounded-lg border border-teal-100 bg-white shadow-2xl flex flex-col overflow-hidden dark:bg-slate-950 dark:border-slate-800">
+                <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800">
+                  <div className="flex items-center justify-between gap-3 mb-2">
+                    <p className="text-xs font-black uppercase tracking-widest text-slate-500 flex items-center gap-2">
+                      <Target className="w-3.5 h-3.5 text-teal-600" /> Learning Path
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-black text-teal-700">{pathProgress}%</span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setShowMobilePath(false)}
+                        className="h-8 w-8 rounded-full"
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden dark:bg-slate-800">
+                    <div className="h-full bg-primary transition-all" style={{ width: `${pathProgress}%` }} />
+                  </div>
                 </div>
-                <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                  <div className="h-full bg-primary transition-all" style={{ width: `${pathProgress}%` }} />
-                </div>
-              </div>
-              <ScrollArea className="max-h-[42dvh]">
-                <div className="px-3 pb-3 space-y-2">
+                <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-3 py-3 space-y-2">
                   {topicsForCurrentSubject.map((st: any) => {
                     const isActive = selectedTopic?.id === st.id;
                     const isLocked = st.status === 'locked';
@@ -397,7 +436,7 @@ export const AIChatSection = ({
                             {isCompleted ? <CheckCircle2 className="w-4 h-4" /> : isLocked ? <Lock className="w-4 h-4" /> : <Play className="w-4 h-4" />}
                           </div>
                           <div className="min-w-0 flex-1">
-                            <p className="text-sm font-bold leading-snug text-slate-800 break-words">{st.name}</p>
+                            <p className="text-sm font-bold leading-snug text-slate-800 break-words dark:text-slate-100">{formatTopicLike(st)}</p>
                             <p className="mt-1 text-xs text-slate-500">
                               {isCompleted ? 'Mastered' : isLocked ? 'Placement check required' : 'Active learning'}
                             </p>
@@ -407,8 +446,8 @@ export const AIChatSection = ({
                     );
                   })}
                 </div>
-              </ScrollArea>
-            </div>
+              </div>
+            </>
           )}
 
           <div className="flex-1 flex min-w-0 max-w-full flex-row min-h-0 overflow-hidden relative">
@@ -485,7 +524,7 @@ export const AIChatSection = ({
                               </div>
                               <div className="flex-1 min-w-0">
                                 <p className={`text-sm font-bold leading-tight mb-1 ${isActive ? 'text-teal-900 dark:text-teal-100' : isLocked ? 'text-slate-600 dark:text-slate-300' : 'text-slate-700 dark:text-slate-300'}`}>
-                                  {st.name}
+                                  {formatTopicLike(st)}
                                 </p>
                                 <p className="text-[10px] text-slate-500 dark:text-slate-400">
                                   {st.status === 'completed' ? 'Mastered!' : isLocked ? 'Placement check required' : 'Active Learning'}
@@ -517,7 +556,7 @@ export const AIChatSection = ({
   
                           <div className="flex-1 pt-0.5">
                             <p className={`text-sm font-bold leading-tight mb-1 ${st.status === 'locked' ? 'text-slate-400' : 'text-slate-800 dark:text-slate-100'}`}>
-                              {st.name}
+                              {formatTopicLike(st)}
                             </p>
                           </div>
                         </div>
@@ -554,7 +593,7 @@ export const AIChatSection = ({
                       <div>
                         <p className="text-xs font-black uppercase tracking-widest text-teal-700 dark:text-teal-300">Placement Check</p>
                         <h3 className="text-xl font-black text-slate-900 dark:text-slate-100">
-                          Unlock {placementState?.target_topic?.name || placementState?.targetTopic?.name || 'this lesson'}
+                          Unlock {formatTopicName(placementState?.target_topic?.name || placementState?.targetTopic?.name || 'this lesson')}
                         </h3>
                         <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
                           EduNexus will recommend the best lesson to start from before opening the path.
@@ -595,7 +634,7 @@ export const AIChatSection = ({
                           {placementState.questions.map((question: any, index: number) => (
                             <div key={question.id} className="rounded-xl border border-slate-200 dark:border-slate-800 p-4">
                               <p className="text-xs font-black uppercase tracking-widest text-slate-500 mb-2">
-                                {index + 1}. {question.topic_name}
+                                {index + 1}. {formatTopicName(question.topic_name)}
                               </p>
                               <p className="font-bold text-slate-900 dark:text-slate-100 mb-3">
                                 <MathText>{question.text}</MathText>
@@ -737,56 +776,12 @@ export const AIChatSection = ({
                                 }`}>
                                 <div className={`${isYoungLearner && msg.role === 'ai' ? 'text-base font-bold font-display sm:text-xl' : 'text-sm sm:text-base'} min-w-0 max-w-full overflow-hidden break-words leading-relaxed [overflow-wrap:anywhere] prose dark:prose-invert prose-p:max-w-full prose-pre:max-w-full prose-pre:overflow-x-auto prose-table:block prose-table:max-w-full prose-table:overflow-x-auto`}>
                                   {msg.role === 'ai' ? (
-                                    <ReactMarkdown components={mathMarkdownComponents}>{normalizeAcademicTextForDisplay(msg.content)}</ReactMarkdown>
+                                    <ReactMarkdown components={mathMarkdownComponents}>{prepareTutorMarkdown(msg.content)}</ReactMarkdown>
                                   ) : (
                                     <p className="min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere]"><MathText>{msg.content}</MathText></p>
                                   )}
                                 </div>
                               </div>
-
-
-                              {/* Video Suggestions for current message (if relevant) */}
-                              {msg.role === 'ai' && idx === aiChatMessages.length - 1 && suggestedVideos.length > 0 && (
-                                <div className="mt-4 min-w-0 max-w-full space-y-4 overflow-hidden">
-                                  <p className="text-sm font-bold text-slate-500 flex items-center gap-2">
-                                    <Video className="w-4 h-4" /> Watch these to understand better:
-                                  </p>
-                                  {activeVideo && (
-                                    <div className="relative w-full rounded-xl overflow-hidden shadow-none ring-1 ring-black/10 transition-all duration-700" 
-                                         style={{paddingBottom: '56.25%'}}>
-                                      <iframe
-                                        className="absolute inset-0 w-full h-full"
-                                        src={`https://www.youtube.com/embed/${activeVideo}?autoplay=1`}
-                                        allow="accelerometer; autoplay; clipboard-write; 
-                                               encrypted-media; gyroscope; picture-in-picture"
-                                        allowFullScreen
-                                      />
-                                      <button
-                                        className="absolute top-2 right-2 bg-black/60 text-white 
-                                                   rounded-full p-2 hover:bg-black/80 shadow-none"
-                                        onClick={() => setActiveVideo(null)}
-                                      >
-                                        <X className="w-4 h-4" />
-                                      </button>
-                                    </div>
-                                  )}
-                                  <div className="grid min-w-0 grid-cols-1 gap-3 pb-2 sm:grid-cols-2">
-                                    {suggestedVideos.map((video, vIdx) => (
-                                      <Card key={vIdx} className="min-w-0 overflow-hidden cursor-pointer hover:border-teal-400 transition-all shadow-none group" onClick={() => { setSelectedVideo(video); setActiveVideo(video.id); }}>
-                                        <div className="relative aspect-video">
-                                          <img src={video.thumbnail} alt={video.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform" />
-                                          <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <Play className="w-8 h-8 text-white fill-current" />
-                                          </div>
-                                        </div>
-                                        <div className="p-2">
-                                          <p className="text-xs font-bold line-clamp-2">{video.title}</p>
-                                        </div>
-                                      </Card>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
 
                               {/* Speaker control */}
                               {msg.role === 'ai' && isSpeechSupported && (
@@ -811,7 +806,29 @@ export const AIChatSection = ({
                         </div>
                       ))}
 
-                      {!aiLoading && !showMasteryTest && aiChatMessages.length > 0 && (
+                      {masteryPassed && (
+                        <div className="max-w-6xl mx-auto rounded-lg border border-emerald-100 bg-emerald-50/70 p-4 shadow-none dark:border-emerald-900/50 dark:bg-emerald-950/20">
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="min-w-0">
+                              <p className="text-xs font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-300">Lesson Complete</p>
+                              <p className="mt-1 text-sm text-slate-700 dark:text-slate-200">
+                                You have mastered <span className="font-bold">{selectedTopic?.name || focusTopicLabel}</span>. Click below to move to the next lesson; this one stays open for revision, but chat is now closed for this lesson.
+                              </p>
+                            </div>
+                            <Button
+                              type="button"
+                              disabled={!nextLessonCandidate}
+                              onClick={handleContinueToNextLesson}
+                              className="h-11 rounded-lg bg-teal-600 px-4 font-bold text-white hover:bg-teal-700 disabled:opacity-60"
+                            >
+                              {nextLessonCandidate ? 'Move to Next Lesson' : 'All Lessons Completed'}
+                              <ArrowRight className="ml-2 h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+
+                      {!masteryPassed && !aiLoading && !showMasteryTest && aiChatMessages.length > 0 && (
                         <div className="max-w-6xl mx-auto rounded-lg border border-teal-100 dark:border-teal-900/50 bg-teal-50/60 dark:bg-teal-950/10 p-4 shadow-none">
                           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
                             <div>
@@ -837,6 +854,50 @@ export const AIChatSection = ({
                                 );
                               })}
                             </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {!masteryPassed && !aiLoading && !showMasteryTest && suggestedVideos.length > 0 && (
+                        <div className="max-w-6xl mx-auto min-w-0 rounded-lg border border-slate-100 bg-white p-4 shadow-none dark:border-slate-800 dark:bg-slate-900">
+                          <p className="mb-3 flex items-center gap-2 text-sm font-bold text-slate-600 dark:text-slate-300">
+                            <Video className="h-4 w-4 text-teal-600" /> Recommended videos for this lesson
+                          </p>
+                          {activeVideo && (
+                            <div className="relative mb-3 w-full overflow-hidden rounded-lg shadow-none ring-1 ring-black/10" style={{ paddingBottom: '56.25%' }}>
+                              <iframe
+                                className="absolute inset-0 h-full w-full"
+                                src={`https://www.youtube.com/embed/${activeVideo}?autoplay=1`}
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                allowFullScreen
+                              />
+                              <button
+                                type="button"
+                                className="absolute right-2 top-2 rounded-full bg-black/60 p-2 text-white hover:bg-black/80"
+                                onClick={() => setActiveVideo(null)}
+                              >
+                                <X className="h-4 w-4" />
+                              </button>
+                            </div>
+                          )}
+                          <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
+                            {suggestedVideos.map((video, vIdx) => (
+                              <Card
+                                key={vIdx}
+                                className="group min-w-0 cursor-pointer overflow-hidden border-slate-100 shadow-none transition-all hover:border-teal-400 dark:border-slate-800"
+                                onClick={() => { setSelectedVideo(video); setActiveVideo(video.id); }}
+                              >
+                                <div className="relative aspect-video">
+                                  <img src={video.thumbnail} alt={video.title} className="h-full w-full object-cover transition-transform group-hover:scale-105" />
+                                  <div className="absolute inset-0 flex items-center justify-center bg-black/25 opacity-0 transition-opacity group-hover:opacity-100">
+                                    <Play className="h-8 w-8 fill-current text-white" />
+                                  </div>
+                                </div>
+                                <div className="p-2.5">
+                                  <p className="line-clamp-2 text-xs font-bold text-slate-800 dark:text-slate-100">{video.title}</p>
+                                </div>
+                              </Card>
+                            ))}
                           </div>
                         </div>
                       )}
@@ -871,7 +932,7 @@ export const AIChatSection = ({
               {/* Chat Input */}
               <div className="p-3 sm:px-6 border-t bg-white/50 dark:bg-slate-900/50 backdrop-blur-md z-10">
                 <div className="relative group max-w-6xl mx-auto">
-                  {isCurrentTopicCompleted && (
+                  {isLessonCompleted && (
                     <div className="absolute inset-0 z-20 flex items-center justify-center bg-slate-50/80 dark:bg-slate-900/80 rounded-lg backdrop-blur-[1px] border border-emerald-200 dark:border-emerald-900/50">
                       <div className="flex items-center gap-3 px-6 py-3 bg-white dark:bg-slate-900 rounded-lg shadow-none  border border-emerald-100 dark:border-emerald-900">
                         <Trophy className="w-6 h-6 text-emerald-500 animate-bounce" />
@@ -883,7 +944,8 @@ export const AIChatSection = ({
                           variant="ghost" 
                           size="sm" 
                           className="ml-4 text-teal-600 font-black text-xs h-8 hover:bg-teal-50"
-                          onClick={() => handleTopicSelect(topicsForCurrentSubject.find((t: any) => t.status === 'unlocked' || t.status === 'in_progress'))}
+                          onClick={handleContinueToNextLesson}
+                          disabled={!nextLessonCandidate}
                         >
                           Next Topic →
                         </Button>
@@ -891,20 +953,20 @@ export const AIChatSection = ({
                     </div>
                   )}
                   <Input
-                    placeholder={showMasteryTest ? "Mastery Test in Progress..." : (isCheckingUnderstanding ? "Type your explanation here..." : isCurrentTopicCompleted ? "Topic completed!" : `Ask about ${(typeof viewingSubtopic === 'object' ? (viewingSubtopic as any)?.name : viewingSubtopic) || activeSubtopic || "this topic"}...`)}
+                    placeholder={showMasteryTest ? "Mastery Test in Progress..." : (isCheckingUnderstanding ? "Type your explanation here..." : isLessonCompleted ? "Topic completed!" : `Ask about ${(typeof viewingSubtopic === 'object' ? (viewingSubtopic as any)?.name : viewingSubtopic) || activeSubtopic || "this topic"}...`)}
                     value={chatInput}
                     onChange={(e) => setChatInput(e.target.value)}
                     className="rounded-lg py-5 sm:py-6 pl-4 sm:pl-6 pr-24 sm:pr-32 bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 focus:ring-4 focus:ring-teal-500/10 transition-all shadow-none text-base sm:text-lg resize-none"
                     autoFocus
-                    disabled={showMasteryTest || aiLoading || isCurrentTopicCompleted}
+                    disabled={showMasteryTest || aiLoading || isLessonCompleted}
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter' && chatInput.trim() && !showMasteryTest && !isCurrentTopicCompleted) {
+                      if (e.key === 'Enter' && chatInput.trim() && !showMasteryTest && !isLessonCompleted) {
                         e.preventDefault();
                         submitChatInput();
                       }
                     }}
                   />
-                  {!showMasteryTest && !isCurrentTopicCompleted && (
+                  {!showMasteryTest && !isLessonCompleted && (
                     <>
                       <Button
                         type="button"
@@ -929,7 +991,7 @@ export const AIChatSection = ({
                     </>
                   )}
                 </div>
-                {(isListening || interimTranscript || speechError || !isSpeechRecognitionSupported) && !showMasteryTest && !isCurrentTopicCompleted && (
+                {(isListening || interimTranscript || speechError || !isSpeechRecognitionSupported) && !showMasteryTest && !isLessonCompleted && (
                   <div className="max-w-6xl mx-auto mt-2 min-h-5 text-xs font-medium text-slate-500 dark:text-slate-400">
                     {isListening && (
                       <span className="text-teal-700 dark:text-teal-300">
@@ -995,7 +1057,7 @@ export const AIChatSection = ({
             {/* Brain Power Cards Section - Reading Recommendations */}
             {selectedTopic && (
               <BrainPowerCardsSection
-                topicName={selectedTopic.name}
+                topicName={selectedTopicName}
                 subjectName={selectedSubject?.name}
                 onJumpIn={(card) => {
                   handleAIContinue(`I'd like to learn more about "${card.title}" — specifically the part about: ${card.snippet}`);
@@ -1013,7 +1075,7 @@ export const AIChatSection = ({
                       <Video className="mt-0.5 h-4 w-4 shrink-0 text-teal-600 sm:h-5 sm:w-5" />
                       <span className="min-w-0">
                         <span className="block text-xs font-medium uppercase tracking-wide text-muted-foreground">Recommended videos</span>
-                        <span className="line-clamp-2 break-words">For {selectedTopic.name}</span>
+                        <span className="line-clamp-2 break-words">For {selectedTopicName}</span>
                       </span>
                     </CardTitle>
                     <Badge variant="outline" className="w-fit shrink-0 text-[10px] uppercase font-bold text-teal-600 border-teal-200">YouTube Resources</Badge>
@@ -1105,7 +1167,7 @@ export const AIChatSection = ({
                                       }`}>
                                       {done ? <CheckCircle2 className="w-4 h-4 text-emerald-500" /> : isLocked ? <Lock className="w-4 h-4 text-amber-600" /> : <Layers className="w-4 h-4" />}
                                     </div>
-                                    <span className="flex-1 text-left whitespace-normal">{topic.name}</span>
+                                    <span className="flex-1 text-left whitespace-normal">{formatTopicLike(topic)}</span>
                                     {pct > 0 && !done && (
                                       <span className="text-[10px] text-teal-600 dark:text-teal-400 font-bold tabular-nums">{pct}%</span>
                                     )}
@@ -1142,14 +1204,18 @@ export const AIChatSection = ({
                       </div>
                       <div>
                         <p className="text-sm font-black uppercase tracking-widest text-amber-700 dark:text-amber-300">Lesson Locked</p>
-                        <h3 className="text-lg font-black text-slate-900 dark:text-slate-100">{lockedLessonNotice.requestedTopic?.name}</h3>
-                        <p className="text-sm text-slate-700 dark:text-slate-300 mt-1">{lockedLessonNotice.message}</p>
+                        <h3 className="text-lg font-black text-slate-900 dark:text-slate-100">{formatTopicLike(lockedLessonNotice.requestedTopic)}</h3>
+                        <p className="text-sm text-slate-700 dark:text-slate-300 mt-1">
+                          {lockedLessonNotice.currentTopic
+                            ? `You have not unlocked "${formatTopicLike(lockedLessonNotice.requestedTopic)}" yet. Continue from "${formatTopicLike(lockedLessonNotice.currentTopic)}" first.`
+                            : `You have not unlocked "${formatTopicLike(lockedLessonNotice.requestedTopic)}" yet. Complete the previous lesson first.`}
+                        </p>
                       </div>
                     </div>
                     {lockedLessonNotice.currentTopic ? (
                       <Button className="bg-teal-600 hover:bg-teal-700 rounded-xl gap-2" onClick={openCurrentUnlockedLesson}>
                         <Play className="w-4 h-4" />
-                        Open {lockedLessonNotice.currentTopic.name}
+                        Open {formatTopicLike(lockedLessonNotice.currentTopic)}
                       </Button>
                     ) : null}
                   </div>
@@ -1166,8 +1232,8 @@ export const AIChatSection = ({
                     </div>
                     <div className="flex-1 text-center md:text-left">
                       <Badge variant="outline" className="text-white border-white/30 bg-white/10 mb-2">Ready to Learn</Badge>
-                      <h3 className="text-2xl font-bold mb-2">{selectedTopic.name}</h3>
-                      <p className="text-teal-50 mb-6 max-w-lg">I'm ready to teach you about {selectedTopic.name}. We can start with a basic explanation or dive straight into practice.</p>
+                      <h3 className="text-2xl font-bold mb-2">{selectedTopicName}</h3>
+                      <p className="text-teal-50 mb-6 max-w-lg">I'm ready to teach you about {selectedTopicName}. We can start with a basic explanation or dive straight into practice.</p>
 
                       <div className="flex flex-wrap gap-3 justify-center md:justify-start">
                         <Button className="bg-white text-teal-700 hover:bg-teal-50 rounded-xl px-6 gap-2" onClick={() => openTutorFromSelection(selectedTopic, setShowAIPanel, handleAIContinue, aiChatMessages)}>
@@ -1176,7 +1242,7 @@ export const AIChatSection = ({
                         <Button variant="outline" className="border-white/40 text-white hover:bg-white/10 rounded-xl px-6 gap-2" onClick={() => setActiveView('quiz')}>
                           <FileText className="w-4 h-4" /> Take Quiz
                         </Button>
-                        <Button variant="outline" className="border-white/40 text-white hover:bg-white/10 rounded-xl px-6 gap-2" onClick={() => handleAIContinue(`Give me a summary of ${selectedTopic.name}`)}>
+                        <Button variant="outline" className="border-white/40 text-white hover:bg-white/10 rounded-xl px-6 gap-2" onClick={() => handleAIContinue(`Give me a summary of ${selectedTopicName}`)}>
                           <Repeat className="w-4 h-4" /> Summary
                         </Button>
                       </div>
@@ -1205,7 +1271,7 @@ export const AIChatSection = ({
                       }
                     }}>
                       <div className="w-2 h-2 rounded-full bg-amber-400 mr-3 group-hover:scale-150 transition-transform" />
-                      <span className="truncate">{topic.name}</span>
+                      <span className="truncate">{formatTopicLike(topic)}</span>
                     </Button>
                   )) : (
                     <div className="py-4 text-center">

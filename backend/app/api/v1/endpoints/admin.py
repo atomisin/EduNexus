@@ -15,6 +15,7 @@ from sqlalchemy.orm import selectinload
 from app.db.database import get_async_db
 from app.api.v1.endpoints.auth import get_current_user
 from app.models.user import User, UserRole, UserStatus, TeacherStudent, TeacherProfile
+from app.services.account_deletion import delete_user_account
 from app.services.storage_service import storage_service
 from app.models.student import StudentProfile
 from app.models.token_usage import TokenUsageLog
@@ -368,8 +369,8 @@ async def delete_user(
         "role": user.role
     }
     
-    # Delete user - cascading will handle related records
-    await db.delete(user)
+    # Delete user and dependent rows in a deterministic FK-safe order.
+    await delete_user_account(db, user)
     await db.commit()
     
     # In production, you might want to log this action

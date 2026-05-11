@@ -3,7 +3,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { CheckCircle, XCircle } from 'lucide-react';
+import { CheckCircle, Trash2, XCircle } from 'lucide-react';
 
 interface UserCardProps {
   user: {
@@ -19,9 +19,10 @@ interface UserCardProps {
   variant: 'pending' | 'approved' | 'suspended';
   onApprove: (userId: string) => void;
   onReject: (userId: string) => void;
+  onDelete: (userId: string, label: string) => void;
 }
 
-export const UserCard: React.FC<UserCardProps> = ({ user, variant, onApprove, onReject }) => {
+export const UserCard: React.FC<UserCardProps> = ({ user, variant, onApprove, onReject, onDelete }) => {
   const avatarClass = variant === 'pending'
     ? 'text-xl bg-primary text-primary-foreground'
     : variant === 'approved'
@@ -83,6 +84,13 @@ export const UserCard: React.FC<UserCardProps> = ({ user, variant, onApprove, on
                 {variant === 'suspended' && (
                   <Button variant="default" onClick={() => onApprove(user.id)}>Reactivate</Button>
                 )}
+                <Button
+                  variant="outline"
+                  className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                  onClick={() => onDelete(user.id, user.full_name || user.name || user.email)}
+                >
+                  <Trash2 className="mr-2 h-4 w-4" /> Delete
+                </Button>
               </div>
             </div>
           </div>

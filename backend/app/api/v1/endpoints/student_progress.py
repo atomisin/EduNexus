@@ -373,7 +373,7 @@ async def get_performance_analytics(
     )
     activities = res_act.scalars().all()
 
-    quiz_scores = [a for a in activities if a.activity_type == "quiz"]
+    quiz_scores = [a for a in activities if a.activity_type in {"quiz", "mastery_test"}]
     session_activities = [a for a in activities if a.activity_type == "session"]
     lesson_activities = [a for a in activities if a.activity_type in {"lesson", "topic", "material"}]
     ai_chat_activities = [a for a in activities if a.activity_type in {"ai_chat", "chat", "tutor"}]

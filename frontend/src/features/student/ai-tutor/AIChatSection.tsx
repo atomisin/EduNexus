@@ -64,8 +64,11 @@ const mathMarkdownComponents = {
 const PLACEHOLDER_TOPIC_NAMES = new Set(['CLASS', 'SUBJECT', 'TERM', 'TOPIC', 'TOPICS']);
 
 const prepareTutorMarkdown = (content: string) =>
-  normalizeAcademicTextForDisplay(content || '')
-    .replace(/(^|\n)\s*(?:[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]\ufe0f?\s*)+(?=#{1,6}\s+)/gu, '$1')
+  normalizeAcademicTextForDisplay(
+    (content || '')
+      .replace(/(^|\n)\s*(?:[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]\ufe0f?\s*)+#{1,6}\s+/gu, '$1### ')
+  )
+    .replace(/(^|\n)#{1,6}\s+(?:[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]\ufe0f?\s*)+/gu, '$1### ')
     .replace(/^(#{1,6}\s+(?:Goal|Core idea|Try this|Example|Practice|Summary|Step\s+\d+))\s+(.+)$/gim, '$1\n$2');
 
 const isRealLearningTopic = (topic: any) => {

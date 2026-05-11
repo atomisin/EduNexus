@@ -1,14 +1,25 @@
 import { useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { Camera, CheckCircle2, Loader2 } from 'lucide-react';
+import { Camera, CheckCircle2, Loader2, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { EDUCATION_LEVELS } from '@/constants/educationLevels';
-import { studentAPI } from '@/services/api';
+import { studentAPI, userAPI } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatCurriculumLabel, formatEducationLevel } from '@/utils/educationDisplay';
 
@@ -56,9 +67,10 @@ export const ProfileView = ({
   getLearningStyleLabel,
   startAssessment,
 }: ProfileViewProps) => {
-  const { setUser } = useAuth();
+  const { logout, setUser } = useAuth();
   const [savingProfile, setSavingProfile] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
 
   const handleSave = async () => {
@@ -407,6 +419,53 @@ export const ProfileView = ({
                 Take Learning Style Assessment
               </Button>
             )}
+          </CardContent>
+        </Card>
+
+        <Card className="rounded-lg border-red-200 bg-red-50/40 shadow-none dark:border-red-900/60 dark:bg-red-950/10">
+          <CardHeader className="px-4 py-4 sm:px-5">
+            <CardTitle className="text-base font-semibold text-red-700 dark:text-red-300">Account Control</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 px-4 pb-5 sm:px-5">
+            <p className="text-sm text-red-700/80 dark:text-red-200/80">
+              Delete your EduNexus account permanently. This removes your profile, learning records, and access.
+            </p>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" className="w-full rounded-lg">
+                  <Trash2 className="mr-2 h-4 w-4" /> Delete My Account
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete your account?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This action is permanent and cannot be undone. Your account and associated learning data will be removed from EduNexus.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel disabled={deletingAccount}>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    disabled={deletingAccount}
+                    className="bg-red-600 text-white hover:bg-red-700"
+                    onClick={async () => {
+                      setDeletingAccount(true);
+                      try {
+                        await userAPI.deleteMe();
+                        toast.success('Your account has been deleted.');
+                        logout();
+                      } catch (error: any) {
+                        toast.error(error.message || 'Failed to delete account');
+                      } finally {
+                        setDeletingAccount(false);
+                      }
+                    }}
+                  >
+                    {deletingAccount ? 'Deleting...' : 'Delete Account'}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </CardContent>
         </Card>
       </div>

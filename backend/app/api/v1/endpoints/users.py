@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Request, Response, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pydantic import BaseModel
@@ -8,9 +8,11 @@ import io
 import uuid
 
 from app.db.database import get_async_db
-from app.api.v1.endpoints.auth import get_current_user
+from app.api.v1.endpoints.auth import get_current_user, _auth_cookie_options
+from app.core.config import settings
 from app.models.student import StudentProfile
 from app.models.user import User, TeacherProfile
+from app.services.account_deletion import delete_user_account
 from app.services.storage_service import storage_service
 
 router = APIRouter()
@@ -259,4 +261,42 @@ async def upload_current_user_avatar(
     return {
         "avatar_url": storage_service.resolve_url(avatar_url) if avatar_url else None,
         "message": "Profile picture updated successfully",
+    }
+
+
+@router.delete("/me")
+async def delete_current_user_account(
+    request: Request,
+    response: Response,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """Permanently delete the authenticated user's account and clear auth cookies."""
+    deleted_user = {
+        "id": str(current_user.id),
+        "email": current_user.email,
+        "role": str(current_user.role.value if hasattr(current_user.role, "value") else current_user.role),
+    }
+
+    await delete_user_account(db, current_user)
+    await db.commit()
+
+    cookie_options = _auth_cookie_options(request)
+    response.delete_cookie(
+        key="access_token",
+        path="/",
+        secure=cookie_options["secure"],
+        samesite=cookie_options["samesite"],
+    )
+    response.delete_cookie(
+        key="refresh_token",
+        path=f"{settings.API_V1_STR}/auth/refresh",
+        secure=cookie_options["secure"],
+        samesite=cookie_options["samesite"],
+    )
+
+    return {
+        "success": True,
+        "detail": "Your account has been permanently deleted.",
+        "deleted_user": deleted_user,
     }

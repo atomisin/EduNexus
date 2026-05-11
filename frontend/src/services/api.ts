@@ -987,6 +987,11 @@ export const userAPI = {
     method: 'PUT',
     body: JSON.stringify(data),
   }),
+
+  deleteMe: () => fetchWithAuth('/users/me', {
+    method: 'DELETE',
+    skipAuthRefresh: true,
+  }),
 };
 
 // Subscription API

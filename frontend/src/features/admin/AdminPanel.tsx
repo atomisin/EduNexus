@@ -122,6 +122,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
   };
 
+  const handleDeleteUser = async (userId: string, label: string) => {
+    const confirmed = window.confirm(`Permanently delete ${label}? This cannot be undone.`);
+    if (!confirmed) return;
+    try {
+      await adminAPI.deleteUser(userId, 'Deleted by admin');
+      toast.success('User deleted permanently');
+      fetchUsers();
+    } catch (error: any) {
+      toast.error('Failed to delete user: ' + error.message);
+    }
+  };
+
   const filteredUsers = users.filter(user => {
     const userName = user.full_name || user.name || '';
     const matchesSearch = userName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -294,7 +306,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 </Alert>
               ) : (
                 pendingUsers.map((user) => (
-                  <UserCard key={user.id} user={user} variant="pending" onApprove={handleApproveUser} onReject={handleRejectUser} />
+                  <UserCard key={user.id} user={user} variant="pending" onApprove={handleApproveUser} onReject={handleRejectUser} onDelete={handleDeleteUser} />
                 ))
               )}
             </TabsContent>
@@ -307,7 +319,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 </Alert>
               ) : (
                 approvedUsers.map((user) => (
-                  <UserCard key={user.id} user={user} variant="approved" onApprove={handleApproveUser} onReject={handleRejectUser} />
+                  <UserCard key={user.id} user={user} variant="approved" onApprove={handleApproveUser} onReject={handleRejectUser} onDelete={handleDeleteUser} />
                 ))
               )}
             </TabsContent>
@@ -320,7 +332,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 </Alert>
               ) : (
                 suspendedUsers.map((user) => (
-                  <UserCard key={user.id} user={user} variant="suspended" onApprove={handleApproveUser} onReject={handleRejectUser} />
+                  <UserCard key={user.id} user={user} variant="suspended" onApprove={handleApproveUser} onReject={handleRejectUser} onDelete={handleDeleteUser} />
                 ))
               )}
             </TabsContent>

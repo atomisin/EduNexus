@@ -8,6 +8,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 import random
 import string
+from types import SimpleNamespace
 
 from app.db.database import get_db, get_async_db
 from app.models.user import User, UserRole, UserStatus, TeacherProfile
@@ -67,9 +68,35 @@ def needs_email_verification(user: User) -> bool:
     )
 
 
+def queue_verification_email(background_tasks: BackgroundTasks, user: User, verification_code: Optional[str]) -> bool:
+    """Queue verification email so registration can return immediately after DB commit."""
+    if not verification_code:
+        return False
+
+    user_snapshot = {
+        "email": user.email,
+        "first_name": user.first_name,
+        "last_name": user.last_name,
+        "full_name": user.full_name,
+    }
+
+    def _send_verification_email() -> None:
+        try:
+            email_user = SimpleNamespace(**user_snapshot)
+            sent = email_service.send_verification_email(email_user, verification_code)
+            if not sent:
+                logger.error("Queued verification email failed for %s", user_snapshot["email"])
+        except Exception:
+            logger.exception("Queued verification email crashed for %s", user_snapshot["email"])
+
+    background_tasks.add_task(_send_verification_email)
+    return True
+
+
 async def resend_verification_for_existing_user(
     user: User,
     db: AsyncSession,
+    background_tasks: Optional[BackgroundTasks] = None,
 ) -> Optional[dict]:
     """Let unverified users restart registration without creating duplicates."""
     if not needs_email_verification(user):
@@ -84,12 +111,11 @@ async def resend_verification_for_existing_user(
     if user.status != UserStatus.UNVERIFIED and not user.email_verified_at:
         user.status = UserStatus.UNVERIFIED
     await db.commit()
-    email_sent = email_service.send_verification_email(user, verification_code)
-    if not email_sent:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="We could not send the verification code. Please try again shortly.",
-        )
+    email_sent = (
+        queue_verification_email(background_tasks, user, verification_code)
+        if background_tasks
+        else email_service.send_verification_email(user, verification_code)
+    )
 
     return {
         "success": True,
@@ -194,7 +220,11 @@ class UserResponse(BaseModel):
 
 
 @router.post("/register", response_model=dict)
-async def register(user_data: UserCreate, db: AsyncSession = Depends(get_async_db)):
+async def register(
+    user_data: UserCreate,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_async_db),
+):
     """Register a new user (generic endpoint)"""
     # Validate email
     is_valid, error_msg = validate_email_registration(user_data.email, user_data.role)
@@ -210,7 +240,7 @@ async def register(user_data: UserCreate, db: AsyncSession = Depends(get_async_d
     result = await db.execute(select(User).filter(User.email == user_data.email))
     existing_user = result.scalars().first()
     if existing_user:
-        resend_result = await resend_verification_for_existing_user(existing_user, db)
+        resend_result = await resend_verification_for_existing_user(existing_user, db, background_tasks)
         if resend_result:
             return resend_result
         raise HTTPException(
@@ -276,12 +306,7 @@ async def register(user_data: UserCreate, db: AsyncSession = Depends(get_async_d
         verification_required
         and verification_code
     ):
-        email_sent = email_service.send_verification_email(db_user, verification_code)
-        if not email_sent:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="We could not send the verification code. Please try again shortly.",
-            )
+        email_sent = queue_verification_email(background_tasks, db_user, verification_code)
 
     return {
         "success": True,
@@ -299,7 +324,9 @@ async def register(user_data: UserCreate, db: AsyncSession = Depends(get_async_d
     "/register/teacher", response_model=dict, status_code=status.HTTP_201_CREATED
 )
 async def register_teacher(
-    teacher_data: TeacherRegistration, db: AsyncSession = Depends(get_async_db)
+    teacher_data: TeacherRegistration,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Register a new teacher account"""
     # Validate email
@@ -316,7 +343,7 @@ async def register_teacher(
     result = await db.execute(select(User).filter(User.email == teacher_data.email))
     existing_user = result.scalars().first()
     if existing_user:
-        resend_result = await resend_verification_for_existing_user(existing_user, db)
+        resend_result = await resend_verification_for_existing_user(existing_user, db, background_tasks)
         if resend_result:
             return resend_result
         raise HTTPException(
@@ -390,12 +417,7 @@ async def register_teacher(
         verification_required
         and verification_code
     ):
-        email_sent = email_service.send_verification_email(db_user, verification_code)
-        if not email_sent:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="We could not send the verification code. Please try again shortly.",
-            )
+        email_sent = queue_verification_email(background_tasks, db_user, verification_code)
 
     return {
         "success": True,
@@ -434,7 +456,7 @@ async def register_student(
     result = await db.execute(select(User).filter(User.email == student_data.email))
     existing_user = result.scalars().first()
     if existing_user:
-        resend_result = await resend_verification_for_existing_user(existing_user, db)
+        resend_result = await resend_verification_for_existing_user(existing_user, db, background_tasks)
         if resend_result:
             return resend_result
         raise HTTPException(
@@ -520,12 +542,7 @@ async def register_student(
         verification_required
         and verification_code
     ):
-        email_sent = email_service.send_verification_email(db_user, verification_code)
-        if not email_sent:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="We could not send the verification code. Please try again shortly.",
-            )
+        email_sent = queue_verification_email(background_tasks, db_user, verification_code)
 
     # Ensure curriculum is generated/loaded asynchronously
     from app.services.curriculum_initializer import initialize_standard_curriculum

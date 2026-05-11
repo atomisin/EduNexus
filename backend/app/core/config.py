@@ -80,7 +80,7 @@ class Settings(BaseSettings):
     SMTP_FROM_EMAIL: str = "noreply@edunexus.ai"
     SMTP_FROM_NAME: str = "EduNexus"
     RESEND_API_KEY: Optional[str] = None
-    RESEND_FROM_EMAIL: Optional[str] = None
+    RESEND_FROM_EMAIL: Optional[str] = "onboarding@resend.dev"
 
     # Email Verification
     VERIFICATION_ENABLED: bool = True

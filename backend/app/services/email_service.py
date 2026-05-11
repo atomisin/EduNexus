@@ -25,8 +25,10 @@ class EmailService:
         self.use_tls = settings.SMTP_USE_TLS
         self.from_email = settings.SMTP_FROM_EMAIL
         self.from_name = settings.SMTP_FROM_NAME
-        self.resend_api_key = settings.RESEND_API_KEY
-        self.resend_from_email = settings.RESEND_FROM_EMAIL or settings.SMTP_FROM_EMAIL
+        self.resend_api_key = (settings.RESEND_API_KEY or "").strip() or None
+        # Keep Resend independent from SMTP_FROM_EMAIL. SMTP may point at a
+        # future custom domain that Resend has not verified yet.
+        self.resend_from_email = (settings.RESEND_FROM_EMAIL or "").strip() or "onboarding@resend.dev"
 
     def _send_via_resend(self, to_email: str, subject: str, html_content: str, text_content: Optional[str] = None) -> bool:
         """Send an email through Resend's HTTPS API, which is friendlier to hosted environments."""
@@ -52,7 +54,14 @@ class EmailService:
                     },
                     json=payload,
                 )
-                response.raise_for_status()
+                if response.status_code >= 400:
+                    logger.error(
+                        "Resend rejected email to %s with status %s: %s",
+                        to_email,
+                        response.status_code,
+                        response.text[:500],
+                    )
+                    return False
             return True
         except Exception as e:
             logger.exception(f"Failed to send email via Resend: {e}")

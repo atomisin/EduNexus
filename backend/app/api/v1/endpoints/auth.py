@@ -642,7 +642,9 @@ async def login(
             hours=settings.VERIFICATION_TOKEN_EXPIRE_HOURS
         )
         await db.commit()
-        email_sent = queue_verification_email(background_tasks, user, verification_code)
+        # This branch raises an HTTPException, so send synchronously here rather
+        # than relying on response background tasks that may not be attached.
+        email_sent = email_service.send_verification_email(user, verification_code)
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={

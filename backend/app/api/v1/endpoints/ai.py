@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any
 import uuid
 import traceback
+import re
 
 from app.db.database import get_async_db
 from app.api.v1.endpoints.auth import get_current_user
@@ -206,6 +207,135 @@ def build_fallback_mastery_questions(topic: str, subject: str) -> List[Dict[str,
             start=1,
         )
     ]
+
+
+def option_matching_number(options: Dict[str, Any], expected: float) -> Optional[str]:
+    for key, value in (options or {}).items():
+        numbers = re.findall(r"-?\d+(?:\.\d+)?", str(value))
+        for number in numbers:
+            parsed = float(number)
+            if abs(parsed - expected) < 0.0001:
+                return str(key).upper()
+    return None
+
+
+def derive_numeric_mastery_answer(question: Dict[str, Any]) -> Optional[str]:
+    """Correct obvious arithmetic answer keys when generated metadata contradicts the math."""
+    text = str(question.get("text") or "")
+    lower_text = text.lower()
+    options = question.get("options") or {}
+    numbers = [float(item) for item in re.findall(r"\b\d+(?:\.\d+)?\b", text)]
+
+    if not numbers:
+        return None
+
+    division_intents = [
+        "how many group",
+        "how many set",
+        "how many bundle",
+        "how many pack",
+        "how many each",
+        "share equally",
+        "divide",
+        "divided",
+        "each group",
+        "each set",
+    ]
+    if any(intent in lower_text for intent in division_intents) and len(numbers) >= 2:
+        dividend = numbers[0]
+        divisor = numbers[-1]
+        if divisor:
+            return option_matching_number(options, dividend / divisor)
+
+    if "by tens" in lower_text and "next" in lower_text:
+        return option_matching_number(options, numbers[-1] + 10)
+    if "by fives" in lower_text and "next" in lower_text:
+        return option_matching_number(options, numbers[-1] + 5)
+    if "by twos" in lower_text and "next" in lower_text:
+        return option_matching_number(options, numbers[-1] + 2)
+    if "next number after" in lower_text:
+        return option_matching_number(options, numbers[-1] + 1)
+
+    expression = re.search(r"(\d+(?:\.\d+)?)\s*([+\-x×*/÷])\s*(\d+(?:\.\d+)?)", text)
+    if expression:
+        left = float(expression.group(1))
+        op = expression.group(2)
+        right = float(expression.group(3))
+        expected: Optional[float] = None
+        if op == "+":
+            expected = left + right
+        elif op == "-":
+            expected = left - right
+        elif op in {"x", "×", "*"}:
+            expected = left * right
+        elif op in {"/", "÷"} and right:
+            expected = left / right
+        if expected is not None:
+            return option_matching_number(options, expected)
+
+    if any(word in lower_text for word in ["altogether", "total", "sum"]) and len(numbers) >= 2:
+        matched_option = option_matching_number(options, sum(numbers[:2]))
+        if matched_option:
+            return matched_option
+
+    if any(word in lower_text for word in ["left", "remain", "remaining", "difference"]) and len(numbers) >= 2:
+        matched_option = option_matching_number(options, numbers[0] - numbers[1])
+        if matched_option:
+            return matched_option
+
+    if any(word in lower_text for word in ["each", "rows of", "columns of", "groups of", "sets of"]) and any(word in lower_text for word in ["total", "altogether", "how many"]) and len(numbers) >= 2:
+        if any(word in lower_text for word in ["how many group", "how many set", "how many bundle", "how many pack"]):
+            return None
+        return option_matching_number(options, numbers[0] * numbers[-1])
+
+    return None
+
+
+def normalize_mastery_questions(questions: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    normalized: List[Dict[str, Any]] = []
+    invalid_answer_phrases = [
+        "closest",
+        "not available",
+        "not in the option",
+        "not in the options",
+        "option is not available",
+        "no option",
+        "none of the options",
+    ]
+    for idx, raw_question in enumerate(questions or [], start=1):
+        if not isinstance(raw_question, dict):
+            continue
+        options = raw_question.get("options") or {}
+        if not isinstance(options, dict) or len(options) < 2:
+            continue
+        cleaned_options = {
+            str(key).upper(): str(value)
+            for key, value in options.items()
+            if str(key).strip() and str(value).strip()
+        }
+        if len(set(cleaned_options.values())) != len(cleaned_options):
+            continue
+        correct_option = str(raw_question.get("correct_option") or "").upper().strip()
+        explanation = str(raw_question.get("explanation") or "").strip()
+        combined_answer_text = f"{cleaned_options.get(correct_option, '')} {explanation}".lower()
+        if any(phrase in combined_answer_text for phrase in invalid_answer_phrases):
+            correct_option = ""
+
+        derived_option = derive_numeric_mastery_answer({**raw_question, "options": cleaned_options})
+        if derived_option in cleaned_options:
+            correct_option = derived_option
+        elif correct_option not in cleaned_options:
+            continue
+
+        normalized.append({
+            "id": str(raw_question.get("id") or f"q{idx}"),
+            "text": str(raw_question.get("text") or "").strip(),
+            "options": cleaned_options,
+            "correct_option": correct_option,
+            "explanation": explanation,
+            "difficulty": str(raw_question.get("difficulty") or "medium").lower(),
+        })
+    return normalized
 
 
 def user_key(request: Request):
@@ -660,7 +790,14 @@ async def generate_mastery_test(
                 sanitize_user_input(test_req.topic),
                 sanitize_user_input(test_req.subject),
             )
-        return {"questions": questions}
+        normalized_questions = normalize_mastery_questions(questions)
+        if not normalized_questions:
+            logger.warning("[mastery-test] Generated questions failed validation; using fallback for topic %s", test_req.topic)
+            normalized_questions = normalize_mastery_questions(build_fallback_mastery_questions(
+                sanitize_user_input(test_req.topic),
+                sanitize_user_input(test_req.subject),
+            ))
+        return {"questions": normalized_questions}
     except Exception:
         await refund_brain_power(current_user.id, brain_power_cost, db)
         raise
@@ -876,9 +1013,21 @@ async def evaluate_mastery_test(
     student_profile = res_prof.scalars().first()
     student_context = get_student_context(current_user, student_profile)
 
-    # Programmatic, Rule-Based Validation (Bypassing the LLM)
-    total = len(request.results)
-    score = sum(1 for r in request.results if r.get("is_correct", False))
+    # Programmatic, rule-based validation. Do not trust client-supplied is_correct.
+    normalized_results: List[Dict[str, Any]] = []
+    for result in request.results:
+        selected = str(result.get("selected") or "").upper().strip()
+        correct_option = str(result.get("correct_option") or "").upper().strip()
+        is_correct = bool(correct_option and selected == correct_option)
+        normalized_results.append({
+            **result,
+            "selected": selected,
+            "correct_option": correct_option,
+            "is_correct": is_correct,
+        })
+
+    total = len(normalized_results)
+    score = sum(1 for r in normalized_results if r.get("is_correct", False))
     percentage = (score / total * 100) if total > 0 else 0
     passed = percentage >= 70
 
@@ -902,7 +1051,7 @@ async def evaluate_mastery_test(
         "passed": passed,
         "mastery_level": mastery_level,
         "feedback": feedback,
-        "detailed_results": request.results,
+        "detailed_results": normalized_results,
     }
 
     # Persist results and XP if passed

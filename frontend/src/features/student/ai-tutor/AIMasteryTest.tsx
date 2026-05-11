@@ -5,8 +5,6 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import {
-    CheckCircle2,
-    XCircle,
     ArrowRight,
     Trophy,
     Brain,
@@ -87,6 +85,7 @@ export const AIMasteryTest: React.FC<AIMasteryTestProps> = ({ topic, topicId, su
             {
                 question_id: currentQuestion.id,
                 selected: selectedOption,
+                correct_option: currentQuestion.correct_option,
                 is_correct: isCorrect,
                 difficulty: currentQuestion.difficulty
             }
@@ -99,6 +98,14 @@ export const AIMasteryTest: React.FC<AIMasteryTestProps> = ({ topic, topicId, su
         } else {
             handleSubmit(newAnswers);
         }
+    };
+
+    const handleRetake = () => {
+        setCurrentIndex(0);
+        setSelectedOption("");
+        setAnswers([]);
+        setEvaluation(null);
+        setShowResults(false);
     };
 
     const handleSubmit = async (finalAnswers: any[]) => {
@@ -158,9 +165,9 @@ export const AIMasteryTest: React.FC<AIMasteryTestProps> = ({ topic, topicId, su
                     animate={{ opacity: 1, scale: 1 }}
                     className="w-full max-w-2xl mx-auto"
                 >
-                    <Card className="border-teal-200 shadow-none overflow-hidden">
+                    <Card className="border-teal-200 shadow-none overflow-hidden rounded-lg">
                         <div className={`h-3 ${isPassed ? 'bg-teal-500' : 'bg-amber-500'}`} />
-                        <CardHeader className="text-center pb-2">
+                        <CardHeader className="text-center pb-2 px-5 sm:px-6">
                             <div className="flex justify-center mb-4">
                                 {isPassed ? (
                                     <div className="bg-teal-100 p-4 rounded-full relative">
@@ -179,32 +186,32 @@ export const AIMasteryTest: React.FC<AIMasteryTestProps> = ({ topic, topicId, su
                                     </div>
                                 )}
                             </div>
-                            <CardTitle className="text-3xl font-extrabold text-slate-900">
+                            <CardTitle className="text-2xl sm:text-3xl font-extrabold text-slate-900">
                                 {isPassed ? 'Mastery Achieved!' : 'Great Effort!'}
                             </CardTitle>
-                            <CardDescription className="text-lg">
+                            <CardDescription className="text-base sm:text-lg">
                                 Topic: <span className="font-semibold text-teal-700">{topic}</span>
                             </CardDescription>
                         </CardHeader>
-                        <CardContent className="p-8">
-                            <div className="grid grid-cols-2 gap-6 mb-8 text-center">
-                                <div className="bg-slate-50 p-6 rounded-lg border border-slate-100">
-                                    <div className="text-4xl font-black text-slate-900 mb-1">
+                        <CardContent className="p-5 sm:p-8">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-6 mb-6 sm:mb-8 text-center">
+                                <div className="bg-slate-50 p-4 sm:p-6 rounded-lg border border-slate-100">
+                                    <div className="text-3xl sm:text-4xl font-black text-slate-900 mb-1">
                                         {evaluation.score}<span className="text-xl text-slate-400">/{evaluation.total}</span>
                                     </div>
                                     <div className="text-sm font-bold text-slate-500 uppercase tracking-widest">Final Score</div>
                                 </div>
-                                <div className="bg-slate-50 p-6 rounded-lg border border-slate-100">
+                                <div className="bg-slate-50 p-4 sm:p-6 rounded-lg border border-slate-100">
                                     <div className="text-2xl font-bold text-teal-600 mb-1">{evaluation.mastery_level}</div>
                                     <div className="text-sm font-bold text-slate-500 uppercase tracking-widest">Mastery Level</div>
                                 </div>
                             </div>
 
-                            <div className="bg-teal-50/50 p-6 rounded-lg border border-teal-100 relative mb-8">
+                            <div className="bg-teal-50/50 p-4 sm:p-6 rounded-lg border border-teal-100 relative mb-6 sm:mb-8">
                                 <div className="absolute -top-3 left-6 px-3 bg-white text-teal-700 font-bold text-xs uppercase border border-teal-100 rounded-full">
                                     Teacher's Feedback
                                 </div>
-                                <p className="text-slate-700 italic leading-relaxed text-lg">
+                                <p className="text-slate-700 italic leading-relaxed text-base sm:text-lg">
                                     "{evaluation.feedback}"
                                 </p>
                             </div>
@@ -230,23 +237,23 @@ export const AIMasteryTest: React.FC<AIMasteryTestProps> = ({ topic, topicId, su
                             {evaluation.detailed_results && (
                                 <div className="mt-8 space-y-4">
                                     <h4 className="text-lg font-bold text-slate-800 border-b pb-2">Detailed Question Review</h4>
-                                    <div className="max-h-[300px] overflow-y-auto pr-2 space-y-4 no-scrollbar">
+                                    <div className="space-y-4 sm:max-h-[360px] sm:overflow-y-auto sm:pr-2 no-scrollbar">
                                         {evaluation.detailed_results.map((r: any, idx: number) => {
                                             const question = questions.find(q => q.id === r.question_id);
                                             return (
-                                                <div key={idx} className={`p-4 rounded-xl border-l-[6px] ${r.is_correct ? 'border-teal-500 bg-teal-50/30' : 'border-amber-500 bg-amber-50/30'}`}>
+                                                <div key={idx} className={`p-4 rounded-lg border-l-[5px] ${r.is_correct ? 'border-teal-500 bg-teal-50/30' : 'border-amber-500 bg-amber-50/30'}`}>
                                                     <p className="font-semibold text-slate-800 mt-1">{idx + 1}. <MathText>{question?.text || ''}</MathText></p>
                                                     <div className="mt-3 space-y-2 text-sm">
                                                         <div className="flex items-start gap-2">
                                                             <span className="font-bold text-slate-500 w-16">Your Answer:</span>
                                                             <span className={`font-medium ${r.is_correct ? 'text-teal-700' : 'text-amber-700'}`}>
-                                                                {question?.options[r.selected] || r.selected} {r.is_correct && '✅'}
+                                                                {question?.options[r.selected] || r.selected} {r.is_correct && '✓'}
                                                             </span>
                                                         </div>
                                                         {!r.is_correct && (
                                                             <div className="flex items-start gap-2 text-teal-700">
                                                                 <span className="font-bold text-slate-500 w-16">Correct:</span>
-                                                                <span className="font-medium">{question?.options[question.correct_option]} ✅</span>
+                                                                <span className="font-medium">{question?.options[question.correct_option]} ✓</span>
                                                             </div>
                                                         )}
                                                         <div className="bg-white p-3 rounded-lg border border-slate-100 text-slate-600 mt-2 text-sm">
@@ -261,14 +268,35 @@ export const AIMasteryTest: React.FC<AIMasteryTestProps> = ({ topic, topicId, su
                             )}
 
                         </CardContent>
-                        <CardFooter className="bg-slate-50 p-6 border-t border-slate-100">
-                            <Button
-                                onClick={() => onComplete(evaluation)}
-                                className={`w-full h-12 text-lg font-bold rounded-xl text-white ${isPassed ? 'bg-teal-600 hover:bg-teal-700' : 'bg-amber-600 hover:bg-amber-700'}`}
-                            >
-                                {isPassed ? 'Continue to Next Topic' : 'Review Missed Concepts'}
-                                <ArrowRight className="ml-2 w-5 h-5" />
-                            </Button>
+                        <CardFooter className="bg-slate-50 p-4 sm:p-6 border-t border-slate-100">
+                            {isPassed ? (
+                                <Button
+                                    onClick={() => onComplete(evaluation)}
+                                    className="w-full h-12 text-base sm:text-lg font-bold rounded-lg text-white bg-teal-600 hover:bg-teal-700"
+                                >
+                                    Continue to Next Topic
+                                    <ArrowRight className="ml-2 w-5 h-5" />
+                                </Button>
+                            ) : (
+                                <div className="grid w-full grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        onClick={handleRetake}
+                                        className="h-12 rounded-lg font-bold"
+                                    >
+                                        Retake Mastery Test
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        onClick={() => onComplete(evaluation)}
+                                        className="h-12 rounded-lg font-bold text-white bg-amber-600 hover:bg-amber-700"
+                                    >
+                                        Back to Tutor
+                                        <ArrowRight className="ml-2 w-5 h-5" />
+                                    </Button>
+                                </div>
+                            )}
                         </CardFooter>
                     </Card>
                 </motion.div>
@@ -280,25 +308,25 @@ export const AIMasteryTest: React.FC<AIMasteryTestProps> = ({ topic, topicId, su
     const progress = ((currentIndex + 1) / questions.length) * 100;
 
     return (
-        <Card className="w-full max-w-2xl mx-auto border-teal-100 shadow-none overflow-hidden min-h-[500px] flex flex-col">
-            <CardHeader className="bg-white border-b border-slate-50 p-4">
-                <div className="flex justify-between items-center mb-4">
-                    <div className="flex items-center gap-2">
-                        <div className="bg-teal-100 p-2 rounded-lg">
+        <Card className="w-full max-w-2xl mx-auto border-teal-100 shadow-none overflow-hidden min-h-[500px] flex flex-col rounded-lg">
+            <CardHeader className="bg-white border-b border-slate-50 p-4 sm:p-5">
+                <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-4 mb-4">
+                    <div className="flex items-start gap-3 min-w-0">
+                        <div className="shrink-0 bg-teal-100 p-2 rounded-lg">
                             <Brain className="w-5 h-5 text-teal-600" />
                         </div>
-                        <div>
-                            <h3 className="font-bold text-slate-800 leading-none">Mastery Test</h3>
-                            <p className="text-xs text-slate-500 mt-1">{topic}</p>
+                        <div className="min-w-0">
+                            <h3 className="font-bold text-slate-800 leading-tight">Mastery Test</h3>
+                            <p className="text-sm sm:text-xs text-slate-500 mt-1 leading-snug break-words">{topic}</p>
                         </div>
                     </div>
-                    <div className="text-right">
-                        <div className="text-sm font-bold text-slate-900">Question {currentIndex + 1}/10</div>
-                        <div className="flex gap-1 mt-1">
-                            {[...Array(10)].map((_, i) => (
+                    <div className="text-left sm:text-right">
+                        <div className="text-sm font-bold text-slate-900">Question {currentIndex + 1}/{questions.length}</div>
+                        <div className="flex sm:justify-end gap-1 mt-1 overflow-hidden">
+                            {[...Array(questions.length)].map((_, i) => (
                                 <div
                                     key={i}
-                                    className={`h-1.5 w-3 rounded-full ${i < currentIndex ? 'bg-teal-500' :
+                                    className={`h-1.5 min-w-3 flex-1 sm:flex-none sm:w-3 rounded-full ${i < currentIndex ? 'bg-teal-500' :
                                         i === currentIndex ? 'bg-teal-600 animate-pulse' : 'bg-slate-200'
                                         }`}
                                 />
@@ -309,8 +337,8 @@ export const AIMasteryTest: React.FC<AIMasteryTestProps> = ({ topic, topicId, su
                 <Progress value={progress} className="h-1 bg-slate-100" />
             </CardHeader>
 
-            <CardContent className="p-8 flex-1">
-                <div className="mb-8">
+            <CardContent className="p-5 sm:p-8 flex-1">
+                <div className="mb-6 sm:mb-8">
                     <div className="flex items-center gap-2 mb-3">
                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${currentQuestion.difficulty === 'easy' ? 'bg-green-50 text-green-700 border-green-100' :
                             currentQuestion.difficulty === 'medium' ? 'bg-amber-50 text-amber-700 border-amber-100' :
@@ -319,7 +347,7 @@ export const AIMasteryTest: React.FC<AIMasteryTestProps> = ({ topic, topicId, su
                             {currentQuestion.difficulty} Level
                         </span>
                     </div>
-                    <h2 className="text-2xl font-bold text-slate-900 leading-tight">
+                    <h2 className="text-xl sm:text-2xl font-bold text-slate-900 leading-tight">
                         <MathText>{currentQuestion.text}</MathText>
                     </h2>
                 </div>
@@ -334,17 +362,14 @@ export const AIMasteryTest: React.FC<AIMasteryTestProps> = ({ topic, topicId, su
                             <RadioGroupItem value={key} id={`opt-${key}`} className="peer sr-only" />
                             <Label
                                 htmlFor={`opt-${key}`}
-                                className="flex items-center p-5 rounded-lg border-2 border-slate-100 hover:border-primary/30 bg-white hover:bg-slate-50/30 cursor-pointer transition-all duration-200 peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 relative overflow-hidden group shadow-sm"
+                                className="flex items-center gap-3 p-4 sm:p-5 rounded-lg border-2 border-slate-100 hover:border-primary/30 bg-white hover:bg-slate-50/30 cursor-pointer transition-all duration-200 peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 relative overflow-hidden group shadow-sm"
                             >
-                                <div className="w-10 h-10 rounded-xl bg-slate-50 group-hover:bg-primary/10 text-slate-500 group-hover:text-primary peer-data-[state=checked]:bg-primary peer-data-[state=checked]:text-white flex items-center justify-center font-black text-lg mr-4 border border-slate-100 group-hover:border-primary/20 transition-colors">
+                                <div className="shrink-0 w-10 h-10 rounded-lg bg-slate-50 group-hover:bg-primary/10 text-slate-500 group-hover:text-primary peer-data-[state=checked]:bg-primary peer-data-[state=checked]:text-white flex items-center justify-center font-black text-lg border border-slate-100 group-hover:border-primary/20 transition-colors">
                                     {key}
                                 </div>
-                                <div className="flex-1 font-semibold text-lg text-slate-800"><MathText>{value}</MathText></div>
-                                <div className="flex items-center gap-2">
-                                    {selectedOption === key && <CheckCircle2 className="w-5 h-5 text-primary" />}
-                                    <div className="w-6 h-6 rounded-full border-2 border-slate-200 peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary flex items-center justify-center transition-all ml-2">
-                                        <div className="w-2 h-2 rounded-full bg-white scale-0 peer-data-[state=checked]:scale-100 transition-transform" />
-                                    </div>
+                                <div className="min-w-0 flex-1 font-semibold text-base sm:text-lg text-slate-800"><MathText>{value}</MathText></div>
+                                <div className="shrink-0 w-7 h-7 rounded-full border-2 border-slate-200 peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary flex items-center justify-center transition-all">
+                                    <div className="w-2.5 h-2.5 rounded-full bg-white scale-0 peer-data-[state=checked]:scale-100 transition-transform" />
                                 </div>
                             </Label>
                         </div>
@@ -352,8 +377,8 @@ export const AIMasteryTest: React.FC<AIMasteryTestProps> = ({ topic, topicId, su
                 </RadioGroup>
             </CardContent>
 
-            <CardFooter className="p-6 bg-slate-50/80 backdrop-blur-sm border-t border-slate-100">
-                <div className="w-full flex justify-between items-center">
+            <CardFooter className="p-4 sm:p-6 bg-slate-50/80 backdrop-blur-sm border-t border-slate-100">
+                <div className="w-full flex flex-col-reverse sm:flex-row gap-3 sm:justify-between sm:items-center">
                     <Button
                         variant="ghost"
                         onClick={onCancel}
@@ -364,7 +389,7 @@ export const AIMasteryTest: React.FC<AIMasteryTestProps> = ({ topic, topicId, su
                     <Button
                         onClick={handleNext}
                         disabled={!selectedOption || submitting}
-                        className="px-10 bg-teal-600 hover:bg-teal-700 text-white font-bold h-12 rounded-xl shadow-none shadow-teal-500/20"
+                        className="w-full sm:w-auto px-8 sm:px-10 bg-teal-600 hover:bg-teal-700 text-white font-bold h-12 rounded-lg shadow-none shadow-teal-500/20"
                     >
                         {submitting ? 'Evaluating...' : currentIndex === questions.length - 1 ? 'Finish Test' : 'Next Question'}
                         <ChevronRight className="ml-1 w-5 h-5" />

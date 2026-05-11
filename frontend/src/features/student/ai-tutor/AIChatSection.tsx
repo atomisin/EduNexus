@@ -184,6 +184,7 @@ export const AIChatSection = ({
   const [activeVideo, setActiveVideo] = useState<string | null>(null);
   const [placementAnswers, setPlacementAnswers] = useState<Record<string, string>>({});
   const [chatInput, setChatInput] = useState('');
+  const [showMobilePath, setShowMobilePath] = useState(false);
 
   const appendVoiceTranscript = useCallback((transcript: string) => {
     setChatInput((current) => {
@@ -209,6 +210,20 @@ export const AIChatSection = ({
   const focusTopicLabel = (typeof viewingSubtopic === 'object' ? (viewingSubtopic as any)?.name : viewingSubtopic) || activeSubtopic || selectedTopic?.name || 'this topic';
   const conversationTurns = aiChatMessages.filter((m: any) => m.role === 'user').length;
   const lessonStageLabel = (lessonController?.stage || 'intro').replace(/_/g, ' ');
+  const pathProgress = topicsForCurrentSubject.length
+    ? Math.round((topicsForCurrentSubject.filter((s: any) => s.status === 'completed').length / topicsForCurrentSubject.length) * 100)
+    : 0;
+  const stageGuidance: Record<string, string> = {
+    intro: `Start ${focusTopicLabel} with a clear goal, the core idea, and one quick check.`,
+    teach: `Continue ${focusTopicLabel} with one focused explanation and a small task.`,
+    check_understanding: `Answer one checkpoint so EduNexus can see what is clear and what needs support.`,
+    practice: `Try a worked practice question, then compare your method with the tutor's feedback.`,
+    remediate: `Choose a repair step for the part that felt weak before trying another question.`,
+    mastery_ready: `You are ready for the mastery check on ${focusTopicLabel}.`,
+    mastery_quiz: `Complete the mastery questions carefully before returning to tutoring.`,
+    completed: `This lesson is complete. Review it, or move to the next unlocked lesson.`,
+  };
+  const nextMoveText = stageGuidance[lessonController?.stage || 'intro'] || `Choose the support you need next for ${focusTopicLabel}.`;
   const learnerActions = [
     { label: 'Step by step', icon: Layers, prompt: `Teach ${focusTopicLabel} step by step. Start from the basics, then give me one small thing to try.` },
     { label: 'Example', icon: Star, prompt: `Give me a real-world Nigerian example for ${focusTopicLabel}, then ask me one quick check question.` },
@@ -321,12 +336,80 @@ export const AIChatSection = ({
                     Learning: {selectedTopic.name}
                   </Badge>
                 )}
+                {topicsForCurrentSubject.length > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowMobilePath((value) => !value)}
+                    className="md:hidden rounded-lg h-8 px-2 border-teal-100 text-teal-700"
+                  >
+                    <Target className="w-4 h-4 mr-1" />
+                    Path
+                  </Button>
+                )}
                 <Button variant="ghost" size="sm" onClick={() => setShowAIPanel(false)} className="rounded-full h-8 px-2 sm:px-3 hover:bg-slate-100 dark:hover:bg-slate-800">
                   <X className="w-4 h-4 sm:mr-1.5" /> <span className="hidden sm:inline">Close</span>
                 </Button>
               </div>
             </div>
           </CardHeader>
+
+          {showMobilePath && topicsForCurrentSubject.length > 0 && (
+            <div className="md:hidden shrink-0 border-b border-slate-100 bg-white dark:bg-slate-950">
+              <div className="px-4 py-3">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs font-black uppercase tracking-widest text-slate-500 flex items-center gap-2">
+                    <Target className="w-3.5 h-3.5 text-teal-600" /> Learning Path
+                  </p>
+                  <span className="text-xs font-black text-teal-700">{pathProgress}%</span>
+                </div>
+                <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                  <div className="h-full bg-primary transition-all" style={{ width: `${pathProgress}%` }} />
+                </div>
+              </div>
+              <ScrollArea className="max-h-[42dvh]">
+                <div className="px-3 pb-3 space-y-2">
+                  {topicsForCurrentSubject.map((st: any) => {
+                    const isActive = selectedTopic?.id === st.id;
+                    const isLocked = st.status === 'locked';
+                    const isCompleted = st.status === 'completed';
+
+                    return (
+                      <button
+                        key={st.id}
+                        type="button"
+                        onClick={() => {
+                          setShowMobilePath(false);
+                          void (isLocked ? startPlacementCheck(st) : handleTopicSelect(st));
+                        }}
+                        className={`w-full text-left p-3 rounded-lg transition-all border ${
+                          isActive
+                            ? 'bg-teal-50 border-teal-200'
+                            : isLocked
+                              ? 'bg-slate-50 border-dashed border-slate-200'
+                              : 'bg-white border-slate-100'
+                        }`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className={`mt-0.5 w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
+                            isCompleted ? 'bg-emerald-100 text-emerald-700' : isActive ? 'bg-teal-600 text-white' : isLocked ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'
+                          }`}>
+                            {isCompleted ? <CheckCircle2 className="w-4 h-4" /> : isLocked ? <Lock className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-bold leading-snug text-slate-800 break-words">{st.name}</p>
+                            <p className="mt-1 text-xs text-slate-500">
+                              {isCompleted ? 'Mastered' : isLocked ? 'Placement check required' : 'Active learning'}
+                            </p>
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </ScrollArea>
+            </div>
+          )}
 
           <div className="flex-1 flex min-w-0 max-w-full flex-row min-h-0 overflow-hidden relative">
             {/* Sidebar - Learning Path / Roadmap */}
@@ -341,13 +424,13 @@ export const AIChatSection = ({
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-sm font-bold text-slate-700 dark:text-slate-200">Total Progress</span>
                         <span className="text-sm font-black text-teal-600">
-                          {Math.round((topicsForCurrentSubject.filter((s: any) => s.status === 'completed').length / topicsForCurrentSubject.length) * 100)}%
+                          {pathProgress}%
                         </span>
                       </div>
                       <div className="h-2 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden border border-white/50 dark:border-slate-700 shadow-inner">
                         <div
                           className="h-full bg-primary transition-all duration-500 ease-out"
-                          style={{ width: `${(topicsForCurrentSubject.filter((s: any) => s.status === 'completed').length / topicsForCurrentSubject.length) * 100}%` }}
+                          style={{ width: `${pathProgress}%` }}
                         />
                       </div>
                     </>
@@ -448,8 +531,8 @@ export const AIChatSection = ({
             {/* Chat Area - Right Side */}
             <div className="flex-1 flex flex-col min-h-0 bg-white dark:bg-slate-900/30 relative">
               {showMasteryTest ? (
-                <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-md overflow-y-auto p-4 md:p-10 flex justify-center items-start animate-in fade-in duration-300">
-                  <div className="w-full max-w-4xl animate-in zoom-in-95 duration-500 my-auto">
+                <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-md overflow-y-auto p-2 sm:p-4 md:p-10 flex justify-center items-start animate-in fade-in duration-300">
+                  <div className="w-full max-w-4xl animate-in zoom-in-95 duration-500 my-4 md:my-auto">
                     <AIMasteryTest
                       topic={aiState.masteryMetadata?.topic?.name || selectedTopic?.name || "current topic"}
                       topicId={aiState.masteryMetadata?.topic?.id || selectedTopic?.id}
@@ -734,7 +817,7 @@ export const AIChatSection = ({
                             <div>
                               <p className="text-xs font-black uppercase tracking-widest text-teal-700 dark:text-teal-300">Next Learning Move</p>
                               <p className="text-sm text-slate-600 dark:text-slate-300">
-                                Stage: <span className="font-bold capitalize">{lessonStageLabel}</span>. {conversationTurns < 2 ? 'Start with a guided explanation, then answer one quick check.' : 'Choose what you need next: clearer explanation, example, practice, or summary.'}
+                                <span className="font-bold capitalize">{lessonStageLabel}</span>: {nextMoveText}
                               </p>
                             </div>
                             <div className="flex flex-wrap gap-2">
@@ -765,15 +848,17 @@ export const AIChatSection = ({
                               <AvatarImage src={`/avatars/ai_tutor_${tutorGender}.png`} />
                               <AvatarFallback className="bg-teal-600 text-white"><Brain className="w-5 h-5" /></AvatarFallback>
                             </Avatar>
-                            <div className="flex items-center gap-2 p-4 px-6 bg-slate-50 dark:bg-slate-800/50 rounded-lg rounded-tl-none border border-slate-100 dark:border-slate-700">
-                              <div className="flex gap-1">
-                                <span className="w-2 h-2 bg-teal-500 rounded-full animate-bounce [animation-duration:0.6s]" />
-                                <span className="w-2 h-2 bg-teal-500 rounded-full animate-bounce [animation-duration:0.6s] [animation-delay:0.2s]" />
-                                <span className="w-2 h-2 bg-teal-500 rounded-full animate-bounce [animation-duration:0.6s] [animation-delay:0.4s]" />
+                            <div className="min-w-0 p-4 px-5 bg-slate-50 dark:bg-slate-800/50 rounded-lg rounded-tl-none border border-slate-100 dark:border-slate-700">
+                              <div className="flex items-center gap-3">
+                                <div className="relative h-8 w-8 shrink-0 rounded-full border border-teal-100 bg-white dark:bg-slate-900">
+                                  <span className="absolute inset-1 rounded-full border-2 border-teal-500/20 border-t-teal-600 animate-spin" />
+                                  <Brain className="absolute inset-0 m-auto h-3.5 w-3.5 text-teal-700" />
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="text-sm font-bold text-slate-800 dark:text-slate-100">Preparing a clear next step</p>
+                                  <p className="text-xs text-slate-500 dark:text-slate-400">Checking the lesson context and your last answer.</p>
+                                </div>
                               </div>
-                              <span className="ml-2 text-sm font-bold text-teal-600 uppercase tracking-tighter">
-                                {getPersonaName(profile?.education_level)} is thinking...
-                              </span>
                             </div>
                           </div>
                         </div>

@@ -94,6 +94,38 @@ OUTPUT RULES:
 - Keep the language age-appropriate for the persona. Use markdown lightly, only when it improves scanning.
 """
 
+SUBJECT_RIGOR_PROMPT = """
+
+SUBJECT RIGOR AND ADAPTIVE TEACHING STANDARD:
+Teach like an experienced subject teacher, not a generic chatbot.
+
+Universal rules across all subjects:
+- Preserve the real discipline of the subject. Do not water down the concept into vague motivation or surface definitions.
+- Adapt the route, not the standard: simplify language, reduce steps, add analogies, or use easier numbers when the learner struggles, but keep the correct subject method and terminology.
+- Use the learner's latest answer as diagnostic evidence:
+  - If the answer is correct and confident, briefly validate it, name the rule or principle, then increase depth by one small step.
+  - If the answer is partly correct, identify the correct part, fix the misconception, and ask a targeted follow-up.
+  - If the answer is wrong or confused, reteach with a smaller worked example before asking another question.
+  - If the learner is guessing or giving short agreement, ask them to apply the idea before moving forward.
+- For every technical lesson, include at least one authentic task type: calculation, classification, interpretation, derivation, comparison, case analysis, data reading, formula use, procedure, or error-spotting.
+- Do not hallucinate facts, formulae, laws, dates, definitions, or answer keys. If unsure, say what must be checked and teach the stable principle.
+- Never mark an answer correct unless the reasoning and final answer match the question. Never choose a "closest" option as correct for a calculation.
+
+Subject-specific expectations:
+- Mathematics: use exact methods, equations, notation, worked steps, checks, and common error warnings. For algebra, calculus, matrices, logarithms, trigonometry, statistics, and geometry, teach the formal method before shortcuts.
+- Physics: connect concepts to quantities, units, laws, diagrams described in words, proportional reasoning, and formula application.
+- Chemistry: use correct particles, formulae, equations, valency, mole reasoning, laboratory observations, and safety/procedure where relevant.
+- Biology: use structures, functions, processes, classification, cause-effect, diagrams described in words, and real organism examples.
+- Accounting, commerce, and economics: use transactions, entries, ledgers, statements, business cases, definitions, assumptions, and interpretation of figures.
+- Languages and humanities: use passages, examples, interpretation, evidence, structure, grammar, context, argument, and evaluation.
+- Professional subjects: use workplace scenarios, standards, trade-offs, constraints, and professional judgement.
+
+Response quality:
+- One focused idea per turn, but with enough academic substance to move the learner forward.
+- Prefer a worked example plus one check question over a long lecture.
+- Keep the next action precise: "Find...", "Calculate...", "Classify...", "Explain why...", "Choose the correct method...", or "Spot the error...".
+"""
+
 STAGE_RESPONSE_RULES = {
     "intro": "Open the lesson gently. State the goal, teach the first idea, then ask one easy check question.",
     "teach": "Teach one new idea only. Use a concrete example, then ask one short check question.",
@@ -1040,12 +1072,24 @@ Tone: Professional, concise."""
             max_tokens = 100
         else:
             system_prompt = persona.system_prompt + LEARNING_TURN_PROMPT
+            system_prompt += SUBJECT_RIGOR_PROMPT
 
             if student_name:
                 system_prompt += f"\n\nSTUDENT NAME: {student_name}\nGREETING RULE: Greet the student by their name '{student_name}' if appropriate for the conversation state. Do NOT use generic terms like 'young friend' or 'dear student' if you know their actual name."
 
             # Inject Enrolled Subjects & Department for Exam/Secondary students
             if student_profile:
+                level_label = format_education_level_label(getattr(student_profile, "education_level", "") or education_level)
+                learning_style = getattr(student_profile, "learning_style", None) or "not specified"
+                attention_span = getattr(student_profile, "attention_span", None)
+                system_prompt += (
+                    "\n\nLEARNER ADAPTATION PROFILE:"
+                    f"\n- Class/level: {level_label}"
+                    f"\n- Learning style: {learning_style}"
+                    f"\n- Attention span: {attention_span or 'not specified'}"
+                    "\nRULE: Match the cognitive demand to this level while adapting pace and examples to the learner's responses."
+                    "\nRULE: If the learner shows strong assimilation, move toward exam-style or transfer tasks. If they struggle, break the same concept into smaller steps without changing the syllabus standard."
+                )
                 if student_profile.department:
                     system_prompt += f"\nSTUDENT DEPARTMENT: {student_profile.department}"
                 
@@ -1069,9 +1113,9 @@ Tone: Professional, concise."""
             elif persona.name in ("Bello", "Zara"):
                 max_tokens = 300  # Primary 1-6
             elif persona.name == "Coach Rex":
-                max_tokens = 400  # JSS 1-3
+                max_tokens = 450  # JSS 1-3
             else:
-                max_tokens = 500  # SS/Professional
+                max_tokens = 650  # SS/Professional
 
             if needs_intervention:
                 system_prompt += """

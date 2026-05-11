@@ -1,6 +1,7 @@
 import smtplib
 import random
 import string
+import httpx
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timedelta
@@ -24,9 +25,44 @@ class EmailService:
         self.use_tls = settings.SMTP_USE_TLS
         self.from_email = settings.SMTP_FROM_EMAIL
         self.from_name = settings.SMTP_FROM_NAME
+        self.resend_api_key = settings.RESEND_API_KEY
+        self.resend_from_email = settings.RESEND_FROM_EMAIL or settings.SMTP_FROM_EMAIL
+
+    def _send_via_resend(self, to_email: str, subject: str, html_content: str, text_content: Optional[str] = None) -> bool:
+        """Send an email through Resend's HTTPS API, which is friendlier to hosted environments."""
+        if not self.resend_api_key:
+            return False
+
+        payload = {
+            "from": f"{self.from_name} <{self.resend_from_email}>",
+            "to": [to_email],
+            "subject": subject,
+            "html": html_content,
+        }
+        if text_content:
+            payload["text"] = text_content
+
+        try:
+            with httpx.Client(timeout=15.0) as client:
+                response = client.post(
+                    "https://api.resend.com/emails",
+                    headers={
+                        "Authorization": f"Bearer {self.resend_api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json=payload,
+                )
+                response.raise_for_status()
+            return True
+        except Exception as e:
+            logger.exception(f"Failed to send email via Resend: {e}")
+            return False
     
     def send_email(self, to_email: str, subject: str, html_content: str, text_content: Optional[str] = None) -> bool:
-        """Send an email via SMTP"""
+        """Send an email via the configured provider."""
+        if self.resend_api_key:
+            return self._send_via_resend(to_email, subject, html_content, text_content)
+
         try:
             msg = MIMEMultipart('alternative')
             msg['Subject'] = subject

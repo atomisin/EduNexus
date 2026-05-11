@@ -611,6 +611,7 @@ async def register_student(
 async def login(
     request: Request,
     response: Response,
+    background_tasks: BackgroundTasks,
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: AsyncSession = Depends(get_async_db),
 ):
@@ -641,7 +642,7 @@ async def login(
             hours=settings.VERIFICATION_TOKEN_EXPIRE_HOURS
         )
         await db.commit()
-        email_sent = email_service.send_verification_email(user, verification_code)
+        email_sent = queue_verification_email(background_tasks, user, verification_code)
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={

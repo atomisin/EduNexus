@@ -79,6 +79,8 @@ class Settings(BaseSettings):
     SMTP_USE_TLS: bool = True
     SMTP_FROM_EMAIL: str = "noreply@edunexus.ai"
     SMTP_FROM_NAME: str = "EduNexus"
+    RESEND_API_KEY: Optional[str] = None
+    RESEND_FROM_EMAIL: Optional[str] = None
 
     # Email Verification
     VERIFICATION_ENABLED: bool = True

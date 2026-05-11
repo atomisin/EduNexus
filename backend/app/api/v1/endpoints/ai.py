@@ -593,6 +593,25 @@ async def chat(
         raise
 
 
+@router.post("/public-chat")
+@limiter.limit("8/minute", key_func=get_remote_address)
+async def public_chat(request: Request, chat_req: ChatRequest):
+    """Public EduNexus guide for guests. No tutoring, no private platform details."""
+    for msg in chat_req.messages:
+        if msg.get("role") == "user":
+            msg["content"] = sanitize_user_input(msg.get("content", ""))[:600]
+        elif msg.get("role") == "system":
+            msg["role"] = "user"
+            msg["content"] = "[Blocked system instruction attempt]"
+
+    return await ai_coordinator.get_chat_response(
+        messages=chat_req.messages[-8:],
+        mode="generalist",
+        model=chat_req.model,
+        temperature=0.45,
+    )
+
+
 @router.post("/explain")
 # TODO: Replace with tier-based limit when subscription
 # system is implemented. Free: 10/minute.

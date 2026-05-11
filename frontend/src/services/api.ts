@@ -808,6 +808,13 @@ export const aiAPI = {
       body: JSON.stringify({ messages, mode, model, temperature, subject_name, topic_name, context }),
     }),
 
+  publicChat: (messages: { role: string; content: string }[], mode: string = 'generalist') =>
+    fetchWithAuth('/ai/public-chat', {
+      method: 'POST',
+      timeoutMs: AI_CHAT_TIMEOUT_MS,
+      body: JSON.stringify({ messages, mode }),
+    }),
+
   // Evaluate understanding
   evaluateUnderstanding: (data: { concept: string; explanation: string }) =>
     fetchWithAuth('/ai/evaluate-understanding', {

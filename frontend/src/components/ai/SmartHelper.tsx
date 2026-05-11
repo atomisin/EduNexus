@@ -23,6 +23,7 @@ interface SmartHelperProps {
   onClose: () => void;
   subject?: string;
   topic?: string;
+  enableHistory?: boolean;
 }
 
 const renderMathChildren = (children: any) => {
@@ -40,7 +41,10 @@ const prepareHelperMarkdown = (content: string) =>
     .replace(/(^|\n)\s*(?:[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]\ufe0f?\s*)+\s*(?:\*\*[^*]+?\*\*:|[^:\n]{1,32}:)\s*/gu, '$1')
     .replace(/\[object Object\]/g, '');
 
-export function SmartHelper({ isOpen, onClose, subject, topic }: SmartHelperProps) {
+const GUIDE_WELCOME =
+  "Welcome to EduNexus. I can help you choose the right access path for learning, teaching, or school use. What would you like to do first?";
+
+export function SmartHelper({ isOpen, onClose, subject, topic, enableHistory = true }: SmartHelperProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -58,6 +62,17 @@ export function SmartHelper({ isOpen, onClose, subject, topic }: SmartHelperProp
     const loadHistory = async () => {
       // Only load if it's the first time opening or if context changed
       if (!isOpen || isInitialized) return;
+
+      if (!enableHistory) {
+        setMessages([{
+          id: 'welcome',
+          role: 'assistant',
+          content: GUIDE_WELCOME,
+          timestamp: new Date(),
+        }]);
+        setIsInitialized(true);
+        return;
+      }
 
       try {
         console.log('[SmartHelper] Loading history...', { subject, topic });
@@ -79,7 +94,7 @@ export function SmartHelper({ isOpen, onClose, subject, topic }: SmartHelperProp
           const welcomeMessage: Message = {
             id: 'welcome',
             role: 'assistant',
-            content: "Hello! I'm your EduNexus guide. I can help with account setup, AI Tutor, lesson progression, live classes, reports, and subscriptions. What would you like to do on the platform?",
+            content: GUIDE_WELCOME,
             timestamp: new Date(),
           };
           setMessages([welcomeMessage]);
@@ -92,7 +107,7 @@ export function SmartHelper({ isOpen, onClose, subject, topic }: SmartHelperProp
           setMessages([{
             id: 'welcome-fallback',
             role: 'assistant',
-            content: "Hello! I can still help with EduNexus while history is unavailable. What would you like to do on the platform?",
+            content: GUIDE_WELCOME,
             timestamp: new Date(),
           }]);
         }
@@ -185,7 +200,9 @@ export function SmartHelper({ isOpen, onClose, subject, topic }: SmartHelperProp
       const chatHistory = messages.map(m => ({ role: m.role, content: m.content }));
       chatHistory.push({ role: 'user', content: userMessage.content });
 
-      const response = await aiAPI.chat(chatHistory, 'generalist');
+      const response = enableHistory
+        ? await aiAPI.chat(chatHistory, 'generalist')
+        : await aiAPI.publicChat(chatHistory, 'generalist');
 
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
@@ -198,14 +215,16 @@ export function SmartHelper({ isOpen, onClose, subject, topic }: SmartHelperProp
       setMessages(updatedMessages);
 
       // Persist to backend
-      try {
-        await aiAPI.saveChatHistory({
-          subject_id: subject,
-          topic_name: topic,
-          messages: updatedMessages.map(m => ({ role: m.role, content: m.content }))
-        });
-      } catch (saveErr) {
-        console.warn('[SmartHelper] Failed to save chat:', saveErr);
+      if (enableHistory) {
+        try {
+          await aiAPI.saveChatHistory({
+            subject_id: subject,
+            topic_name: topic,
+            messages: updatedMessages.map(m => ({ role: m.role, content: m.content }))
+          });
+        } catch (saveErr) {
+          console.warn('[SmartHelper] Failed to save chat:', saveErr);
+        }
       }
     } catch (error: any) {
       const errorMessage: Message = {
@@ -251,7 +270,13 @@ export function SmartHelper({ isOpen, onClose, subject, topic }: SmartHelperProp
   };
 
   return (
-    <div className={`fixed inset-x-3 bottom-[calc(1rem+env(safe-area-inset-bottom))] z-50 w-auto max-w-[calc(100vw-1.5rem)] min-w-0 transition-all duration-300 transform sm:inset-x-auto sm:right-4 sm:w-96 sm:max-w-[calc(100vw-2rem)] ${isOpen ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0 pointer-events-none'}`}>
+    <>
+      <div
+        className={`fixed inset-0 z-40 bg-slate-950/30 backdrop-blur-sm transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'pointer-events-none opacity-0'}`}
+        onClick={onClose}
+        aria-hidden="true"
+      />
+      <div className={`fixed inset-x-3 bottom-[calc(1rem+env(safe-area-inset-bottom))] z-50 w-auto max-w-[calc(100vw-1.5rem)] min-w-0 transition-all duration-300 transform sm:inset-x-auto sm:right-4 sm:w-96 sm:max-w-[calc(100vw-2rem)] ${isOpen ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0 pointer-events-none'}`}>
       <Card className="min-w-0 overflow-hidden shadow-2xl border-0 bg-gradient-to-br from-teal-50/50 to-slate-50/50 dark:from-slate-900/50 dark:to-slate-900/50 border-t-4 border-t-teal-600">
         <CardHeader className="pb-3 border-b bg-white/50 dark:bg-slate-900/50 rounded-t-lg">
           <div className="flex items-center justify-between">
@@ -261,7 +286,7 @@ export function SmartHelper({ isOpen, onClose, subject, topic }: SmartHelperProp
                 <AvatarFallback className="bg-teal-600 text-white"><Brain className="w-4 h-4" /></AvatarFallback>
               </Avatar>
               <div>
-                <CardTitle className="text-sm font-semibold">AI Generalist</CardTitle>
+                <CardTitle className="text-sm font-semibold">EduNexus Guide</CardTitle>
                 <Badge className="text-[10px] h-4 bg-emerald-100 text-emerald-700 border-emerald-200">
                   Online
                 </Badge>
@@ -386,11 +411,12 @@ export function SmartHelper({ isOpen, onClose, subject, topic }: SmartHelperProp
               </Button>
             </div>
             <p className="text-[10px] text-slate-400 mt-2 text-center uppercase tracking-wider font-medium">
-              AI Generalist • Express Mode
+              EduNexus Guide • Quick Help
             </p>
           </div>
         </CardContent>
       </Card>
-    </div >
+      </div>
+    </>
   );
 }

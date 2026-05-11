@@ -31,7 +31,7 @@ function App() {
   const [activeSession, setActiveSession] = useState<{ id: string; title: string; isTeacher: boolean } | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const location = useLocation();
-  const shouldShowSmartHelper = Boolean(user) && !location.pathname.startsWith('/student/learn');
+  const shouldShowSmartHelper = !location.pathname.startsWith('/student/learn') && !location.pathname.startsWith('/session');
 
   useEffect(() => {
     const savedTheme = localStorage.getItem('theme');
@@ -204,14 +204,16 @@ function App() {
           <SmartHelper
             isOpen={showSmartHelper}
             onClose={() => setShowSmartHelper(false)}
+            enableHistory={Boolean(user)}
           />
 
-          <div className="fixed bottom-[calc(1.25rem+env(safe-area-inset-bottom))] right-4 z-40 flex gap-2">
+          <div className="fixed bottom-[calc(1.25rem+env(safe-area-inset-bottom))] right-4 z-[60] flex gap-2">
             <Button
               variant="default"
               size="icon"
-              className="h-11 w-11 sm:h-12 sm:w-12 rounded-full bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/30"
+              className="h-12 w-12 rounded-full bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/30"
               onClick={() => setShowSmartHelper(!showSmartHelper)}
+              aria-label="Chat with EduNexus Guide"
             >
               <MessageSquare className="w-5 h-5" />
             </Button>

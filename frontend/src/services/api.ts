@@ -98,7 +98,8 @@ export async function fetchWithAuth(endpoint: string, options: RequestInit & { s
     }
 
     if (!response.ok) {
-      if (response.status === 401 && !silentAuth) {
+      const isAuthFlowEndpoint = endpoint.startsWith('/auth/');
+      if (response.status === 401 && !silentAuth && !isAuthFlowEndpoint) {
         window.dispatchEvent(new Event('auth:unauthorized'));
       }
       const error = await response.json().catch(() => ({ detail: 'An error occurred' }));

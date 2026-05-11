@@ -68,14 +68,17 @@ function App() {
     window.addEventListener('navigate', handleNavigate as EventListener);
     
     const handleUnauthorized = () => {
-      // If we weren't even logged in, ignore the 401
-      if (!isAuthenticated) return;
+      // If we weren't even logged in, ignore the 401.
+      const hasStoredUser = Boolean(localStorage.getItem('edunexus_user'));
+      if (!isAuthenticated && !hasStoredUser) return;
 
-      // Don't redirect if we're on a public page
+      // Only protected app screens should show a session-expired message.
       const publicPaths = ['/', '/login', '/register', '/join', '/verify-email', '/reset-password'];
       const currentPath = window.location.pathname.toLowerCase().split(/[?#]/)[0].replace(/\/$/, '') || '/';
+      const protectedPrefixes = ['/student', '/teacher', '/admin', '/session', '/change-password'];
+      const isProtectedPath = protectedPrefixes.some(prefix => currentPath === prefix || currentPath.startsWith(`${prefix}/`));
       
-      if (publicPaths.includes(currentPath)) {
+      if (publicPaths.includes(currentPath) || !isProtectedPath) {
         console.log('[Auth] Suppressing unauthorized redirect for public path:', currentPath);
         return;
       }
@@ -104,7 +107,7 @@ function App() {
       window.removeEventListener('auth:unauthorized', handleUnauthorized);
       window.removeEventListener('api:fetch_failed', handleFetchFailed);
     };
-  }, [navigate, logout]);
+  }, [navigate, logout, isAuthenticated]);
 
   const [verificationToken, setVerificationToken] = useState<string | null>(null);
 

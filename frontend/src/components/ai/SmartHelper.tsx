@@ -25,6 +25,21 @@ interface SmartHelperProps {
   topic?: string;
 }
 
+const renderMathChildren = (children: any) => {
+  const items = Array.isArray(children) ? children : [children];
+  return items.map((child, index) => {
+    if (typeof child === 'string' || typeof child === 'number') {
+      return <MathText key={`${child}-${index}`}>{String(child)}</MathText>;
+    }
+    return child;
+  });
+};
+
+const prepareHelperMarkdown = (content: string) =>
+  normalizeAcademicTextForDisplay(String(content || ''))
+    .replace(/(^|\n)\s*(?:[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]\ufe0f?\s*)+\s*(?:\*\*[^*]+?\*\*:|[^:\n]{1,32}:)\s*/gu, '$1')
+    .replace(/\[object Object\]/g, '');
+
 export function SmartHelper({ isOpen, onClose, subject, topic }: SmartHelperProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -64,7 +79,7 @@ export function SmartHelper({ isOpen, onClose, subject, topic }: SmartHelperProp
           const welcomeMessage: Message = {
             id: 'welcome',
             role: 'assistant',
-            content: "Hello! I'm your AI partner. I can help you with your studies or answer general questions. How can I help you today?",
+            content: "Hello! I'm your EduNexus guide. I can help with account setup, AI Tutor, lesson progression, live classes, reports, and subscriptions. What would you like to do on the platform?",
             timestamp: new Date(),
           };
           setMessages([welcomeMessage]);
@@ -77,7 +92,7 @@ export function SmartHelper({ isOpen, onClose, subject, topic }: SmartHelperProp
           setMessages([{
             id: 'welcome-fallback',
             role: 'assistant',
-            content: "Hello! I'm here to help. (History loading failed, but we can still chat!)",
+            content: "Hello! I can still help with EduNexus while history is unavailable. What would you like to do on the platform?",
             timestamp: new Date(),
           }]);
         }
@@ -282,13 +297,14 @@ export function SmartHelper({ isOpen, onClose, subject, topic }: SmartHelperProp
                       : 'bg-white dark:bg-slate-800 shadow-sm rounded-bl-md border border-slate-100 dark:border-slate-700'
                       }`}>
                       <div className="min-w-0 max-w-full overflow-hidden break-words text-sm [overflow-wrap:anywhere] prose dark:prose-invert prose-p:max-w-full">
-                        <ReactMarkdown
+        <ReactMarkdown
                           components={{
-                            p: ({ children }: any) => <p><MathText>{String(children ?? '')}</MathText></p>,
-                            li: ({ children }: any) => <li><MathText>{String(children ?? '')}</MathText></li>,
+                            p: ({ children }: any) => <p>{renderMathChildren(children)}</p>,
+                            li: ({ children }: any) => <li>{renderMathChildren(children)}</li>,
+                            strong: ({ children }: any) => <strong className="font-semibold">{renderMathChildren(children)}</strong>,
                           }}
                         >
-                          {normalizeAcademicTextForDisplay(message.content)}
+                          {prepareHelperMarkdown(message.content)}
                         </ReactMarkdown>
                       </div>
                     </div>
@@ -350,7 +366,7 @@ export function SmartHelper({ isOpen, onClose, subject, topic }: SmartHelperProp
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyPress={handleKeyPress}
-                placeholder={isListening ? "Listening... Speak now" : "Ask me anything..."}
+                placeholder={isListening ? "Listening... Speak now" : "Ask about EduNexus..."}
                 className="flex-1"
                 disabled={isLoading || isListening}
               />

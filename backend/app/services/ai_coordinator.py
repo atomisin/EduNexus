@@ -1050,6 +1050,12 @@ Format your response using markdown:
 
         # 2. Handle Gibberish
         if is_gibberish(user_message):
+            if mode == "generalist":
+                return {
+                    "response": "I can help with EduNexus platform questions. Please ask about signing up, using AI Tutor, lessons, live classes, reports, account approval, or subscriptions.",
+                    "needs_tts": False,
+                    "persona": None,
+                }
             gibberish_response = (
                 f"Oops! Looks like your fingers slipped! \ud83d\ude04 "
                 f"No worries, let's try again. What would you like to know?"
@@ -1065,11 +1071,31 @@ Format your response using markdown:
 
         # 4. Build System Prompt & Calculate max_tokens
         if mode == "generalist":
-            system_prompt = """You are the EduNexus AI Generalist. 
-Your goal is to be minimal, short, and direct. 
-Do NOT teach concepts or provide in-depth explanations. 
-Tone: Professional, concise."""
-            max_tokens = 100
+            system_prompt = """You are the EduNexus AI Generalist, the platform guide for EduNexus only.
+
+SCOPE:
+- Answer only questions about EduNexus: what the platform does, how students use it, how teachers use it, admin workflows, account setup, email verification, AI Tutor, lesson progression, placement checks, mastery tests, live classes, study materials, reports, notifications, Brain Power, profile settings, and platform policies.
+- Do not answer external questions about news, events, politics, sports, celebrities, weather, general trivia, or unrelated schoolwork. Politely say you can only help with EduNexus and offer an EduNexus-related next step.
+- Do not teach academic topics or solve homework. If a guest asks for teaching, explain that subject tutoring happens inside the EduNexus AI Tutor after choosing the right class, subject, and lesson.
+- Your goal is to help guests and users understand EduNexus and encourage them to use the platform, not to replace the dedicated tutor experience.
+
+PLATFORM FACTS:
+- EduNexus is a Nigerian education platform for learners, teachers, schools, and professional learners.
+- Students can enroll in class-appropriate subjects, follow locked lesson progression, use AI Tutor, take placement checks to unlock ahead safely, complete mastery tests, view progress analytics, join live classes, access shared notes/materials, receive recommendations, and manage their profile.
+- Teachers can manage classes/students, run live sessions, generate lesson outlines, share class notes and take-home assignments, launch quizzes, review performance, and send parent/guardian reports.
+- Admins can approve, suspend, reactivate, and delete accounts, manage users/content, and monitor AI usage and cost.
+- Brain Power is the learner-friendly daily AI usage meter. Encourage healthy learning rhythm instead of exposing raw token counts.
+- Email verification happens first, then admin approval is required before normal access.
+- Subscription/payment plans are not active yet. If asked about price, payment, or subscription, say EduNexus is currently in beta/early access and plan details will be announced before paid billing starts. Do not invent prices.
+
+STYLE:
+- Be smart, polite, concise, and helpful.
+- Use plain language and short paragraphs.
+- Prefer practical guidance and next steps.
+- For guests, end with a gentle next step such as creating an account, signing in, choosing a class level, or asking about a platform feature.
+- Do not prefix replies with persona names, emojis, or role labels.
+- Do not output raw JSON or objects."""
+            max_tokens = 320
         else:
             system_prompt = persona.system_prompt + LEARNING_TURN_PROMPT
             system_prompt += SUBJECT_RIGOR_PROMPT
@@ -1144,17 +1170,26 @@ If you have fully taught ALL the required concepts for the current topic or the 
             user_id=user_id or (student_profile.user_id if student_profile else None),
         )
         response = strip_thinking_tags(response)
-        should_start_mastery_quiz = "[TRIGGER_MASTERY]" in response
-        response = response.replace("[TRIGGER_MASTERY]", "").strip()
-        response = polish_tutor_response(response, subject_name=subject_name)
-        lesson_control = infer_lesson_control(
-            messages=messages,
-            lesson_context=lesson_context,
-            marker_triggered=should_start_mastery_quiz,
-        )
+        if mode == "generalist":
+            should_start_mastery_quiz = False
+            lesson_control = {
+                "ui_action": None,
+                "lesson_stage": None,
+                "next_actions": [],
+                "mastery_ready": False,
+            }
+        else:
+            should_start_mastery_quiz = "[TRIGGER_MASTERY]" in response
+            response = response.replace("[TRIGGER_MASTERY]", "").strip()
+            response = polish_tutor_response(response, subject_name=subject_name)
+            lesson_control = infer_lesson_control(
+                messages=messages,
+                lesson_context=lesson_context,
+                marker_triggered=should_start_mastery_quiz,
+            )
 
         # 6. Post-process response (Prefix for young learners)
-        if persona.use_emoji and persona.name:
+        if mode != "generalist" and persona.use_emoji and persona.name:
             # Smarter check to prevent double prefixing: if name or prefix is already in start of response
             prefix_plain = f"**{persona.name}**"
             if (

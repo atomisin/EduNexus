@@ -28,6 +28,23 @@ function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number =
 let _serverWarm = false;
 let _warmUpPromise: Promise<boolean> | null = null;
 let _refreshPromise: Promise<boolean> | null = null;
+const LOGOUT_IN_PROGRESS_KEY = 'edunexus_logout_in_progress';
+
+export function markLogoutInProgress() {
+  if (typeof window !== 'undefined') {
+    sessionStorage.setItem(LOGOUT_IN_PROGRESS_KEY, '1');
+  }
+}
+
+export function clearLogoutInProgress() {
+  if (typeof window !== 'undefined') {
+    sessionStorage.removeItem(LOGOUT_IN_PROGRESS_KEY);
+  }
+}
+
+function isLogoutInProgress() {
+  return typeof window !== 'undefined' && sessionStorage.getItem(LOGOUT_IN_PROGRESS_KEY) === '1';
+}
 
 export function warmUpServer(): Promise<boolean> {
   if (_serverWarm) return Promise.resolve(true);
@@ -86,7 +103,16 @@ export async function fetchWithAuth(endpoint: string, options: RequestInit & { s
       credentials: 'include', // CRITICAL: Send cookies with request
     }, timeoutMs);
 
-    if (response.status === 401 && endpoint !== '/auth/refresh' && !skipAuthRefresh) {
+    const isAuthFlowEndpoint = endpoint.startsWith('/auth/');
+    const shouldAttemptRefresh = (
+      response.status === 401 &&
+      endpoint !== '/auth/refresh' &&
+      !skipAuthRefresh &&
+      !isAuthFlowEndpoint &&
+      !isLogoutInProgress()
+    );
+
+    if (shouldAttemptRefresh) {
       const refreshed = await refreshAccessToken();
       if (refreshed) {
         response = await fetchWithTimeout(targetUrl, {
@@ -98,8 +124,7 @@ export async function fetchWithAuth(endpoint: string, options: RequestInit & { s
     }
 
     if (!response.ok) {
-      const isAuthFlowEndpoint = endpoint.startsWith('/auth/');
-      if (response.status === 401 && !silentAuth && !isAuthFlowEndpoint) {
+      if (response.status === 401 && !silentAuth && !isAuthFlowEndpoint && !isLogoutInProgress()) {
         window.dispatchEvent(new Event('auth:unauthorized'));
       }
       const error = await response.json().catch(() => ({ detail: 'An error occurred' }));
@@ -197,6 +222,7 @@ export const authAPI = {
 
   // Login (Sets HttpOnly cookies via backend)
   login: async (email: string, password: string) => {
+    clearLogoutInProgress();
     const formData = new URLSearchParams();
     formData.append('username', email);
     formData.append('password', password);

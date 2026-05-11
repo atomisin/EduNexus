@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useEffect, useCallback } from 'rea
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import type { ReactNode } from 'react';
-import { authAPI, userAPI, warmUpServer } from '@/services/api';
+import { authAPI, clearLogoutInProgress, markLogoutInProgress, userAPI, warmUpServer } from '@/services/api';
 
 export interface User {
   id: string;
@@ -129,6 +129,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           };
           setUser(loggedInUser);
           setIsAuthenticated(true);
+          clearLogoutInProgress();
           setMustChangePassword(freshUser.force_password_change || false);
         }
       } catch (err) {
@@ -192,6 +193,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         setUser(loggedInUser);
         setIsAuthenticated(true);
+        clearLogoutInProgress();
         setMustChangePassword(response.force_password_change || false);
         
         // Optimistically update localStorage before resolve so navigation sees it
@@ -355,6 +357,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const logout = () => {
     // C-05: Coordinate with backend to clear cookie
+    markLogoutInProgress();
     authAPI.logout().catch(err => console.error('Logout sync failed:', err));
     localStorage.removeItem('edunexus_token');
     localStorage.removeItem('edunexus_user');

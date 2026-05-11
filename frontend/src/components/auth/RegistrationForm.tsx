@@ -9,7 +9,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Loader2, CheckCircle2, AlertCircle, GraduationCap } from 'lucide-react';
 import { 
   EDUCATION_CATEGORIES, 
   EDUCATION_LEVELS, 
@@ -215,24 +215,24 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSuccess, o
       <Card className="relative w-full max-w-4xl max-h-[92vh] overflow-x-hidden overflow-y-auto rounded-lg border border-border shadow-xl">
         <div className="h-1 bg-primary" />
         <CardHeader className="border-b bg-background px-4 py-5 sm:px-6">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="space-y-4">
             <div className="flex items-center gap-3 text-left">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-primary/20 bg-primary/10">
-                <img src="/edunexus-logo.png" alt="EduNexus" className="h-10 w-auto" />
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-primary">
+                <GraduationCap className="h-5 w-5" />
               </div>
               <div className="min-w-0">
-                <CardTitle className="text-2xl leading-tight">Create Your Account</CardTitle>
+                <CardTitle className="text-xl sm:text-2xl leading-tight">Create your EduNexus account</CardTitle>
                 <CardDescription className="text-sm">
-                  Verify your email, then wait for admin approval.
+                  Choose the account type that matches how you will use the platform.
                 </CardDescription>
               </div>
             </div>
-            <div className="grid grid-cols-2 rounded-lg border border-border bg-muted p-1 text-sm font-semibold sm:min-w-72">
+            <div className="grid grid-cols-2 rounded-lg border border-border bg-muted p-1 text-sm font-semibold">
               <button
                 type="button"
                 onClick={() => setIsTeacherMode(false)}
                 className={cn(
-                  "rounded-md px-3 py-2 text-left transition-colors",
+                  "rounded-md px-3 py-3 text-left transition-colors",
                   !isTeacherMode ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
                 )}
               >
@@ -243,7 +243,7 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSuccess, o
                 type="button"
                 onClick={() => setIsTeacherMode(true)}
                 className={cn(
-                  "rounded-md px-3 py-2 text-left transition-colors",
+                  "rounded-md px-3 py-3 text-left transition-colors",
                   isTeacherMode ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
                 )}
               >

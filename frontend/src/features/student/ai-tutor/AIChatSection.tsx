@@ -504,7 +504,7 @@ export const AIChatSection = ({
                       <div className="p-5 space-y-4">
                         <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 p-4">
                           <p className="text-sm font-bold text-slate-700 dark:text-slate-200">
-                            {placementState.questions.length} prerequisite lesson{placementState.questions.length === 1 ? '' : 's'} will be checked.
+                            {(placementState.prerequisite_topics?.length || 0) || placementState.questions.length} prerequisite lesson{((placementState.prerequisite_topics?.length || 0) || placementState.questions.length) === 1 ? '' : 's'} will be checked with {placementState.questions.length} questions.
                           </p>
                         </div>
 

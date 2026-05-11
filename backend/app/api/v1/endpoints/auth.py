@@ -55,6 +55,44 @@ def email_verification_required() -> bool:
     return settings.VERIFICATION_ENABLED and not settings.VERIFICATION_BYPASS
 
 
+async def resend_verification_for_existing_user(
+    user: User,
+    db: AsyncSession,
+) -> Optional[dict]:
+    """Let unverified users restart registration without creating duplicates."""
+    if user.email_verified_at or user.status not in {
+        UserStatus.UNVERIFIED,
+        UserStatus.PENDING,
+        UserStatus.PENDING_APPROVAL,
+    }:
+        return None
+
+    verification_required = email_verification_required()
+    email_sent = False
+    if verification_required:
+        verification_code = email_service.generate_verification_code()
+        user.verification_code = verification_code
+        user.verification_code_expires = datetime.now(timezone.utc) + timedelta(
+            hours=settings.VERIFICATION_TOKEN_EXPIRE_HOURS
+        )
+        if user.status != UserStatus.UNVERIFIED and not user.email_verified_at:
+            user.status = UserStatus.UNVERIFIED
+        await db.commit()
+        email_sent = email_service.send_verification_email(user, verification_code)
+
+    return {
+        "success": True,
+        "detail": "We found your account and sent a fresh verification code.",
+        "user_id": str(user.id),
+        "email": user.email,
+        "role": str(user.role.value if hasattr(user.role, "value") else user.role),
+        "verification_required": verification_required,
+        "verification_sent": email_sent,
+        "email_verification_sent": email_sent,
+        "existing_unverified": True,
+    }
+
+
 class UserCreate(BaseModel):
     email: EmailStr
     username: str
@@ -159,7 +197,11 @@ async def register(user_data: UserCreate, db: AsyncSession = Depends(get_async_d
 
     # Check if email exists
     result = await db.execute(select(User).filter(User.email == user_data.email))
-    if result.scalars().first():
+    existing_user = result.scalars().first()
+    if existing_user:
+        resend_result = await resend_verification_for_existing_user(existing_user, db)
+        if resend_result:
+            return resend_result
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered"
         )
@@ -256,7 +298,11 @@ async def register_teacher(
 
     # Check if email exists
     result = await db.execute(select(User).filter(User.email == teacher_data.email))
-    if result.scalars().first():
+    existing_user = result.scalars().first()
+    if existing_user:
+        resend_result = await resend_verification_for_existing_user(existing_user, db)
+        if resend_result:
+            return resend_result
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered"
         )
@@ -365,7 +411,11 @@ async def register_student(
 
     # Check if email exists
     result = await db.execute(select(User).filter(User.email == student_data.email))
-    if result.scalars().first():
+    existing_user = result.scalars().first()
+    if existing_user:
+        resend_result = await resend_verification_for_existing_user(existing_user, db)
+        if resend_result:
+            return resend_result
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered"
         )

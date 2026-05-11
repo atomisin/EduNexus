@@ -38,6 +38,7 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 PLACEHOLDER_TOPIC_NAMES = {"CLASS", "SUBJECT", "TERM", "TOPIC", "TOPICS"}
+PLACEMENT_QUESTIONS_PER_LESSON = 5
 
 
 def is_real_learning_topic(topic: Topic) -> bool:
@@ -563,9 +564,13 @@ def make_placement_token(
     })
 
 
-def placement_correct_option(topic: Topic) -> str:
+def placement_correct_option(topic: Topic, question_index: int = 0) -> str:
+    return placement_correct_option_for_id(str(topic.id), question_index)
+
+
+def placement_correct_option_for_id(topic_id: str, question_index: int = 0) -> str:
     options = ["A", "B", "C", "D"]
-    digest = hashlib.sha256(str(topic.id).encode("utf-8")).digest()[0]
+    digest = hashlib.sha256(f"{topic_id}:{question_index}".encode("utf-8")).digest()[0]
     return options[digest % len(options)]
 
 
@@ -617,7 +622,23 @@ def normalize_question_spec(spec: Dict[str, Any]) -> Dict[str, Any]:
         "correct": str(spec.get("correct") or spec.get("answer") or "").strip(),
         "distractors": [str(item).strip() for item in distractors if str(item).strip()][:3],
         "explanation": str(spec.get("explanation") or "").strip(),
+        "skill": str(spec.get("skill") or spec.get("focus") or "").strip(),
+        "difficulty": str(spec.get("difficulty") or "").strip().lower(),
     }
+
+
+def extract_question_specs(payload: Any) -> List[Dict[str, Any]]:
+    if isinstance(payload, list):
+        raw_items = payload
+    elif isinstance(payload, dict):
+        raw_items = payload.get("items") or payload.get("questions") or [payload]
+    else:
+        raw_items = []
+    return [
+        normalize_question_spec(item)
+        for item in raw_items
+        if isinstance(item, dict)
+    ]
 
 
 def validate_placement_question_spec(spec: Dict[str, Any], topic: Topic, subject: Optional[Subject]) -> None:
@@ -639,6 +660,7 @@ def validate_placement_question_spec(spec: Dict[str, Any], topic: Topic, subject
         "repeating the lesson",
         "real understanding of",
         "which response shows",
+        "number of tens in",
     ]
     if any(phrase in text for phrase in banned_phrases):
         raise ValueError("Placement question is metadata-recognition, not competence-based")
@@ -678,15 +700,34 @@ def validate_placement_question_spec(spec: Dict[str, Any], topic: Topic, subject
             raise ValueError(f"{subject_key} placement question is not sufficiently subject-applied")
 
 
+def validate_placement_question_set(specs: List[Dict[str, Any]], topic: Topic, subject: Optional[Subject]) -> List[Dict[str, Any]]:
+    if len(specs) < PLACEMENT_QUESTIONS_PER_LESSON:
+        raise ValueError(f"Placement requires at least {PLACEMENT_QUESTIONS_PER_LESSON} questions per lesson")
+    selected = specs[:PLACEMENT_QUESTIONS_PER_LESSON]
+    seen_texts = set()
+    skill_tags = set()
+    for spec in selected:
+        validate_placement_question_spec(spec, topic, subject)
+        normalized_text = re.sub(r"\s+", " ", spec["text"].strip().lower())
+        if normalized_text in seen_texts:
+            raise ValueError("Placement question set contains duplicate questions")
+        seen_texts.add(normalized_text)
+        if spec.get("skill"):
+            skill_tags.add(spec["skill"].strip().lower())
+    if len(skill_tags) < 3:
+        raise ValueError("Placement question set does not cover enough distinct lesson skills")
+    return selected
+
+
 def build_placement_generation_prompt(topic: Topic, subject: Optional[Subject]) -> str:
     grade_levels = ", ".join(subject.grade_levels or []) if subject else ""
     outcomes = "; ".join(topic.learning_outcomes or [])
     return f"""
-Create ONE multiple-choice placement question for EduNexus.
+Create {PLACEMENT_QUESTIONS_PER_LESSON} multiple-choice placement questions for EduNexus.
 
 Purpose:
 - Test whether a learner has usable prerequisite understanding of the exact curriculum lesson below.
-- The question will decide if the learner may unlock a later lesson, so it must be fair, answerable, and directly tied to this prerequisite.
+- The questions will decide if the learner may unlock a later lesson, so they must be fair, answerable, and directly tied to this prerequisite.
 
 Curriculum context:
 - Subject: {subject.name if subject else "Unknown"}
@@ -702,25 +743,34 @@ Rules:
 - Do not ask a generic algebra, science, or English question unless this exact lesson requires it.
 - Do not ask the learner to identify the lesson title or choose a statement that merely describes the lesson.
 - For Mathematics, the learner must calculate, count, compare, arrange, solve, or complete a numeric pattern from the lesson skill.
+- For place-value or counting lessons, avoid ambiguous wording such as "number of tens in 456"; ask for "tens digit", "place value of the tens digit", "complete groups of ten", or a concrete counting sequence instead.
 - For Biology, test application of a living system, structure, process, classification, function, or cause-effect idea from the lesson.
 - For Chemistry, test substances, formulae, reactions, properties, particles, or laboratory reasoning from the lesson.
 - For Physics, use a measurable scenario, relationship, diagram-style reasoning, or calculation from the lesson.
 - For Accounting, Commerce, Economics, and professional subjects, use a realistic transaction, case, data point, or professional decision from the lesson.
 - For language/humanities subjects, use a short passage, example, interpretation, or applied classification task.
 - Match the depth to the class/level. Primary tasks should be simple and concrete; JSS/SS tasks should require curriculum-level reasoning; professional tasks should use workplace-level judgement.
+- Order the questions by increasing complexity:
+  1. Basic prerequisite recall or recognition.
+  2. Direct application.
+  3. Slightly varied application.
+  4. Error-spotting, comparison, or reasoning.
+  5. Transfer question that combines the lesson's important points.
+- Cover the lesson's important points across the set. Do not produce five versions of the same skill.
 - If math or technical notation is needed, use LaTeX delimiters like \\( ... \\).
 - Ensure every wrong option is plausible but clearly wrong for the exact lesson.
+- The {PLACEMENT_QUESTIONS_PER_LESSON} questions must cover different angles of the same prerequisite lesson, not repeat one idea with new numbers only.
 - Return JSON only with this shape:
-  {{"text":"question text","correct":"correct option text","distractors":["wrong option","wrong option","wrong option"],"explanation":"one-sentence explanation"}}
+  {{"items":[{{"skill":"specific lesson skill being tested","difficulty":"basic|direct|varied|reasoning|transfer","text":"question text","correct":"correct option text","distractors":["wrong option","wrong option","wrong option"],"explanation":"one-sentence explanation"}}]}}
 """.strip()
 
 
-async def generate_cached_placement_spec(
+async def generate_cached_placement_specs(
     db: AsyncSession,
     topic: Topic,
     subject: Optional[Subject],
     user_id: Optional[uuid.UUID],
-) -> Dict[str, Any]:
+) -> List[Dict[str, Any]]:
     if not subject:
         raise HTTPException(status_code=400, detail="Subject context is required for placement questions")
 
@@ -737,10 +787,9 @@ async def generate_cached_placement_spec(
     )
     cached = cached_res.scalars().first()
     if cached:
-        spec = normalize_question_spec(cached.question_spec)
+        specs = extract_question_specs(cached.question_spec)
         try:
-            validate_placement_question_spec(spec, topic, subject)
-            return spec
+            return validate_placement_question_set(specs, topic, subject)
         except ValueError as exc:
             cached.status = "invalid"
             cached.review_notes = str(exc)
@@ -748,7 +797,7 @@ async def generate_cached_placement_spec(
 
     prompt = build_placement_generation_prompt(topic, subject)
     last_error: Optional[Exception] = None
-    spec: Optional[Dict[str, Any]] = None
+    specs: Optional[List[Dict[str, Any]]] = None
     for attempt in range(2):
         try:
             retry_instruction = (
@@ -763,9 +812,8 @@ async def generate_cached_placement_spec(
                 format="json_object",
                 user_id=user_id,
             )
-            candidate = normalize_question_spec(parse_json_object(raw))
-            validate_placement_question_spec(candidate, topic, subject)
-            spec = candidate
+            candidate = extract_question_specs(parse_json_object(raw))
+            specs = validate_placement_question_set(candidate, topic, subject)
             break
         except Exception as exc:
             last_error = exc
@@ -776,7 +824,7 @@ async def generate_cached_placement_spec(
                 exc,
             )
 
-    if spec is None:
+    if specs is None:
         raise HTTPException(
             status_code=503,
             detail="EduNexus could not prepare a reliable placement question for this lesson yet. Please try again shortly.",
@@ -787,7 +835,7 @@ async def generate_cached_placement_spec(
         topic_id=topic.id,
         education_level=education_level,
         curriculum_hash=curriculum_hash,
-        question_spec=spec,
+        question_spec={"items": specs},
         source="llm",
         review_notes=None,
     )
@@ -807,14 +855,14 @@ async def generate_cached_placement_spec(
         )
         cached = cached_res.scalars().first()
         if cached:
-            return normalize_question_spec(cached.question_spec)
+            return validate_placement_question_set(extract_question_specs(cached.question_spec), topic, subject)
     except Exception:
         await db.rollback()
         logger.exception("Failed to cache placement question for topic %s", topic.id)
-    return spec
+    return specs
 
 
-async def build_placement_question(
+async def build_placement_questions(
     db: AsyncSession,
     topic: Topic,
     idx: int,
@@ -822,34 +870,38 @@ async def build_placement_question(
     include_answer: bool = False,
     unlock_topic: Optional[Topic] = None,
     user_id: Optional[uuid.UUID] = None,
-) -> Dict[str, Any]:
-    """Build a deterministic placement question tied to one prerequisite topic."""
-    correct_option = placement_correct_option(topic)
-    spec = await generate_cached_placement_spec(db, topic, subject, user_id)
+) -> List[Dict[str, Any]]:
+    """Build deterministic placement questions tied to one prerequisite topic."""
+    specs = await generate_cached_placement_specs(db, topic, subject, user_id)
     option_keys = ["A", "B", "C", "D"]
-    options: Dict[str, str] = {}
-    distractor_index = 0
-    for key in option_keys:
-        if key == correct_option:
-            options[key] = spec["correct"]
-        else:
-            options[key] = spec["distractors"][distractor_index]
-            distractor_index += 1
+    questions = []
+    for question_index, spec in enumerate(specs, start=1):
+        correct_option = placement_correct_option(topic, question_index)
+        options: Dict[str, str] = {}
+        distractor_index = 0
+        for key in option_keys:
+            if key == correct_option:
+                options[key] = spec["correct"]
+            else:
+                options[key] = spec["distractors"][distractor_index]
+                distractor_index += 1
 
-    question = {
-        "id": f"{topic.id}:{idx}",
-        "topic_id": str(topic.id),
-        "topic_name": topic.name,
-        "unlock_topic_id": str(unlock_topic.id) if unlock_topic else str(topic.id),
-        "unlock_topic_name": unlock_topic.name if unlock_topic else topic.name,
-        "source": "revision" if unlock_topic and unlock_topic.id != topic.id else "prerequisite",
-        "text": spec["text"],
-        "options": options,
-        "explanation": spec["explanation"],
-    }
-    if include_answer:
-        question["correct_option"] = correct_option
-    return question
+        question = {
+            "id": f"{topic.id}:{idx}:{question_index}",
+            "topic_id": str(topic.id),
+            "topic_name": topic.name,
+            "question_index": question_index,
+            "unlock_topic_id": str(unlock_topic.id) if unlock_topic else str(topic.id),
+            "unlock_topic_name": unlock_topic.name if unlock_topic else topic.name,
+            "source": "revision" if unlock_topic and unlock_topic.id != topic.id else "prerequisite",
+            "text": spec["text"],
+            "options": options,
+            "explanation": spec["explanation"],
+        }
+        if include_answer:
+            question["correct_option"] = correct_option
+        questions.append(question)
+    return questions
 
 
 def summarize_placement(
@@ -890,7 +942,7 @@ def summarize_placement(
     elif score <= 20:
         recommended_topic = recommendation_topics[0]
         reason = "The placement score is very low, so the safest path is to restart from the beginning."
-    elif score >= 85:
+    elif score >= 80:
         if weak_topics:
             weak_topic_id = uuid.UUID(weak_topics[0]["topic_id"])
             recommended_topic = next((topic for topic in recommendation_topics if topic.id == weak_topic_id), target_topic)
@@ -913,7 +965,7 @@ def summarize_placement(
         "score": score,
         "correct": correct,
         "total": total,
-        "passed_for_target": score >= 85 and not weak_topics,
+        "passed_for_target": score >= 80 and not weak_topics,
         "weak_topics": weak_topics,
         "recommended_topic": {
             "id": str(recommended_topic.id),
@@ -1068,7 +1120,7 @@ async def start_placement_check(
     assessment_entries = placement_scope["assessment_entries"]
     questions = []
     for idx, entry in enumerate(assessment_entries):
-        questions.append(await build_placement_question(
+        questions.extend(await build_placement_questions(
             db,
             entry["assessment_topic"],
             idx + 1,
@@ -1093,6 +1145,7 @@ async def start_placement_check(
         ],
         "revision_contexts": placement_scope["revision_contexts"],
         "questions": questions,
+        "questions_per_lesson": PLACEMENT_QUESTIONS_PER_LESSON,
         "message": "Answer this quick placement check so EduNexus can recommend the right lesson to start from.",
     }
     if not assessment_entries:
@@ -1127,39 +1180,51 @@ async def submit_placement_check(
     placement_scope = await build_placement_scope(db, subject_uuid, target_topic, prerequisite_topics)
     assessment_entries = placement_scope["assessment_entries"]
     recommendation_topics = placement_scope["recommendation_topics"]
-    valid_topic_ids = {str(entry["assessment_topic"].id) for entry in assessment_entries}
-    entry_by_topic = {str(entry["assessment_topic"].id): entry for entry in assessment_entries}
-    answers_by_topic: Dict[str, Dict[str, Any]] = {}
+    expected_questions = []
+    for idx, entry in enumerate(assessment_entries):
+        expected_questions.extend(await build_placement_questions(
+            db,
+            entry["assessment_topic"],
+            idx + 1,
+            subject=placement_scope.get("subject"),
+            unlock_topic=entry["unlock_topic"],
+            user_id=current_user.id,
+        ))
+
+    valid_question_ids = {str(question["id"]) for question in expected_questions}
+    question_by_id = {str(question["id"]): question for question in expected_questions}
+    answers_by_question: Dict[str, Dict[str, Any]] = {}
     for answer in data.answers:
-        topic_id = str(answer.get("topic_id") or "")
-        if topic_id not in valid_topic_ids:
+        question_id = str(answer.get("question_id") or "")
+        if question_id not in valid_question_ids:
             continue
-        if topic_id in answers_by_topic:
+        if question_id in answers_by_question:
             raise HTTPException(status_code=400, detail="Duplicate placement answer")
 
         selected_option = str(answer.get("selected_option") or "").upper()
         if selected_option not in {"A", "B", "C", "D"}:
             raise HTTPException(status_code=400, detail="Invalid placement answer")
 
-        entry = entry_by_topic.get(topic_id)
-        topic = entry["assessment_topic"] if entry else None
-        unlock_topic = entry["unlock_topic"] if entry else None
-        correct_option = placement_correct_option(topic) if topic else ""
-        answers_by_topic[topic_id] = {
+        question = question_by_id.get(question_id)
+        topic_id = str(question.get("topic_id") or "") if question else ""
+        question_index = int(question.get("question_index") or 0) if question else 0
+        correct_option = placement_correct_option_for_id(topic_id, question_index) if topic_id else ""
+        answers_by_question[question_id] = {
             **answer,
+            "question_id": question_id,
             "topic_id": topic_id,
-            "topic_name": topic.name if topic else answer.get("topic_name"),
-            "unlock_topic_id": str(unlock_topic.id) if unlock_topic else topic_id,
-            "unlock_topic_name": unlock_topic.name if unlock_topic else answer.get("topic_name"),
+            "topic_name": question.get("topic_name") if question else answer.get("topic_name"),
+            "unlock_topic_id": question.get("unlock_topic_id") if question else topic_id,
+            "unlock_topic_name": question.get("unlock_topic_name") if question else answer.get("topic_name"),
             "selected_option": selected_option,
             "is_correct": selected_option == correct_option,
         }
 
-    missing_topic_ids = valid_topic_ids.difference(answers_by_topic.keys())
-    if missing_topic_ids:
-        raise HTTPException(status_code=400, detail="Answer every prerequisite lesson question")
+    missing_question_ids = valid_question_ids.difference(answers_by_question.keys())
+    if missing_question_ids:
+        raise HTTPException(status_code=400, detail="Answer every prerequisite question")
 
-    answers = [answers_by_topic[str(entry["assessment_topic"].id)] for entry in assessment_entries]
+    answers = [answers_by_question[str(question["id"])] for question in expected_questions]
     summary = summarize_placement(recommendation_topics, answers, target_topic)
     summary["revision_contexts"] = placement_scope["revision_contexts"]
     summary["placement_token"] = make_placement_token(

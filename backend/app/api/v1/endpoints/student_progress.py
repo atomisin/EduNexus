@@ -719,6 +719,156 @@ def validate_placement_question_set(specs: List[Dict[str, Any]], topic: Topic, s
     return selected
 
 
+def is_math_subject(subject: Optional[Subject]) -> bool:
+    subject_text = normalize_placement_text(
+        subject.name if subject else "",
+        subject.education_level if subject else "",
+        subject.curriculum_type if subject else "",
+    )
+    return "math" in subject_text
+
+
+def extract_lesson_numbers(text: str) -> List[int]:
+    return [
+        int(match)
+        for match in re.findall(r"\b\d{1,5}\b", text or "")
+        if 0 <= int(match) <= 100000
+    ]
+
+
+def lesson_number_bounds(topic: Topic) -> tuple[int, int]:
+    lesson_text = f"{topic.name or ''} {topic.description or ''}"
+    range_match = re.search(r"\b(\d{1,5})\s*(?:-|–|—|to)\s*(\d{1,5})\b", lesson_text, flags=re.IGNORECASE)
+    if range_match:
+        first, second = int(range_match.group(1)), int(range_match.group(2))
+        return min(first, second), max(first, second)
+
+    numbers = extract_lesson_numbers(lesson_text)
+    if not numbers:
+        return 1, 100
+    lower = min(numbers)
+    upper = max(numbers)
+    if lower == upper:
+        lower = max(1, lower - 20)
+        upper = lower + 40
+    return lower, upper
+
+
+def option_spec(
+    skill: str,
+    difficulty: str,
+    text: str,
+    correct: Any,
+    distractors: List[Any],
+    explanation: str,
+) -> Dict[str, Any]:
+    correct_text = str(correct)
+    clean_distractors: List[str] = []
+    for item in distractors:
+        value = str(item)
+        if value != correct_text and value not in clean_distractors:
+            clean_distractors.append(value)
+    offset = 1
+    while len(clean_distractors) < 3:
+        candidate = str(int(correct_text) + offset) if correct_text.lstrip("-").isdigit() else f"{correct_text} ({offset})"
+        if candidate != correct_text and candidate not in clean_distractors:
+            clean_distractors.append(candidate)
+        offset += 1
+    return {
+        "skill": skill,
+        "difficulty": difficulty,
+        "text": text,
+        "correct": correct_text,
+        "distractors": clean_distractors[:3],
+        "explanation": explanation,
+    }
+
+
+def build_local_math_placement_specs(topic: Topic, subject: Optional[Subject]) -> Optional[List[Dict[str, Any]]]:
+    """Computed fallback for clear primary/JSS arithmetic topics when AI generation is unavailable."""
+    if not is_math_subject(subject):
+        return None
+
+    topic_text = normalize_placement_text(topic.name, topic.description, " ".join(topic.learning_outcomes or []))
+    lower, upper = lesson_number_bounds(topic)
+    span = max(1, upper - lower)
+    base_offset = max(1, min(max(1, span // 4), max(1, span - 5)))
+    base = min(lower + base_offset, max(lower, upper - 5))
+
+    if any(word in topic_text for word in ["addition", "add ", "sum", "plus"]):
+        a = max(lower, min(base, max(lower, upper - 3)))
+        available_after_a = max(1, upper - a)
+        b = max(1, min(15, available_after_a))
+        c = max(1, min(25, available_after_a))
+        word_addend = max(1, min(8, available_after_a))
+        compare_a = max(lower, min(a + 5, max(lower, upper - 2)))
+        compare_b = max(1, min(10, upper - compare_a))
+        total_a = lower
+        total_b = max(1, min(10, max(1, upper - total_a - 1)))
+        total_c = max(1, min(10, max(1, upper - total_a - total_b)))
+        return [
+            option_spec("add two whole numbers", "basic", f"Calculate \\({a} + {b}\\).", a + b, [a + b - 1, a + b + 1, a + b + 10], "Add the two numbers carefully."),
+            option_spec("find a missing addend", "direct", f"What number makes \\({a} + \\square = {a + c}\\)?", c, [c - 1, c + 1, a], "Subtract the known addend from the total."),
+            option_spec("apply addition in a word problem", "varied", f"A learner counted {a} books and then added {word_addend} more books. How many books are there altogether?", a + word_addend, [a + word_addend - 1, a + word_addend + 1, max(0, a - word_addend)], "Altogether means add the two amounts."),
+            option_spec("spot an addition error", "reasoning", f"Which statement is correct for adding {compare_a} and {compare_b}?", f"\\({compare_a} + {compare_b} = {compare_a + compare_b}\\)", [f"\\({compare_a} + {compare_b} = {compare_a + compare_b - 1}\\)", f"\\({compare_a} + {compare_b} = {compare_a + compare_b + 1}\\)", f"\\({compare_a} - {compare_b} = {compare_a + compare_b}\\)"], "The correct statement uses addition and the accurate total."),
+            option_spec("combine several addends", "transfer", f"Find the total: \\({total_a} + {total_b} + {total_c}\\).", total_a + total_b + total_c, [total_a + total_b + total_c - 1, total_a + total_b, total_a + total_b + total_c + 1], "Add each addend once to get the total."),
+        ]
+
+    if any(word in topic_text for word in ["place value", "place-value"]):
+        number = max(101, min(upper, max(base + 37, 137)))
+        digits = [int(ch) for ch in str(number)]
+        tens_digit = digits[-2] if len(digits) >= 2 else 0
+        hundreds_digit = digits[-3] if len(digits) >= 3 else 0
+        number_text = str(number)
+        expanded = " + ".join(
+            str(int(ch) * (10 ** (len(number_text) - idx - 1)))
+            for idx, ch in enumerate(number_text)
+            if ch != "0"
+        )
+        return [
+            option_spec("identify a digit", "basic", f"In the number {number}, what is the tens digit?", tens_digit, [tens_digit + 1, max(0, tens_digit - 1), digits[-1]], "The tens digit is the second digit from the right."),
+            option_spec("state place value", "direct", f"What is the value of the hundreds digit in {number}?", hundreds_digit * 100, [hundreds_digit, hundreds_digit * 10, hundreds_digit * 1000], "A hundreds digit is worth that digit multiplied by 100."),
+            option_spec("write expanded form", "varied", f"Which is the expanded form of {number}?", expanded, [str(number), f"{hundreds_digit} + {tens_digit * 10} + {digits[-1]}", f"{hundreds_digit * 10} + {tens_digit * 100} + {digits[-1]}"], "Expanded form shows the value of each digit."),
+            option_spec("compare place values", "reasoning", f"Which digit in {number} has the greatest place value?", str(digits[0]), [str(digits[-1]), str(tens_digit), "0"], "The leftmost non-zero digit has the greatest place value in this number."),
+            option_spec("transfer place value", "transfer", f"If {number} is increased by 10, which digit changes?", "the tens digit", ["the hundreds digit only", "the ones digit only", "no digit changes"], "Adding 10 changes the tens place unless regrouping affects another place."),
+        ]
+
+    if any(word in topic_text for word in ["ordering", "greater than", "less than", "<", "compare"]):
+        a = max(lower, base)
+        values = [a + 3, a + 1, a + 5, a + 2]
+        ordered = ", ".join(str(value) for value in sorted(values))
+        return [
+            option_spec("compare two numbers", "basic", f"Which symbol makes this true: \\({a + 4} \\square {a + 9}\\)?", "<", [">", "=", "+"], "The first number is smaller than the second number."),
+            option_spec("find the greatest number", "direct", f"Which number is greatest: {a + 3}, {a + 8}, {a + 1}, {a + 6}?", a + 8, [a + 3, a + 1, a + 6], "The greatest number has the highest value."),
+            option_spec("order numbers ascending", "varied", f"Arrange these numbers from smallest to largest: {', '.join(str(value) for value in values)}.", ordered, [", ".join(str(value) for value in values), ", ".join(str(value) for value in sorted(values, reverse=True)), f"{a + 1}, {a + 3}, {a + 2}, {a + 5}"], "Ascending order moves from the smallest to the largest."),
+            option_spec("spot comparison error", "reasoning", f"Which comparison is correct?", f"\\({a + 10} > {a + 2}\\)", [f"\\({a + 10} < {a + 2}\\)", f"\\({a + 10} = {a + 2}\\)", f"\\({a + 2} > {a + 10}\\)"], "The larger number should face the open side of the greater-than sign."),
+            option_spec("transfer ordering", "transfer", f"A teacher writes {a + 7}, {a + 12}, and {a + 9}. Which number comes between the other two?", a + 9, [a + 7, a + 12, a + 19], "The middle value is greater than the smallest and less than the largest."),
+        ]
+
+    if "fraction" in topic_text:
+        return [
+            option_spec("recognize a simple fraction", "basic", "A shape is divided into 4 equal parts and 1 part is shaded. What fraction is shaded?", "\\(\\frac{1}{4}\\)", ["\\(\\frac{4}{1}\\)", "\\(\\frac{1}{3}\\)", "\\(\\frac{3}{4}\\)"], "The shaded part is one out of four equal parts."),
+            option_spec("find a fraction of a set", "direct", "What is \\(\\frac{1}{2}\\) of 12 oranges?", 6, [4, 8, 10], "Half of 12 is 6."),
+            option_spec("compare fractions", "varied", "Which fraction is greater?", "\\(\\frac{3}{4}\\)", ["\\(\\frac{1}{4}\\)", "\\(\\frac{1}{2}\\)", "\\(\\frac{1}{8}\\)"], "Three quarters is greater than one half, one quarter, and one eighth."),
+            option_spec("spot a fraction error", "reasoning", "Which statement is correct?", "\\(\\frac{2}{4}\\) is equal to \\(\\frac{1}{2}\\)", ["\\(\\frac{2}{4}\\) is equal to \\(\\frac{1}{4}\\)", "\\(\\frac{1}{2}\\) is less than \\(\\frac{1}{4}\\)", "\\(\\frac{3}{4}\\) is equal to \\(\\frac{1}{4}\\)"], "Two out of four equal parts is the same as one out of two equal parts."),
+            option_spec("apply fractions", "transfer", "A learner ate \\(\\frac{1}{4}\\) of 20 groundnuts. How many groundnuts were eaten?", 5, [4, 10, 15], "One quarter of 20 is 20 divided by 4."),
+        ]
+
+    if any(word in topic_text for word in ["count", "whole number", "numbers"]):
+        step = 10 if upper - lower >= 50 else 2
+        start = max(lower, min(base, upper - (step * 4)))
+        sequence = [start + step * i for i in range(5)]
+        return [
+            option_spec("count forward", "basic", f"What number comes after {start}?", start + 1, [start - 1, start + 2, start + 10], "Counting forward by ones gives the next number."),
+            option_spec("complete a counting pattern", "direct", f"Complete the pattern: {sequence[0]}, {sequence[1]}, \\(\\square\\), {sequence[3]}, {sequence[4]}.", sequence[2], [sequence[2] - step, sequence[2] + step, sequence[2] + 1], f"The pattern increases by {step} each time."),
+            option_spec("count backward", "varied", f"What number comes just before {start + 12}?", start + 11, [start + 10, start + 12, start + 13], "Counting backward by one gives the previous number."),
+            option_spec("reason with a number line", "reasoning", f"On a number line, which number is between {start + 3} and {start + 7}?", start + 5, [start + 2, start + 8, start + 10], "A number between two values is greater than the first and less than the second."),
+            option_spec("transfer counting skill", "transfer", f"If you count by {step}s from {start}, what is the fifth number you say?", sequence[4], [sequence[3], sequence[4] + step, sequence[2]], "The fifth number is found after four equal jumps from the starting number."),
+        ]
+
+    return None
+
+
 def build_placement_generation_prompt(topic: Topic, subject: Optional[Subject]) -> str:
     grade_levels = ", ".join(subject.grade_levels or []) if subject else ""
     outcomes = "; ".join(topic.learning_outcomes or [])
@@ -798,7 +948,7 @@ async def generate_cached_placement_specs(
     prompt = build_placement_generation_prompt(topic, subject)
     last_error: Optional[Exception] = None
     specs: Optional[List[Dict[str, Any]]] = None
-    for attempt in range(2):
+    for attempt in range(3):
         try:
             retry_instruction = (
                 f"\n\nPrevious attempt failed validation: {last_error}. Regenerate a stronger, applied, class-appropriate question."
@@ -808,7 +958,7 @@ async def generate_cached_placement_specs(
             raw = await llm_service.generate(
                 prompt=f"{prompt}{retry_instruction}",
                 temperature=0.2,
-                max_tokens=450,
+                max_tokens=1800,
                 format="json_object",
                 user_id=user_id,
             )
@@ -824,6 +974,16 @@ async def generate_cached_placement_specs(
                 exc,
             )
 
+    source = "llm"
+    if specs is None:
+        local_specs = build_local_math_placement_specs(topic, subject)
+        if local_specs:
+            try:
+                specs = validate_placement_question_set(local_specs, topic, subject)
+                source = "local_math_fallback"
+            except ValueError as exc:
+                last_error = exc
+
     if specs is None:
         raise HTTPException(
             status_code=503,
@@ -836,8 +996,8 @@ async def generate_cached_placement_specs(
         education_level=education_level,
         curriculum_hash=curriculum_hash,
         question_spec={"items": specs},
-        source="llm",
-        review_notes=None,
+        source=source,
+        review_notes=str(last_error) if source != "llm" and last_error else None,
     )
     db.add(cache)
     try:

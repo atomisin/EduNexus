@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { AlertCircle, CheckCircle2, ChevronLeft, Eye, EyeOff, Loader2, Mail } from 'lucide-react';
 import { authAPI, warmUpServer } from '@/services/api';
+import VerificationSuccess from './VerificationSuccess';
 
 const COLD_START_MESSAGE = 'Please wait...';
 
@@ -15,7 +16,7 @@ interface LoginFormProps {
 }
 
 export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, onRegisterClick }) => {
-  const { login, error, isLoading } = useAuth();
+  const { login, error, isLoading, verificationEmail } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -26,6 +27,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, onRegisterClick
   const [resetStatus, setResetStatus] = useState<'idle' | 'sent' | 'error'>('idle');
   const [resetMessage, setResetMessage] = useState('');
   const [resetLoading, setResetLoading] = useState(false);
+  const [showVerification, setShowVerification] = useState(false);
 
   // Pre-warm the backend the moment this form mounts
   // The server starts waking up while the user types credentials
@@ -54,14 +56,33 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, onRegisterClick
     if (!isLoading) setServerWaking(false);
   }, [isLoading]);
 
+  useEffect(() => {
+    if (error?.toLowerCase().includes('verify your email')) {
+      setShowVerification(true);
+    }
+  }, [error]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     const success = await login(email, password);
     if (success) {
       onSuccess?.();
+    } else if (verificationEmail || error?.toLowerCase().includes('verify your email')) {
+      setShowVerification(true);
     }
   };
+
+  if (showVerification) {
+    return (
+      <VerificationSuccess
+        email={verificationEmail || email}
+        verificationToken="code-verification"
+        verificationSent
+        onContinue={() => setShowVerification(false)}
+      />
+    );
+  }
 
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();

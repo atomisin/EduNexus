@@ -47,6 +47,7 @@ export interface AuthContextType {
   isAuthenticated: boolean;
   mustChangePassword: boolean;
   error: string | null;
+  verificationEmail?: string | null;
 }
 
 export interface RegisterData {
@@ -103,6 +104,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [mustChangePassword, setMustChangePassword] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [verificationEmail, setVerificationEmail] = useState<string | null>(null);
   const navigate = useNavigate();
 
   // C-05: Load user status from API via cookie on mount
@@ -223,6 +225,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (detail?.code) {
           errorCode = detail.code;
           if (detail.message) errorMessage = detail.message;
+          if (detail.code === 'EMAIL_NOT_VERIFIED' && detail.email) {
+            setVerificationEmail(detail.email);
+          }
         } else if (typeof detail === 'string') {
           errorMessage = detail;
         }
@@ -441,6 +446,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         isAuthenticated,
         mustChangePassword,
         error,
+        verificationEmail,
       }}
     >
       {children}

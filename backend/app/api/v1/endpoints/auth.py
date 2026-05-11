@@ -55,30 +55,41 @@ def email_verification_required() -> bool:
     return settings.VERIFICATION_ENABLED and not settings.VERIFICATION_BYPASS
 
 
+def needs_email_verification(user: User) -> bool:
+    return (
+        user.role != UserRole.ADMIN
+        and not user.email_verified_at
+        and user.status in {
+            UserStatus.UNVERIFIED,
+            UserStatus.PENDING,
+            UserStatus.PENDING_APPROVAL,
+        }
+    )
+
+
 async def resend_verification_for_existing_user(
     user: User,
     db: AsyncSession,
 ) -> Optional[dict]:
     """Let unverified users restart registration without creating duplicates."""
-    if user.email_verified_at or user.status not in {
-        UserStatus.UNVERIFIED,
-        UserStatus.PENDING,
-        UserStatus.PENDING_APPROVAL,
-    }:
+    if not needs_email_verification(user):
         return None
 
-    verification_required = email_verification_required()
-    email_sent = False
-    if verification_required:
-        verification_code = email_service.generate_verification_code()
-        user.verification_code = verification_code
-        user.verification_code_expires = datetime.now(timezone.utc) + timedelta(
-            hours=settings.VERIFICATION_TOKEN_EXPIRE_HOURS
+    verification_required = True
+    verification_code = email_service.generate_verification_code()
+    user.verification_code = verification_code
+    user.verification_code_expires = datetime.now(timezone.utc) + timedelta(
+        hours=settings.VERIFICATION_TOKEN_EXPIRE_HOURS
+    )
+    if user.status != UserStatus.UNVERIFIED and not user.email_verified_at:
+        user.status = UserStatus.UNVERIFIED
+    await db.commit()
+    email_sent = email_service.send_verification_email(user, verification_code)
+    if not email_sent:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="We could not send the verification code. Please try again shortly.",
         )
-        if user.status != UserStatus.UNVERIFIED and not user.email_verified_at:
-            user.status = UserStatus.UNVERIFIED
-        await db.commit()
-        email_sent = email_service.send_verification_email(user, verification_code)
 
     return {
         "success": True,
@@ -266,6 +277,11 @@ async def register(user_data: UserCreate, db: AsyncSession = Depends(get_async_d
         and verification_code
     ):
         email_sent = email_service.send_verification_email(db_user, verification_code)
+        if not email_sent:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="We could not send the verification code. Please try again shortly.",
+            )
 
     return {
         "success": True,
@@ -375,6 +391,11 @@ async def register_teacher(
         and verification_code
     ):
         email_sent = email_service.send_verification_email(db_user, verification_code)
+        if not email_sent:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="We could not send the verification code. Please try again shortly.",
+            )
 
     return {
         "success": True,
@@ -500,6 +521,11 @@ async def register_student(
         and verification_code
     ):
         email_sent = email_service.send_verification_email(db_user, verification_code)
+        if not email_sent:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="We could not send the verification code. Please try again shortly.",
+            )
 
     # Ensure curriculum is generated/loaded asynchronously
     from app.services.curriculum_initializer import initialize_standard_curriculum
@@ -590,16 +616,26 @@ async def login(
     # Single Source of Truth: Check status, NOT is_active (C-04-B)
     # The frontend expects specific error codes to show unique messages
     if (
-        email_verification_required()
-        and user.role != UserRole.ADMIN
-        and not user.email_verified_at
-        and user.status in [UserStatus.UNVERIFIED, UserStatus.PENDING, UserStatus.PENDING_APPROVAL]
+        needs_email_verification(user)
     ):
+        verification_code = email_service.generate_verification_code()
+        user.verification_code = verification_code
+        user.verification_code_expires = datetime.now(timezone.utc) + timedelta(
+            hours=settings.VERIFICATION_TOKEN_EXPIRE_HOURS
+        )
+        await db.commit()
+        email_sent = email_service.send_verification_email(user, verification_code)
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
                 "code": "EMAIL_NOT_VERIFIED",
-                "message": "Please verify your email address.",
+                "message": (
+                    "Please verify your email address. We sent a fresh code."
+                    if email_sent
+                    else "Please verify your email address. We could not send a fresh code right now, so please use resend shortly."
+                ),
+                "email": user.email,
+                "verification_sent": email_sent,
             },
         )
 
@@ -1117,6 +1153,11 @@ async def resend_verification(
 
     await db.commit()
     email_sent = email_service.send_verification_email(user, verification_code)
+    if not email_sent:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="We could not send the verification code. Please try again shortly.",
+        )
 
     return {
         "success": True,

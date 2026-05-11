@@ -5,6 +5,7 @@ from sqlalchemy.exc import IntegrityError
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone, date
+from types import SimpleNamespace
 import uuid
 import base64
 import hashlib
@@ -924,12 +925,29 @@ async def generate_cached_placement_specs(
     if not subject:
         raise HTTPException(status_code=400, detail="Subject context is required for placement questions")
 
-    education_level = placement_education_scope(subject)
-    curriculum_hash = placement_curriculum_hash(topic, subject)
+    subject_ctx = SimpleNamespace(
+        id=subject.id,
+        name=subject.name,
+        education_level=subject.education_level,
+        curriculum_type=subject.curriculum_type,
+        grade_levels=list(subject.grade_levels or []),
+    )
+    topic_ctx = SimpleNamespace(
+        id=topic.id,
+        name=topic.name,
+        description=topic.description,
+        term=topic.term,
+        learning_outcomes=list(topic.learning_outcomes or []),
+    )
+    subject_id = subject_ctx.id
+    topic_id = topic_ctx.id
+
+    education_level = placement_education_scope(subject_ctx)
+    curriculum_hash = placement_curriculum_hash(topic_ctx, subject_ctx)
     cached_res = await db.execute(
         select(PlacementQuestionCache).filter(
-            PlacementQuestionCache.subject_id == subject.id,
-            PlacementQuestionCache.topic_id == topic.id,
+            PlacementQuestionCache.subject_id == subject_id,
+            PlacementQuestionCache.topic_id == topic_id,
             PlacementQuestionCache.education_level == education_level,
             PlacementQuestionCache.curriculum_hash == curriculum_hash,
             PlacementQuestionCache.status == "active",
@@ -939,13 +957,13 @@ async def generate_cached_placement_specs(
     if cached:
         specs = extract_question_specs(cached.question_spec)
         try:
-            return validate_placement_question_set(specs, topic, subject)
+            return validate_placement_question_set(specs, topic_ctx, subject_ctx)
         except ValueError as exc:
             cached.status = "invalid"
             cached.review_notes = str(exc)
             await db.commit()
 
-    prompt = build_placement_generation_prompt(topic, subject)
+    prompt = build_placement_generation_prompt(topic_ctx, subject_ctx)
     last_error: Optional[Exception] = None
     specs: Optional[List[Dict[str, Any]]] = None
     for attempt in range(3):
@@ -963,23 +981,23 @@ async def generate_cached_placement_specs(
                 user_id=user_id,
             )
             candidate = extract_question_specs(parse_json_object(raw))
-            specs = validate_placement_question_set(candidate, topic, subject)
+            specs = validate_placement_question_set(candidate, topic_ctx, subject_ctx)
             break
         except Exception as exc:
             last_error = exc
             logger.warning(
                 "Placement question generation attempt %s failed for topic %s: %s",
                 attempt + 1,
-                topic.id,
+                topic_id,
                 exc,
             )
 
     source = "llm"
     if specs is None:
-        local_specs = build_local_math_placement_specs(topic, subject)
+        local_specs = build_local_math_placement_specs(topic_ctx, subject_ctx)
         if local_specs:
             try:
-                specs = validate_placement_question_set(local_specs, topic, subject)
+                specs = validate_placement_question_set(local_specs, topic_ctx, subject_ctx)
                 source = "local_math_fallback"
             except ValueError as exc:
                 last_error = exc
@@ -991,8 +1009,8 @@ async def generate_cached_placement_specs(
         )
 
     cache = PlacementQuestionCache(
-        subject_id=subject.id,
-        topic_id=topic.id,
+        subject_id=subject_id,
+        topic_id=topic_id,
         education_level=education_level,
         curriculum_hash=curriculum_hash,
         question_spec={"items": specs},
@@ -1006,8 +1024,8 @@ async def generate_cached_placement_specs(
         await db.rollback()
         cached_res = await db.execute(
             select(PlacementQuestionCache).filter(
-                PlacementQuestionCache.subject_id == subject.id,
-                PlacementQuestionCache.topic_id == topic.id,
+                PlacementQuestionCache.subject_id == subject_id,
+                PlacementQuestionCache.topic_id == topic_id,
                 PlacementQuestionCache.education_level == education_level,
                 PlacementQuestionCache.curriculum_hash == curriculum_hash,
                 PlacementQuestionCache.status == "active",
@@ -1015,10 +1033,10 @@ async def generate_cached_placement_specs(
         )
         cached = cached_res.scalars().first()
         if cached:
-            return validate_placement_question_set(extract_question_specs(cached.question_spec), topic, subject)
+            return validate_placement_question_set(extract_question_specs(cached.question_spec), topic_ctx, subject_ctx)
     except Exception:
         await db.rollback()
-        logger.exception("Failed to cache placement question for topic %s", topic.id)
+        logger.exception("Failed to cache placement question for topic %s", topic_id)
     return specs
 
 

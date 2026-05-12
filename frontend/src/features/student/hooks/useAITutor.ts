@@ -413,21 +413,34 @@ export const useAITutor = (profile?: any, getFullName?: () => string) => {
   }, [sendMessage]);
 
   const onMasteryTestComplete = useCallback(async (result: any) => {
-    setAiState({ status: 'quiz_completed', result });
+    let finalResult = result;
+    if (result?.passed && currentTopic?.id && !result?.next_topic_unlocked) {
+      try {
+        const completion = await progressAPI.completeTopic(currentTopic.id);
+        finalResult = {
+          ...result,
+          next_topic_unlocked: result?.next_topic_unlocked || completion?.next_topic_unlocked || null,
+        };
+      } catch (error) {
+        console.error('Failed to confirm topic completion:', error);
+      }
+    }
+
+    setAiState({ status: 'quiz_completed', result: finalResult });
     setLessonController(prev => ({
       ...prev,
-      stage: result?.passed ? 'completed' : 'remediate',
+      stage: finalResult?.passed ? 'completed' : 'remediate',
       masteryReady: false,
-      nextActions: result?.passed ? ['next_topic', 'summary'] : ['review_missed', 'try_practice', 'simplify'],
+      nextActions: finalResult?.passed ? ['next_topic', 'summary'] : ['review_missed', 'try_practice', 'simplify'],
     }));
-    if (result?.passed) {
+    if (finalResult?.passed) {
       await refetchStructured();
       if (currentSubject?.id) {
         queryClient.invalidateQueries({ queryKey: ['topic-progress', currentSubject.id] });
       }
     }
     queryClient.invalidateQueries({ queryKey: ['student', 'brain-power'] });
-  }, [currentSubject?.id, queryClient, refetchStructured]);
+  }, [currentSubject?.id, currentTopic?.id, queryClient, refetchStructured]);
 
   const startQuiz = useCallback((topic?: any, subject?: any) => {
     setAiState({ 

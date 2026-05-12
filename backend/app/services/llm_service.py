@@ -599,7 +599,9 @@ Do NOT use casual filler, disclaimers, or emojis unless for small celebratory ma
         - CONTEXT PRIORITIZATION: Use the CHAT HISTORY RECORD above as your primary source for concepts, facts, and specific analogies discussed during the session.
         - SYLLABUS KNOWLEDGE: If the CHAT HISTORY is sparse, introductory, or insufficient to generate 10 rigorous, high-quality questions, you MUST leverage your broader academic knowledge of the official syllabus for this topic to fulfill the requirement.
         - SUBJECT RIGOUR: For Mathematics, Physics, Chemistry, Biology, Accounting, Economics, and professional subjects, use authentic subject tasks. Include calculations, equations, diagrams described in words, formula application, classification, analysis, or case scenarios where appropriate.
+        - LESSON BOUNDARY: Stay within the exact topic title. If the topic contains a number range, unit, chapter, class level, experiment, case, or named concept, do not test outside that scope.
         - EXACT ANSWER IN OPTIONS: Before returning JSON, solve every technical question yourself and verify the exact correct answer appears in one option. If the exact answer is missing, rewrite the options. Never mark the nearest answer as correct.
+        - NO AMBIGUOUS MIDDLE QUESTIONS: Do not ask for "the middle number" of an even-length range. If midpoint reasoning is required, ask for the two middle terms or the average/midpoint value and ensure the exact answer is an option.
         - NO REPETITION: Create entirely NEW mastery-level questions that test the concepts in different ways.
         - DRILL DEEP: Test for deep conceptual understanding (the "why") rather than surface-level recall (the "what").
         - PUSH LIMITS: The difficulty should be slightly above what was explicitly taught, requiring the student to apply logic to new scenarios.

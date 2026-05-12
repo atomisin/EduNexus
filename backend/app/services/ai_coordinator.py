@@ -1144,7 +1144,12 @@ CONVERSION STYLE:
                     system_prompt += "\nRULE: Prioritize examples and context from these specific subjects when explaining cross-cutting concepts."
 
             if subject_name and topic_name:
-                system_prompt += f"\n\nCURRENT CONTEXT:\n- Subject: {subject_name}\n- Topic: {topic_name}\nSTRICT RULE: Focus your teaching and conversation ONLY on this topic. If the student asks about something else, politely redirect them back to {topic_name}."
+                system_prompt += (
+                    f"\n\nCURRENT CONTEXT:\n- Subject: {subject_name}\n- Topic: {topic_name}"
+                    f"\nSTRICT RULE: Focus your teaching and conversation ONLY on this topic. If the student asks about something else, politely redirect them back to {topic_name}."
+                    "\nSCOPE RULE: Treat the topic title as the lesson boundary. If it contains a range, named skill, chapter, unit, class level, experiment, account type, organism group, period, or case, keep explanations, examples, practice, and checks inside that boundary."
+                    "\nPROGRESSION RULE: Do not introduce the next lesson, next range, broader chapter, or advanced extension until the platform has marked this lesson complete and unlocked the next lesson. If the learner jumps ahead, acknowledge it briefly and bring them back to the current lesson check."
+                )
 
             if lesson_context:
                 system_prompt += build_lesson_control_prompt(lesson_context)

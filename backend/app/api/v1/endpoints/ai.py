@@ -285,6 +285,25 @@ def derive_numeric_mastery_answer(question: Dict[str, Any]) -> Optional[str]:
     return None
 
 
+def is_ambiguous_mastery_question(question: Dict[str, Any]) -> bool:
+    """Reject generated questions that are mathematically ambiguous or misleading."""
+    text = str(question.get("text") or "")
+    lower_text = text.lower()
+    if "middle number" in lower_text:
+        range_match = re.search(r"\bfrom\s+(\d+)\s+to\s+(\d+)\b", lower_text)
+        if range_match:
+            start = int(range_match.group(1))
+            end = int(range_match.group(2))
+            count = abs(end - start) + 1
+            # Even-length ranges have two middle positions. Asking for one
+            # "middle number" is not fair unless the expected average appears.
+            if count % 2 == 0:
+                expected_average = (start + end) / 2
+                return option_matching_number(question.get("options") or {}, expected_average) is None
+        return True
+    return False
+
+
 def normalize_mastery_questions(questions: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     normalized: List[Dict[str, Any]] = []
     invalid_answer_phrases = [
@@ -308,6 +327,8 @@ def normalize_mastery_questions(questions: List[Dict[str, Any]]) -> List[Dict[st
             if str(key).strip() and str(value).strip()
         }
         if len(set(cleaned_options.values())) != len(cleaned_options):
+            continue
+        if is_ambiguous_mastery_question({**raw_question, "options": cleaned_options}):
             continue
         correct_option = str(raw_question.get("correct_option") or "").upper().strip()
         explanation = str(raw_question.get("explanation") or "").strip()
@@ -837,7 +858,7 @@ async def generate_mastery_test(
                 sanitize_user_input(test_req.subject),
             )
         normalized_questions = normalize_mastery_questions(questions)
-        if not normalized_questions:
+        if len(normalized_questions) < 5:
             logger.warning("[mastery-test] Generated questions failed validation; using fallback for topic %s", test_req.topic)
             normalized_questions = normalize_mastery_questions(build_fallback_mastery_questions(
                 sanitize_user_input(test_req.topic),

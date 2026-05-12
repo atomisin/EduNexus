@@ -21,7 +21,7 @@ interface CreateSessionDialogProps {
   onAiConfigChange: (config: AIConfig) => void;
   linkedStudents: any[];
   userRole?: string;
-  onSessionCreated: () => void;
+  onSessionCreated: (session?: any) => void;
 }
 
 export const CreateSessionDialog: React.FC<CreateSessionDialogProps> = ({
@@ -117,7 +117,7 @@ export const CreateSessionDialog: React.FC<CreateSessionDialogProps> = ({
         scheduledStart = new Date(`${sessionFormData.date}T${sessionFormData.time}`);
       }
 
-      await sessionAPI.create({
+      const result = await sessionAPI.create({
         title: sessionFormData.title,
         subject_id: sessionFormData.subjectId,
         topic_id: sessionFormData.topicId || undefined,
@@ -149,7 +149,7 @@ export const CreateSessionDialog: React.FC<CreateSessionDialogProps> = ({
         studentIds: [],
       });
 
-      onSessionCreated();
+      onSessionCreated(result?.session);
     } catch (error: any) {
       toast.error(error.message || 'Failed to create session');
     }

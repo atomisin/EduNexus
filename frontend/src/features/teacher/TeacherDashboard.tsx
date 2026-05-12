@@ -152,10 +152,20 @@ export const TeacherDashboard = ({ user, onLogout, onUserUpdate, onStartSession,
     loadDashboardData();
   }, [refreshKey, user.gamification?.impact_score, linkedStudents.length]);
 
-  const handleSessionCreated = async () => {
-    const data = await sessionAPI.list('scheduled');
-    const activeSessionsList = (data.sessions || []).filter((s: any) => s.status !== 'ended');
-    setUpcomingSessions(activeSessionsList);
+  const handleSessionCreated = (session?: any) => {
+    if (!session) {
+      void loadDashboardData();
+      return;
+    }
+
+    setUpcomingSessions(prev => {
+      const withoutDuplicate = prev.filter(existing => existing.id !== session.id);
+      return [session, ...withoutDuplicate].filter((s: any) => s.status !== 'ended');
+    });
+    setDashboardStats(prev => ({
+      ...prev,
+      activeSessions: prev.activeSessions + 1,
+    }));
   };
 
   const handleDeleteSession = async (sessionId: string) => {

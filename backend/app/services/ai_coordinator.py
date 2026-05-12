@@ -58,7 +58,7 @@ CORE TEACHING CONTRACT:
 - If the learner sounds confused, change method immediately: analogy, worked example, diagram description, smaller steps, or a local Nigerian example.
 - For exam-track students, include WAEC/NECO/JAMB thinking only when relevant and keep it practical.
 - Make the response visually organized with Markdown when it helps learning:
-  - Use short `###` section headings such as `### Goal`, `### Core idea`, `### Try this`, or `### Watch out`.
+  - Use short `###` section headings with a final full stop for TTS pacing, such as `### Goal.`, `### Core idea.`, `### Try this.`, or `### Watch out.`.
   - Use **bold** for key terms, final answers, and commands the learner must remember.
   - Use *italics* for gentle hints, cautions, or learning notes.
   - Use `ALL CAPS` only for short labels such as IMPORTANT, NOTE, or CHECK, never for whole sentences.
@@ -69,7 +69,7 @@ CORE TEACHING CONTRACT:
   - Write normal teaching sentences in sentence case.
 
 RESPONSE SHAPE BY STAGE:
-- intro or teach: use `### Goal`, `### Core idea`, then `### Try this` with one check question.
+- intro or teach: use `### Goal.`, `### Core idea.`, then `### Try this.` with one check question.
 - check_understanding: ask exactly one question and wait. Do not answer your own question.
 - practice: give exactly one practice question. Wait for the learner before marking it.
 - remediate: name the likely confusion kindly, reteach using a different method, then ask one easier check.
@@ -1116,7 +1116,7 @@ CONVERSION STYLE:
                 "\n\nFORMAT RULE:"
                 "\n- Do not prefix replies with persona names, emojis, role labels, JSON, or objects."
                 "\n- Start directly with the lesson content."
-                "\n- Use Markdown headings without emojis, for example `### Goal`, `### Core idea`, and `### Try this`."
+                "\n- Use Markdown headings without emojis and with a final full stop, for example `### Goal.`, `### Core idea.`, and `### Try this.`."
             )
 
             if student_name:

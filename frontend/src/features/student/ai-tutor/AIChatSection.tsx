@@ -103,10 +103,16 @@ const stripTutorDecorations = (content: string) =>
     .replace(/(^|\n)\s*(Sparky|Bello|Zara|Coach Rex|Dr\. Ade):\s*/g, '$1')
     .replace(/(^|\n)\s*(?:[\p{Extended_Pictographic}\uFE0F\u200D]\s*)+(?=(Goal|Core idea|Try this|Example|Practice|Summary)\b)/giu, '$1### ');
 
+const addSpeechPauseToLearningHeadings = (content: string) =>
+  content.replace(
+    /^(#{1,6}\s+)(Goal|Core idea|Try this|Example|Practice|Summary|Watch out|Key points|Steps)(?![.!?:])/gim,
+    '$1$2.'
+  );
+
 const prepareTutorMarkdown = (content: string) =>
-  normalizeAcademicTextForDisplay(stripTutorDecorations(content))
+  addSpeechPauseToLearningHeadings(normalizeAcademicTextForDisplay(stripTutorDecorations(content)))
     .replace(/(^|\n)#{1,6}\s+(?:[\p{Extended_Pictographic}\uFE0F\u200D]\s*)+/gu, '$1### ')
-    .replace(/^(#{1,6}\s+(?:Goal|Core idea|Try this|Example|Practice|Summary|Step\s+\d+))\s+(.+)$/gim, '$1\n$2');
+    .replace(/^(#{1,6}\s+(?:Goal\.?|Core idea\.?|Try this\.?|Example\.?|Practice\.?|Summary\.?|Watch out\.?|Key points\.?|Steps\.?|Step\s+\d+\.?))\s+(.+)$/gim, '$1\n$2');
 
 const openTutorFromSelection = (
   selectedTopic: any,

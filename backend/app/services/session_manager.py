@@ -110,13 +110,15 @@ class SessionManager:
             students_to_enroll = [str(row[0]) for row in result.fetchall()]
             logger.info(f"Auto-enrolled {len(students_to_enroll)} students for session")
 
-        # Build session context
+        # Build the minimum context needed for the create response. Continuity,
+        # quizzes, notes, and assignments are prepared after the session exists.
         context = await self._build_context(
             teacher_id=teacher_id,
             subject_id=request.subject_id,
             topic_id=request.topic_id,
             student_ids=students_to_enroll,
             previous_session_id=request.previous_session_id,
+            include_continuity=False,
         )
 
         # Set AI config with defaults
@@ -151,9 +153,11 @@ class SessionManager:
             assignments_generated=[],
         )
 
-        # Generate pre-session quiz
-        pre_quiz = await self._generate_pre_session_quiz(session)
-        session.pre_session_quiz = pre_quiz
+        session.pre_session_quiz = {
+            "title": "Pre-Session Revision",
+            "questions": [],
+            "status": "preparing",
+        }
 
         # Generate student access code if students are assigned
         if students_to_enroll and len(students_to_enroll) > 0:
@@ -164,12 +168,8 @@ class SessionManager:
             session.student_access_code = code
             session.student_access_enabled = True
 
-        # Save to database
+        # Save session, enrollments, and notifications in a single transaction.
         self.db.add(session)
-        await self.db.commit()
-        await self.db.refresh(session)
-
-        # Enroll students (using relational table, NOT context)
         for student_id in students_to_enroll:
             enrollment = SessionStudent(
                 id=uuid.uuid4(),
@@ -191,8 +191,8 @@ class SessionManager:
             )
             self.db.add(notification)
 
-
         await self.db.commit()
+        await self.db.refresh(session)
 
         # Try scheduling eager generation of smart materials
         if background_tasks and session.subject_id and students_to_enroll:
@@ -232,6 +232,33 @@ class SessionManager:
                 student = user_res.scalars().first()
                 
                 if student:
+                    context = await manager._build_context(
+                        teacher_id=str(session.teacher_id),
+                        subject_id=str(session.subject_id),
+                        topic_id=str(session.topic_id) if session.topic_id else "",
+                        student_ids=[student_id],
+                        previous_session_id=str(session.previous_session_id)
+                        if session.previous_session_id
+                        else None,
+                        include_continuity=True,
+                    )
+                    session.context = {**(session.context or {}), **context}
+                    session.previous_session_id = (
+                        uuid.UUID(context["previous_session_id"])
+                        if context.get("previous_session_id")
+                        else session.previous_session_id
+                    )
+
+                    try:
+                        session.pre_session_quiz = await manager._generate_pre_session_quiz(session)
+                    except Exception as quiz_error:
+                        logger.error(f"Background pre-session quiz generation failed: {quiz_error}")
+                        session.pre_session_quiz = {
+                            "title": "Pre-Session Revision",
+                            "questions": [],
+                            "status": "unavailable",
+                        }
+
                     ai_settings = session.ai_config or {}
                     prep_data = await ai_coordinator.generate_smart_prep(
                         student_name=student.full_name or "Student",
@@ -243,16 +270,54 @@ class SessionManager:
                         suggest_videos=ai_settings.get("suggest_videos", True)
                     )
                     
+                    outline = (
+                        prep_data.get("lesson_outline")
+                        or prep_data.get("outline")
+                        or []
+                    )
+                    if isinstance(outline, list):
+                        notes_content = "\n".join(f"- {point}" for point in outline if point)
+                    else:
+                        notes_content = str(outline or "")
+
+                    assignment = (
+                        prep_data.get("active_assignments")
+                        or prep_data.get("assignments")
+                        or prep_data.get("assignment")
+                    )
+                    if isinstance(assignment, str):
+                        assignment_payload = {
+                            "title": f"Take-home assignment: {session.context.get('topic', 'Lesson')}",
+                            "instructions": assignment,
+                            "tasks": [assignment],
+                        }
+                    else:
+                        assignment_payload = assignment
+
+                    video_suggestions = (
+                        prep_data.get("suggested_videos")
+                        or prep_data.get("video_suggestions")
+                        or prep_data.get("videos")
+                        or []
+                    )
+
                     # Merge data into context dictionary
                     updated_context = dict(session.context)
                     updated_context["active_pop_quiz"] = {
                         "title": f"Quick Quiz: {session.context.get('topic', 'Lesson')}",
                         "questions": prep_data.get("pop_quiz") or [],
                     }
-                    updated_context["active_notes"] = prep_data.get("lesson_outline")
-                    updated_context["active_assignments"] = prep_data.get("assignments")
+                    updated_context["active_notes"] = {
+                        "title": f"Lesson outline: {session.context.get('topic', 'Lesson')}",
+                        "content": notes_content,
+                        "source": "smart_prep",
+                    }
+                    updated_context["active_assignments"] = assignment_payload
+                    updated_context["suggested_videos"] = video_suggestions
                     
                     session.context = updated_context
+                    session.session_outline = outline
+                    session.videos_suggested = video_suggestions
                     bg_db.add(session)
                     await bg_db.commit()
                     logger.info(f"Successfully eager-generated smart lesson context for {session_id}")
@@ -1154,6 +1219,7 @@ class SessionManager:
         topic_id: str,
         student_ids: List[str],
         previous_session_id: Optional[str] = None,
+        include_continuity: bool = True,
     ) -> Dict[str, Any]:
         """Build initial session context and continuity"""
         context = {
@@ -1193,7 +1259,7 @@ class SessionManager:
                 context["topic_id"] = topic_id
 
         # If no explicit previous session, find the last one for this context
-        if not previous_session_id and subject_id:
+        if include_continuity and not previous_session_id and subject_id and student_ids:
             last_session = await self.get_last_session_for_context(
                 teacher_id, subject_id, student_ids
             )

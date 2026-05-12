@@ -683,6 +683,7 @@ async def get_shared_session_content(
             "notes": context.get("active_notes") or session.class_notes,
             "assignment": context.get("active_assignments") or session.take_home_assignment,
             "pop_quiz": context.get("active_pop_quiz"),
+            "videos": context.get("suggested_videos") or session.videos_suggested or [],
         }
     except HTTPException:
         raise

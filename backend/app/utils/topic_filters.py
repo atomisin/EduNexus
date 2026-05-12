@@ -7,6 +7,10 @@ from typing import Iterable, List, TypeVar
 T = TypeVar("T")
 
 PLACEHOLDER_TOPIC_NAMES = {"CLASS", "SUBJECT", "TERM", "TOPIC", "TOPICS"}
+ACADEMIC_SECTION_MARKER = re.compile(
+    r"\b(?:A|B|C|D)\s*[\).:]\s*(?:GRAMMAR|ORAL|STRUCTURE|SUMMARY|WRITING|COMPREHENSION|VOCABULARY|WORDS?)\b",
+    re.IGNORECASE,
+)
 
 
 def _topic_name(topic: object) -> str:
@@ -36,6 +40,8 @@ def is_warmup_revision_topic_name(name: str) -> bool:
     key = normalize_topic_key(name)
     if not key:
         return False
+    if key.startswith("WELCOME TEST") and "REVISION" in key and not ACADEMIC_SECTION_MARKER.search(name):
+        return True
     warmup_words = (
         "REVISION",
         "READINESS TEST",
@@ -49,6 +55,19 @@ def is_warmup_revision_topic_name(name: str) -> bool:
     if key.startswith(warmup_words):
         return True
     return bool(re.match(r"^(REVISION|READINESS|REDINESS|RESUMPTION|RESUMOTION)\b.*\b(TEST|WORK|TERM|LESSON)\b", key))
+
+
+def clean_topic_display_name(name: str) -> str:
+    """Remove non-academic warm-up prefixes while preserving the real lesson title."""
+    text = str(name or "").strip()
+    if not text:
+        return ""
+    return re.sub(
+        r"^\s*[-–—]?\s*(?:WELCOME\s+TEST|TEST)\s*(?:[-–—:/]?\s*REVISION)?\s*",
+        "",
+        text,
+        flags=re.IGNORECASE,
+    ).strip(" -–—:/")
 
 
 def is_real_learning_topic(topic: object) -> bool:

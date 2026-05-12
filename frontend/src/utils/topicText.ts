@@ -40,6 +40,8 @@ export const formatTopicName = (value?: string | null) => {
   if (!text) return '';
 
   text = text
+    .replace(/^\s*[-–—]?\s*(?:WELCOME\s+TEST|TEST)\s*(?:[-–—:/]?\s*REVISION)?\s*/i, '')
+    .replace(/^\s*[-–—:/]+/, '')
     .replace(/([A-Z]{2,})([A-Z][a-z])/g, '$1 $2')
     .replace(/([a-z])([A-Z]{2,})/g, '$1 $2')
     .replace(/([a-z])([A-Z][a-z])/g, '$1 $2')

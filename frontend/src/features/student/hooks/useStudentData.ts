@@ -6,6 +6,11 @@ import { studentAPI, sessionAPI, subjectsAPI,
 import type { StudentProfile, Session, Subject, ProgressData } from '../types';
 
 const normalizeSubjectName = (name?: string) => (name || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+const MINUTE = 60 * 1000;
+const STUDENT_QUERY_OPTIONS = {
+  refetchOnWindowFocus: false,
+  retry: 1,
+} as const;
 
 const subjectScore = (subject: Subject, profile?: StudentProfile | null) => {
   const grade = (profile?.grade_level || profile?.education_level || '').toString().replace(/[^a-z0-9]/gi, '').toUpperCase();
@@ -30,6 +35,8 @@ export const useStudentData = (user?: any) => {
     queryKey: ['student', 'profile'],
     queryFn: studentAPI.getProfile,
     enabled: !!user,
+    staleTime: 5 * MINUTE,
+    ...STUDENT_QUERY_OPTIONS,
   });
 
   // Brain Power Query (Dedicated query as requested for better invalidation)
@@ -40,7 +47,8 @@ export const useStudentData = (user?: any) => {
     queryKey: ['student', 'brain-power'],
     queryFn: () => studentAPI.getBrainPower(),
     enabled: !!user,
-    staleTime: 0 // Always fresh - changes frequently
+    staleTime: MINUTE,
+    ...STUDENT_QUERY_OPTIONS,
   });
 
   const brainPower = brainPowerData?.brain_power ?? profile?.brain_power ?? 100;
@@ -57,6 +65,8 @@ export const useStudentData = (user?: any) => {
       department: profile?.department
     }).then((r: any) => r.subjects || r || []),
     enabled: !!user && !!profile,
+    staleTime: 10 * MINUTE,
+    ...STUDENT_QUERY_OPTIONS,
   });
 
   // Enrolled Subjects Query
@@ -67,6 +77,8 @@ export const useStudentData = (user?: any) => {
     queryKey: ['student', 'enrolled-subjects'],
     queryFn: () => studentAPI.getEnrolledSubjects().then((r: any) => r.enrolled_subjects || []),
     enabled: !!user,
+    staleTime: 5 * MINUTE,
+    ...STUDENT_QUERY_OPTIONS,
   });
 
   // Sessions Query
@@ -79,6 +91,8 @@ export const useStudentData = (user?: any) => {
     queryKey: ['student', 'sessions'],
     queryFn: () => studentAPI.getSessions().then((r: any) => r.sessions || r || []),
     enabled: !!user,
+    staleTime: MINUTE,
+    ...STUDENT_QUERY_OPTIONS,
   });
 
   // Materials Query
@@ -86,6 +100,8 @@ export const useStudentData = (user?: any) => {
     queryKey: ['student', 'materials'],
     queryFn: () => studentAPI.getMaterials().then((r: any) => r.materials || r || []),
     enabled: !!user,
+    staleTime: 5 * MINUTE,
+    ...STUDENT_QUERY_OPTIONS,
   });
 
   // Progress Query
@@ -93,6 +109,8 @@ export const useStudentData = (user?: any) => {
     queryKey: ['student', 'progress'],
     queryFn: () => studentAPI.getProgress().then((r: any) => r.progress || r || null),
     enabled: !!user,
+    staleTime: 2 * MINUTE,
+    ...STUDENT_QUERY_OPTIONS,
   });
 
   // Performance Analytics Query
@@ -100,6 +118,8 @@ export const useStudentData = (user?: any) => {
     queryKey: ['student', 'analytics', 'performance'],
     queryFn: () => progressAPI.getPerformanceAnalytics(),
     enabled: !!user,
+    staleTime: 2 * MINUTE,
+    ...STUDENT_QUERY_OPTIONS,
   });
 
   const [isLoadingManual, setIsLoadingManual] = useState(false);

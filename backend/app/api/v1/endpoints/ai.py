@@ -382,6 +382,13 @@ async def refund_brain_power(user_id: uuid.UUID, cost: int, db: AsyncSession) ->
     await db.commit()
 
 
+async def get_student_education_level(db: AsyncSession, user_id: uuid.UUID) -> Optional[str]:
+    res_prof = await db.execute(
+        select(StudentProfile.education_level).filter(StudentProfile.user_id == user_id)
+    )
+    return res_prof.scalar()
+
+
 def raise_brain_power_depleted():
     from datetime import time as dt_time, timedelta, datetime
 
@@ -494,7 +501,10 @@ async def generate_text(
     """Generate text using LLM (C-06: Sanitized & Rate Limited)"""
     sanitized_prompt = sanitize_user_input(generate_req.prompt)
 
-    brain_power_cost = brain_power_cost_for_tokens(estimate_text_tokens(sanitized_prompt), 1024)
+    education_level = await get_student_education_level(db, current_user.id)
+    brain_power_cost = brain_power_cost_for_tokens(
+        estimate_text_tokens(sanitized_prompt), 1024, education_level
+    )
     if not await deduct_brain_power(current_user.id, brain_power_cost, db):
         raise_brain_power_depleted()
 
@@ -546,7 +556,11 @@ async def chat(
     # Token limit based on age (kept for logic, but persona handled)
     # max_tokens = 80 if age_group == "child" else 150 if age_group == "teen" else 250
 
-    brain_power_cost = brain_power_cost_for_tokens(estimate_message_tokens(chat_req.messages), 900)
+    brain_power_cost = brain_power_cost_for_tokens(
+        estimate_message_tokens(chat_req.messages),
+        900,
+        student_profile.education_level if student_profile else None,
+    )
     if not await deduct_brain_power(current_user.id, brain_power_cost, db):
         raise_brain_power_depleted()
 
@@ -625,7 +639,11 @@ async def explain_concept(
     student_context = get_student_context(current_user, student_profile)
 
     explain_input_tokens = estimate_text_tokens(explain_req.concept) + estimate_text_tokens(explain_req.context) + estimate_text_tokens(explain_req.question)
-    brain_power_cost = brain_power_cost_for_tokens(explain_input_tokens, 700)
+    brain_power_cost = brain_power_cost_for_tokens(
+        explain_input_tokens,
+        700,
+        student_profile.education_level if student_profile else None,
+    )
     if not await deduct_brain_power(current_user.id, brain_power_cost, db):
         raise_brain_power_depleted()
 
@@ -662,7 +680,11 @@ async def evaluate_understanding(
     student_context = get_student_context(current_user, student_profile)
 
     eval_input_tokens = estimate_text_tokens(eval_req.concept) + estimate_text_tokens(eval_req.explanation)
-    brain_power_cost = brain_power_cost_for_tokens(eval_input_tokens, 500)
+    brain_power_cost = brain_power_cost_for_tokens(
+        eval_input_tokens,
+        500,
+        student_profile.education_level if student_profile else None,
+    )
     if not await deduct_brain_power(current_user.id, brain_power_cost, db):
         raise_brain_power_depleted()
 
@@ -789,7 +811,11 @@ async def generate_mastery_test(
     student_context = get_student_context(current_user, student_profile)
 
     mastery_input_tokens = estimate_text_tokens(test_req.topic) + estimate_text_tokens(test_req.subject) + estimate_message_tokens(test_req.chat_history)
-    brain_power_cost = brain_power_cost_for_tokens(mastery_input_tokens, 1600)
+    brain_power_cost = brain_power_cost_for_tokens(
+        mastery_input_tokens,
+        1600,
+        student_profile.education_level if student_profile else None,
+    )
     if not await deduct_brain_power(current_user.id, brain_power_cost, db):
         raise_brain_power_depleted()
 
@@ -943,7 +969,11 @@ async def get_topic_breakdown(
                     return cached_breakdown
 
         breakdown_input_tokens = estimate_text_tokens(body.topic) + estimate_text_tokens(subject_name) + estimate_text_tokens(education_level) + estimate_text_tokens(grade_level)
-        brain_power_cost = brain_power_cost_for_tokens(breakdown_input_tokens, 1200)
+        brain_power_cost = brain_power_cost_for_tokens(
+            breakdown_input_tokens,
+            1200,
+            student_profile.education_level if student_profile else None,
+        )
         if not await deduct_brain_power(current_user.id, brain_power_cost, db):
             raise_brain_power_depleted()
 

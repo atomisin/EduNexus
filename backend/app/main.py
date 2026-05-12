@@ -64,6 +64,36 @@ setup_logging()
 logger = logging.getLogger(__name__)
 
 
+async def _create_index_if_columns_exist(db, index_name: str, table_name: str, index_columns: str, required_columns: list[str]):
+    """Create a production index only when the legacy database has the target table/columns."""
+    table_exists = await db.scalar(
+        text("SELECT to_regclass(:table_name) IS NOT NULL"),
+        {"table_name": f"public.{table_name}"},
+    )
+    if not table_exists:
+        return
+
+    for column_name in required_columns:
+        column_exists = await db.scalar(
+            text(
+                """
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM information_schema.columns
+                    WHERE table_schema = 'public'
+                      AND table_name = :table_name
+                      AND column_name = :column_name
+                )
+                """
+            ),
+            {"table_name": table_name, "column_name": column_name},
+        )
+        if not column_exists:
+            return
+
+    await db.execute(text(f"CREATE INDEX IF NOT EXISTS {index_name} ON {table_name} ({index_columns})"))
+
+
 async def reset_brain_power():
     """Daily cron job to reset student brain power to 100%"""
     logger.info("⚡ Resetting all students' Brain Power for the new day...")
@@ -131,8 +161,57 @@ async def lifespan(app: FastAPI):
                 END
                 WHERE status IS NULL
             """))
+            await _create_index_if_columns_exist(
+                db,
+                "ix_notifications_user_created",
+                "notifications",
+                "user_id, created_at DESC",
+                ["user_id", "created_at"],
+            )
+            await _create_index_if_columns_exist(
+                db,
+                "ix_student_profiles_user_id",
+                "student_profiles",
+                "user_id",
+                ["user_id"],
+            )
+            await _create_index_if_columns_exist(
+                db,
+                "ix_teacher_students_teacher_status",
+                "teacher_students",
+                "teacher_id, status",
+                ["teacher_id", "status"],
+            )
+            await _create_index_if_columns_exist(
+                db,
+                "ix_teacher_students_student_status",
+                "teacher_students",
+                "student_id, status",
+                ["student_id", "status"],
+            )
+            await _create_index_if_columns_exist(
+                db,
+                "ix_student_topic_progress_student_subject",
+                "student_topic_progress",
+                "student_id, subject_id",
+                ["student_id", "subject_id"],
+            )
+            await _create_index_if_columns_exist(
+                db,
+                "ix_student_subject_progress_student_subject",
+                "student_subject_progress",
+                "student_id, subject_id",
+                ["student_id", "subject_id"],
+            )
+            await _create_index_if_columns_exist(
+                db,
+                "ix_topics_subject_sort",
+                "topics",
+                "subject_id, sort_order",
+                ["subject_id", "sort_order"],
+            )
             await db.commit()
-            logger.info("Database Hotpatch: production schema columns verified.")
+            logger.info("Database Hotpatch: production schema columns and indexes verified.")
         except Exception as e:
             logger.error(f"Database Hotpatch failed: {e}")
             await db.rollback()

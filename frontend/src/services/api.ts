@@ -214,6 +214,8 @@ export const authAPI = {
     guardian_phone?: string;
     gender?: string;
     age?: number;
+    education_category?: string;
+    enrolled_subjects?: string[];
   }) => fetchWithAuth('/auth/register/student', {
     method: 'POST',
     body: JSON.stringify(studentData),
@@ -377,6 +379,12 @@ export const teacherAPI = {
 
   getStudentDetails: (studentId: string) =>
     fetchWithAuth(`/teachers/students/${studentId}`),
+
+  updateStudentGuardianContact: (studentId: string, data: { guardian_name?: string; guardian_email?: string }) =>
+    fetchWithAuth(`/teacher-students/students/${studentId}/guardian-contact`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
 
   getStudentLearningAnalytics: (studentId: string) =>
     fetchWithAuth(`/teachers/students/${studentId}/learning-analytics/`),

@@ -337,8 +337,8 @@ export const ProfileView = ({
                             }}
                             className={`rounded-lg border px-3 py-1.5 text-left transition-all ${
                               profileFormData.jamb_subjects?.includes(subject.id)
-                                ? 'border-primary bg-primary text-primary-foreground shadow-sm'
-                                : 'border-border bg-white hover:border-primary dark:bg-slate-800'
+                                ? 'border-primary/50 bg-primary/10 text-foreground shadow-sm ring-1 ring-primary/15'
+                                : 'border-border bg-white hover:border-primary hover:bg-primary/5 dark:bg-slate-800'
                             }`}
                           >
                             {subject.name}

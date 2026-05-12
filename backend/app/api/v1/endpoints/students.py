@@ -218,7 +218,7 @@ async def get_my_brain_power(
     seconds_until_recharge = int((recharge_at - now).total_seconds())
 
     return {
-        **brain_power_budget_summary(profile.brain_power),
+        **brain_power_budget_summary(profile.brain_power, profile.education_level),
         "recharge_at": recharge_at.isoformat(),
         "seconds_until_recharge": seconds_until_recharge,
     }

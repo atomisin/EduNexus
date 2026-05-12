@@ -23,6 +23,7 @@ import VerificationSuccess from './VerificationSuccess';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { LegalDocument, legalDocuments } from '@/components/legal/LegalDocuments';
+import { formatEducationLevel } from '@/utils/educationDisplay';
 
 const months = [
   { value: '01', label: 'January' },
@@ -82,6 +83,7 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSuccess, o
     guardianName: '',
     guardianEmail: '',
     guardianPhone: '',
+    useRegistrationEmailForReports: false,
     educationCategory: '' as keyof typeof EDUCATION_CATEGORIES | '',
     enrolledSubjects: [] as string[],
   });
@@ -171,7 +173,9 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSuccess, o
         schoolName: activeTab === 'student' ? formData.schoolName : undefined,
         department: activeTab === 'student' && ['ss_1', 'ss_2', 'ss_3', 'waec', 'neco', 'jamb'].includes(formData.educationLevel) ? formData.department : undefined,
         guardianName: activeTab === 'student' ? formData.guardianName : undefined,
-        guardianEmail: activeTab === 'student' ? formData.guardianEmail : undefined,
+        guardianEmail: activeTab === 'student'
+          ? (formData.useRegistrationEmailForReports ? formData.email : formData.guardianEmail)
+          : undefined,
         guardianPhone: activeTab === 'student' ? formData.guardianPhone : undefined,
         enrolledSubjects: activeTab === 'student' ? formData.enrolledSubjects : undefined,
         educationCategory: activeTab === 'student' ? formData.educationCategory || undefined : undefined,
@@ -212,23 +216,23 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSuccess, o
 
   return (
     <div className="min-h-0 w-full overflow-x-hidden bg-subtle flex items-center justify-center p-1 sm:p-4">
-      <Card className="relative w-full max-w-4xl max-h-[92vh] overflow-x-hidden overflow-y-auto rounded-lg border border-border shadow-xl">
+      <Card className="relative w-full max-w-4xl max-h-[92vh] overflow-x-hidden overflow-y-auto rounded-lg border border-border shadow-lg">
         <div className="h-1 bg-primary" />
         <CardHeader className="border-b bg-background px-4 py-5 sm:px-6">
           <div className="space-y-4">
             <div className="text-left">
-              <CardTitle className="text-xl sm:text-2xl leading-tight">Create your EduNexus account</CardTitle>
-              <CardDescription className="mt-1 text-sm">
+              <CardTitle className="text-lg font-semibold leading-tight sm:text-2xl">Create your EduNexus account</CardTitle>
+              <CardDescription className="mt-1 text-sm leading-relaxed">
                 Choose the account type that matches how you will use the platform.
               </CardDescription>
             </div>
-            <div className="grid grid-cols-2 rounded-lg border border-border bg-muted p-1 text-sm font-semibold">
+            <div className="grid grid-cols-2 rounded-lg border border-primary/15 bg-primary/5 p-1 text-sm font-medium">
               <button
                 type="button"
                 onClick={() => setIsTeacherMode(false)}
                 className={cn(
                   "rounded-md px-3 py-3 text-left transition-colors",
-                  !isTeacherMode ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                  !isTeacherMode ? "bg-background text-foreground shadow-sm ring-1 ring-primary/10" : "text-muted-foreground hover:text-foreground"
                 )}
               >
                 <span className="block">Student</span>
@@ -239,7 +243,7 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSuccess, o
                 onClick={() => setIsTeacherMode(true)}
                 className={cn(
                   "rounded-md px-3 py-3 text-left transition-colors",
-                  isTeacherMode ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                  isTeacherMode ? "bg-background text-foreground shadow-sm ring-1 ring-primary/10" : "text-muted-foreground hover:text-foreground"
                 )}
               >
                 <span className="block">Teacher</span>
@@ -251,9 +255,9 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSuccess, o
         <CardContent className="min-w-0 px-4 py-6 sm:px-6">
           <div className="w-full min-w-0">
             <form onSubmit={handleSubmit} className="space-y-5">
-              <div className="rounded-lg border border-border bg-muted/50 px-4 py-3">
+              <div className="rounded-lg border border-primary/10 bg-primary/5 px-4 py-3">
                 <div className="flex items-center justify-between gap-3">
-                  <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider">
+                  <h3 className="text-sm font-medium text-primary uppercase tracking-wider">
                     {isTeacherMode ? 'Teacher Registration' : 'Student Registration'}
                   </h3>
                   <span className="shrink-0 text-xs font-medium text-muted-foreground">
@@ -469,9 +473,9 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSuccess, o
                   {formData.department && ['ss_1', 'ss_2', 'ss_3', 'waec', 'neco', 'jamb'].includes(formData.educationLevel) && (
                     <div className="space-y-3 p-4 bg-subtle rounded-lg border border-border animate-in fade-in duration-500">
                       <div className="flex justify-between items-center mb-2">
-                        <Label className="text-sm font-bold flex items-center gap-2">
+                        <Label className="text-sm font-normal flex items-center gap-2">
                           <CheckCircle2 className="w-4 h-4 text-primary" />
-                          Select Subjects for {formData.educationLevel.toUpperCase()} ({formData.department})
+                          Select Subjects for {formatEducationLevel(formData.educationLevel)} ({formData.department})
                         </Label>
                         <Badge variant="outline" className={cn(
                           "font-mono",
@@ -495,8 +499,8 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSuccess, o
                                  <CheckCircle2 className="w-3.5 h-3.5 text-white" />
                                </div>
                                <div className="flex-1">
-                                 <span className="text-sm font-bold text-slate-800 dark:text-slate-100">{subject}</span>
-                                 <span className="ml-2 text-[10px] text-primary font-bold uppercase py-0.5 px-2 rounded-full bg-primary/10 border border-primary/20">Required</span>
+                                 <span className="text-sm font-normal text-slate-800 dark:text-slate-100">{subject}</span>
+                                 <span className="ml-2 text-[10px] text-primary font-medium uppercase py-0.5 px-2 rounded-full bg-primary/10 border border-primary/20">Required</span>
                                </div>
                              </div>
                           ))}
@@ -522,8 +526,8 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSuccess, o
                                  className={cn(
                                    "flex items-center space-x-3 p-3 rounded-lg border transition-all duration-200",
                                    isSelected 
-                                     ? "bg-primary text-primary-foreground border-primary" 
-                                     : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-primary/50"
+                                     ? "border-primary/50 bg-primary/10 text-foreground ring-1 ring-primary/15" 
+                                     : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-primary/50 hover:bg-primary/5"
                                  )}
                                >
                                  <Checkbox 
@@ -546,11 +550,11 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSuccess, o
                                       }
                                       handleInputChange('enrolledSubjects', newSelection);
                                    }}
-                                   className={isSelected ? "border-white bg-white text-primary" : ""}
+                                   className={isSelected ? "border-primary bg-primary text-primary-foreground" : ""}
                                  />
                                  <label 
                                    htmlFor={inputId}
-                                   className="text-sm flex-1 font-bold cursor-pointer select-none"
+                                   className="text-sm flex-1 font-normal cursor-pointer select-none"
                                  >
                                    {subject}
                                  </label>
@@ -583,10 +587,26 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSuccess, o
                     </div>
                   )}
 
-                  <div className="rounded-lg border border-border bg-background p-4">
-                    <h3 className="text-sm font-bold text-slate-700 mb-1">Parent / Guardian Details</h3>
-                    <p className="mb-4 text-xs text-muted-foreground">Used for parent reports and school follow-up.</p>
+                  <div className="rounded-lg border border-primary/10 bg-background p-4">
+                    <h3 className="text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Parent / Guardian Report Contact</h3>
+                    <p className="mb-4 text-xs text-muted-foreground">
+                      Used for teacher-guided monthly reports and school follow-up. Teachers can correct this later when needed.
+                    </p>
                     <div className="grid grid-cols-1 gap-4">
+                      <div className="flex items-start gap-3 rounded-lg border border-primary/10 bg-primary/5 p-3">
+                        <Checkbox
+                          id="useRegistrationEmailForReports"
+                          checked={formData.useRegistrationEmailForReports}
+                          onCheckedChange={(checked) => handleInputChange('useRegistrationEmailForReports', checked === true)}
+                          className="mt-0.5 shrink-0"
+                        />
+                        <Label
+                          htmlFor="useRegistrationEmailForReports"
+                          className="cursor-pointer text-sm font-medium leading-relaxed text-slate-700 dark:text-slate-200"
+                        >
+                          Use my registration email for monthly report delivery.
+                        </Label>
+                      </div>
                       <div className="space-y-2">
                         <Label htmlFor="guardianName">Guardian Full Name</Label>
                         <Input
@@ -603,9 +623,10 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({ onSuccess, o
                           <Input
                             id="guardianEmail"
                             type="email"
-                            value={formData.guardianEmail}
+                            value={formData.useRegistrationEmailForReports ? formData.email : formData.guardianEmail}
                             onChange={(e) => handleInputChange('guardianEmail', e.target.value)}
                             placeholder="Guardian email address"
+                            disabled={formData.useRegistrationEmailForReports}
                             className="h-12"
                           />
                         </div>

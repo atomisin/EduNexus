@@ -72,6 +72,7 @@ export interface RegisterData {
   guardianName?: string;
   guardianEmail?: string;
   guardianPhone?: string;
+  useRegistrationEmailForReports?: boolean;
   enrolledSubjects?: string[];
   educationCategory?: string;
 }

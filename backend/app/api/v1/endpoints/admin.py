@@ -11,7 +11,6 @@ from datetime import datetime, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, or_
-from sqlalchemy.orm import selectinload
 from app.db.database import get_async_db
 from app.api.v1.endpoints.auth import get_current_user
 from app.models.user import User, UserRole, UserStatus, TeacherStudent, TeacherProfile
@@ -109,11 +108,7 @@ async def list_all_users(
         )
     
     # Order by creation date
-    stmt = stmt.order_by(User.created_at.desc()).options(
-        selectinload(User.student_profile),
-        selectinload(User.teacher_profile),
-        selectinload(User.teacher_students)
-    )
+    stmt = stmt.order_by(User.created_at.desc())
     
     # Pagination
     result = await db.execute(stmt.offset(skip).limit(limit))
@@ -560,8 +555,12 @@ async def list_teachers_with_limits(
     """
     List all teachers with their student limits and current usage
     """
-    stmt = select(User, TeacherProfile).join(
+    active_student_count = func.count(TeacherStudent.id)
+    stmt = select(User, TeacherProfile, active_student_count.label("student_count")).join(
         TeacherProfile, User.id == TeacherProfile.user_id
+    ).outerjoin(
+        TeacherStudent,
+        (TeacherStudent.teacher_id == User.id) & (TeacherStudent.status == "active"),
     ).filter(User.role == UserRole.TEACHER)
     
     if plan_type:
@@ -570,17 +569,13 @@ async def list_teachers_with_limits(
     if is_verified is not None:
         stmt = stmt.filter(TeacherProfile.is_verified_teacher == is_verified)
     
-    # Eager load teacher_students to prevent N+1 queries
-    stmt = stmt.options(selectinload(User.teacher_students))
+    stmt = stmt.group_by(User.id, TeacherProfile.id).order_by(User.created_at.desc())
     
     exec_result = await db.execute(stmt)
     results = exec_result.all()
     
     teachers = []
-    for user, profile in results:
-        # Count current students from eager loaded relationship
-        student_count = len(user.teacher_students) if user.teacher_students else 0
-        
+    for user, profile, student_count in results:
         max_students = getattr(profile, 'max_students', 10)  # Default limit
         plan = getattr(profile, 'plan_type', 'basic')
         

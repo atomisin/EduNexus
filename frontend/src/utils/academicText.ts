@@ -28,7 +28,10 @@ const looksLikeMath = (value: string) =>
 const normalizeMathOperators = (expression: string) =>
   expression
     .replace(/\u00d7/g, '\\times')
+    .replace(/\blog\s*([0-9]+|[A-Za-z])\s*\(([^()]+)\)/g, (_match, base, argument) => `\\log_{${base}}\\left(${argument.trim()}\\right)`)
+    .replace(/\b(-?\d+)\s*\/\s*(-?\d+)\b/g, (_match, numerator, denominator) => `\\frac{${numerator}}{${denominator}}`)
     .replace(/\b10\^(-?\d+)\b/g, (_match, exponent) => `10^{${exponent}}`)
+    .replace(/\b(\d+(?:\.\d+)?)\^(-?\d+)\b/g, (_match, base, exponent) => `${base}^{${exponent}}`)
     .replace(/\b([A-Za-z])\^(-?\d+)\b/g, (_match, base, exponent) => `${base}^{${exponent}}`);
 
 const wrapInlineMath = (expression: string) => `\\(${normalizeMathOperators(expression.trim())}\\)`;
@@ -107,6 +110,32 @@ export const normalizeAcademicTextForDisplay = (text: string) => {
       if (!isLikelyLogBase(base) || !isLikelyLogArgument(argument)) return match;
       return wrapInlineMath(`\\log_{${base}} ${argument}`);
     }
+  );
+
+  normalized = normalized.replace(
+    /(^|\n)(\s*)((?:-?\d+(?:\.\d+)?|\d+\/\d+)\^-?\d+\s*=\s*[^.\n]*?\blog\s*[0-9A-Za-z]\s*\([^)\n]+\)\s*=\s*-?\d+(?:\.\d+)?\s*\))/g,
+    (_match, prefix, spacing, expression, offset, fullText) => `${prefix}${spacing}${wrapInlineMathIfNeeded(expression, fullText, offset)}`
+  );
+
+  normalized = normalized.replace(
+    /(?<![$\\])\blog\s*([0-9]+|[A-Za-z])\s*\(([^()\n]+)\)\s*=\s*(-?\d+(?:\.\d+)?)/g,
+    (match, base, argument, value, offset, fullText) => {
+      if (!isLikelyLogBase(base)) return match;
+      return wrapInlineMathIfNeeded(`\\log_{${base}}\\left(${argument.trim()}\\right) = ${value}`, fullText, offset);
+    }
+  );
+
+  normalized = normalized.replace(
+    /(?<![$\\])\blog\s*([0-9]+|[A-Za-z])\s*\(([^()\n]+)\)/g,
+    (match, base, argument, offset, fullText) => {
+      if (!isLikelyLogBase(base)) return match;
+      return wrapInlineMathIfNeeded(`\\log_{${base}}\\left(${argument.trim()}\\right)`, fullText, offset);
+    }
+  );
+
+  normalized = normalized.replace(
+    /(?<![$\\])\b(\d+(?:\.\d+)?)\^(-?\d+)\s*=\s*((?:\d+(?:\.\d+)?)|(?:\d+\s*\/\s*\d+))/g,
+    (_match, base, exponent, value, offset, fullText) => wrapInlineMathIfNeeded(`${base}^{${exponent}} = ${value}`, fullText, offset)
   );
 
   normalized = normalized.replace(

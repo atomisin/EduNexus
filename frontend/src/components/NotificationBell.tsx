@@ -31,19 +31,20 @@ export const NotificationBell = () => {
     const [contentDialogOpen, setContentDialogOpen] = useState(false);
 
     const loadNotifications = async () => {
+        if (document.visibilityState === 'hidden') return;
+
         try {
             const data = await notificationsAPI.getAll();
             setNotifications(data);
             setUnreadCount(data.filter((n: Notification) => !n.is_read).length);
         } catch (error) {
-            console.error('Failed to load notifications:', error);
+            // Notification polling should never interrupt the active learning flow.
         }
     };
 
     useEffect(() => {
         loadNotifications();
-        // Refresh notifications every 60 seconds
-        const interval = setInterval(loadNotifications, 60000);
+        const interval = setInterval(loadNotifications, 180000);
         return () => clearInterval(interval);
     }, []);
 

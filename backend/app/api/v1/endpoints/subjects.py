@@ -12,7 +12,7 @@ from app.db.database import get_async_db
 from app.api.v1.endpoints.auth import get_current_user
 from app.models.user import User
 from app.models.subject import Subject, Topic, Lesson
-from app.utils.topic_filters import filter_learning_topics
+from app.utils.topic_filters import clean_topic_display_name, filter_learning_topics
 import logging
 
 logger = logging.getLogger(__name__)
@@ -627,7 +627,7 @@ async def get_subject(
         "topics": [
             {
                 "id": str(t.id),
-                "name": t.name,
+                "name": clean_topic_display_name(t.name),
                 "description": t.description,
                 "difficulty": t.difficulty_level,
                 "estimated_hours": t.estimated_hours,
@@ -665,7 +665,7 @@ async def get_topics(
         "topics": [
             {
                 "id": str(t.id),
-                "name": t.name,
+                "name": clean_topic_display_name(t.name),
                 "description": t.description,
                 "display_order": t.sort_order,
                 "is_active": t.is_active,

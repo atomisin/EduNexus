@@ -36,6 +36,11 @@ class AddStudentById(BaseModel):
     student_id: str
 
 
+class GuardianReportContactUpdate(BaseModel):
+    guardian_name: Optional[str] = None
+    guardian_email: Optional[str] = None
+
+
 @router.post("/complete-registration")
 async def complete_student_registration(
     data: StudentRegistrationUpdate,
@@ -197,41 +202,44 @@ async def get_my_students(
         )
 
     res_links = await db.execute(
-        select(TeacherStudent)
+        select(TeacherStudent, User, StudentProfile)
+        .join(User, User.id == TeacherStudent.student_id)
+        .outerjoin(StudentProfile, StudentProfile.user_id == TeacherStudent.student_id)
         .filter(
             TeacherStudent.teacher_id == current_user.id,
             TeacherStudent.status == "active",
         )
+        .order_by(User.full_name.asc())
     )
-    links = res_links.scalars().all()
+    rows = res_links.all()
 
     students = []
-    for link in links:
-        res_user = await db.execute(select(User).filter(User.id == link.student_id))
-        student_user = res_user.scalars().first()
-        res_prof = await db.execute(select(StudentProfile).filter(StudentProfile.user_id == link.student_id))
-        student_profile = res_prof.scalars().first()
-
-        if student_user:
-            students.append(
-                {
-                    "id": str(link.student_id),
-                    "student_id": student_profile.student_id
-                    if student_profile
-                    else None,
-                    "name": student_user.full_name,
-                    "email": student_user.email,
-                    "education_level": student_profile.education_level
-                    if student_profile
-                    else None,
-                    "grade_level": student_profile.grade_level
-                    if student_profile
-                    else None,
-                    "enrolled_subjects": [
-                        str(s) for s in (student_profile.enrolled_subjects or []) if s
-                    ],
-                }
-            )
+    for link, student_user, student_profile in rows:
+        students.append(
+            {
+                "id": str(link.student_id),
+                "student_id": student_profile.student_id
+                if student_profile
+                else None,
+                "name": student_user.full_name,
+                "email": student_user.email,
+                "education_level": student_profile.education_level
+                if student_profile
+                else None,
+                "grade_level": student_profile.grade_level
+                if student_profile
+                else None,
+                "guardian_name": student_profile.guardian_name
+                if student_profile
+                else None,
+                "guardian_email": student_profile.guardian_email
+                if student_profile
+                else None,
+                "enrolled_subjects": [
+                    str(s) for s in (student_profile.enrolled_subjects or []) if s
+                ] if student_profile else [],
+            }
+        )
 
     return {"students": students}
 
@@ -262,6 +270,53 @@ async def remove_student(
     await db.commit()
 
     return {"success": True, "detail": "Student removed from your class"}
+
+
+@router.put("/students/{student_id}/guardian-contact")
+async def update_student_guardian_contact(
+    student_id: str,
+    data: GuardianReportContactUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """Allow a linked teacher to correct the parent/guardian report contact."""
+    if current_user.role != "teacher":
+        raise HTTPException(status_code=403, detail="Only teachers can update report contacts")
+
+    try:
+        student_uuid = uuid.UUID(student_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid student ID")
+
+    res_link = await db.execute(
+        select(TeacherStudent).filter(
+            TeacherStudent.teacher_id == current_user.id,
+            TeacherStudent.student_id == student_uuid,
+            TeacherStudent.status == "active",
+        )
+    )
+    if not res_link.scalars().first():
+        raise HTTPException(status_code=403, detail="You do not have access to this student")
+
+    res_prof = await db.execute(
+        select(StudentProfile).filter(StudentProfile.user_id == student_uuid)
+    )
+    profile = res_prof.scalars().first()
+    if not profile:
+        raise HTTPException(status_code=404, detail="Student profile not found")
+
+    if data.guardian_name is not None:
+        profile.guardian_name = data.guardian_name
+    if data.guardian_email is not None:
+        profile.guardian_email = data.guardian_email
+    profile.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+
+    return {
+        "success": True,
+        "guardian_name": profile.guardian_name,
+        "guardian_email": profile.guardian_email,
+    }
 
 
 @router.get("/students/{student_id}")

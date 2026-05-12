@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, UserPlus, Users, Activity, TrendingUp, Brain, Layers, Loader2 } from 'lucide-react';
+import { Plus, UserPlus, Users, Activity, TrendingUp, Brain, Layers, Loader2, Mail } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -18,6 +18,8 @@ export const StudentManagementView = () => {
   const [loading, setLoading] = useState(true);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showAddByIdDialog, setShowAddByIdDialog] = useState(false);
+  const [editingGuardianStudent, setEditingGuardianStudent] = useState<any | null>(null);
+  const [guardianContact, setGuardianContact] = useState({ guardian_name: '', guardian_email: '' });
   const [addingStudent, setAddingStudent] = useState(false);
   const [studentIdInput, setStudentIdInput] = useState('');
   const [newStudent, setNewStudent] = useState({
@@ -125,6 +127,26 @@ export const StudentManagementView = () => {
     }
   };
 
+  const openGuardianEditor = (student: any) => {
+    setEditingGuardianStudent(student);
+    setGuardianContact({
+      guardian_name: student.guardian_name || '',
+      guardian_email: student.guardian_email || '',
+    });
+  };
+
+  const handleUpdateGuardianContact = async () => {
+    if (!editingGuardianStudent) return;
+    try {
+      await teacherAPI.updateStudentGuardianContact(editingGuardianStudent.id, guardianContact);
+      toast.success('Report contact updated');
+      setEditingGuardianStudent(null);
+      loadStudents();
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to update report contact');
+    }
+  };
+
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between">
@@ -228,8 +250,12 @@ export const StudentManagementView = () => {
                             </AvatarFallback>
                           </Avatar>
                           <div className="flex-1">
-                            <h3 className="font-semibold text-slate-900 dark:text-slate-100">{student.full_name || 'Student'}</h3>
+                            <h3 className="font-semibold text-slate-900 dark:text-slate-100">{student.full_name || student.name || 'Student'}</h3>
                             <p className="text-sm text-slate-500">{student.email}</p>
+                            <p className="mt-1 flex items-center gap-1 text-xs text-slate-500">
+                              <Mail className="h-3.5 w-3.5" />
+                              {student.guardian_email || 'No report email set'}
+                            </p>
                             <div className="flex items-center gap-2 mt-2">
                               <Badge variant="outline" className="text-xs">
                                 {student.learning_style || 'Visual'} Learner
@@ -244,9 +270,14 @@ export const StudentManagementView = () => {
                               <div className="h-full w-1/3 bg-teal-600 rounded-full" />
                             </div>
                           </div>
-                          <Button variant="ghost" size="sm" className="text-red-500" onClick={() => handleRemoveStudent(student.id)}>
-                            Remove
-                          </Button>
+                          <div className="flex items-center gap-1">
+                            <Button variant="ghost" size="sm" onClick={() => openGuardianEditor(student)}>
+                              Report Email
+                            </Button>
+                            <Button variant="ghost" size="sm" className="text-red-500" onClick={() => handleRemoveStudent(student.id)}>
+                              Remove
+                            </Button>
+                          </div>
                         </div>
                       </CardContent>
                     </Card>
@@ -405,6 +436,39 @@ export const StudentManagementView = () => {
             <Button onClick={handleAddStudent} disabled={addingStudent} className="w-full btn-primary">
               {addingStudent ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
               {addingStudent ? 'Registering...' : 'Complete Registration'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!editingGuardianStudent} onOpenChange={(open) => !open && setEditingGuardianStudent(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Update Report Contact</DialogTitle>
+            <DialogDescription>
+              Set where monthly progress reports should be sent for this student.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Parent / Guardian Name</Label>
+              <Input
+                value={guardianContact.guardian_name}
+                onChange={(e) => setGuardianContact({ ...guardianContact, guardian_name: e.target.value })}
+                placeholder="Parent or guardian name"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Report Email</Label>
+              <Input
+                type="email"
+                value={guardianContact.guardian_email}
+                onChange={(e) => setGuardianContact({ ...guardianContact, guardian_email: e.target.value })}
+                placeholder="parent@example.com"
+              />
+            </div>
+            <Button onClick={handleUpdateGuardianContact} className="w-full btn-primary">
+              Save Report Contact
             </Button>
           </div>
         </DialogContent>

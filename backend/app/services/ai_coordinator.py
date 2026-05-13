@@ -59,7 +59,8 @@ CORE TEACHING CONTRACT:
 - Make every heading complete and teacher-like. For example, `### Goal.` should be followed by a full sentence, not a fragment. `### Core idea.` must name the concept directly, not start with a dangling phrase like `is a measure...`.
 - Use the student's answer as evidence. Diagnose whether they are confident, guessing, confused, or ready.
 - If the learner is wrong or vague, praise the attempt briefly, correct the misconception, and ask a simpler follow-up.
-- If the learner is correct, explain why it is correct, then move one small step forward.
+- If the learner is correct, first say clearly that the answer is correct, explain why it is correct in one or two sentences, then move one small step forward.
+- Before expecting the learner to produce more, do enough teaching for the current step: explanation first, then one low-pressure check.
 - If the learner says "ok", "yes", or similar, do not assume mastery. Ask them to apply the idea in one quick check.
 - If the learner sounds confused, change method immediately: analogy, worked example, diagram description, smaller steps, or a local Nigerian example.
 - For exam-track students, include WAEC/NECO/JAMB thinking only when relevant and keep it practical.
@@ -75,8 +76,8 @@ CORE TEACHING CONTRACT:
   - Write normal teaching sentences in sentence case.
 
 RESPONSE SHAPE BY STAGE:
-- intro or teach: use `### Goal.`, `### Core idea.`, then `### Try this.` with one check question.
-- check_understanding: briefly react to the learner's previous answer, then ask exactly one new question and wait. Do not answer your own question.
+- intro or teach: use `### Goal.`, `### Core idea.`, then a short example or explanation, then `### Try this.` with one gentle check question.
+- check_understanding: briefly react to the learner's previous answer, tell them whether it is correct or what needs fixing, explain why in one or two sentences, then ask exactly one new question and wait.
 - practice: give exactly one practice question. Wait for the learner before marking it.
 - remediate: name the likely confusion kindly, reteach using a different method, then ask one easier check.
 - mastery_ready or mastery_quiz: give a brief transition only; the app will open the quiz.
@@ -333,6 +334,7 @@ def infer_lesson_control(
     bored = any(phrase in latest_user for phrase in ("boring", "bored", "repeating", "repetition", "too easy", "already covered"))
     confused = any(phrase in latest_user for phrase in ("confused", "stuck", "don't understand", "dont understand", "lost"))
     confident = any(phrase in latest_user for phrase in MASTERY_CONFIDENCE_PHRASES)
+    short_answer = len(latest_user.split()) <= 8 if latest_user else False
 
     has_readiness_evidence = (
         user_turn_count >= 3
@@ -362,9 +364,17 @@ def infer_lesson_control(
         stage = "teach"
         next_actions = ["teach_step_by_step", "give_example", "check_understanding"]
         ui_action = None
+    elif previous_stage in {"intro", "teach"} and user_turn_count <= 2:
+        stage = "teach"
+        next_actions = ["explain_further", "give_example", "gentle_check"]
+        ui_action = None
+    elif previous_stage == "teach" and short_answer:
+        stage = "teach"
+        next_actions = ["affirm_and_explain", "one_small_step", "gentle_check"]
+        ui_action = None
     else:
         stage = "check_understanding"
-        next_actions = ["ask_check_question", "practice", "summarize"]
+        next_actions = ["affirm_or_correct", "ask_check_question", "practice"]
         ui_action = None
 
     return {

@@ -37,6 +37,9 @@ const getAITutorErrorMessage = (err: any) => {
   if (lower.includes('taking too long') || lower.includes('waking up')) {
     return 'The AI tutor is taking longer than usual to respond. Please try again in a moment.';
   }
+  if (lower.includes('ai_service_unavailable')) {
+    return 'The AI tutor is temporarily unavailable right now. Please try again in a moment.';
+  }
   if (lower.includes('unable to connect') || lower.includes('failed to fetch') || lower.includes('network')) {
     return 'I lost the connection to the tutor service for a moment. Please try your last question again.';
   }

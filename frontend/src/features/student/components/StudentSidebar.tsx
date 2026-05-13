@@ -1,5 +1,6 @@
 import React from 'react';
-import { Home, Trophy, BookMarked, Brain, FileText, GraduationCap } from 'lucide-react';
+import { LayoutDashboard, ClipboardList, LibraryBig, ChartNoAxesCombined, GraduationCap } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import type { ViewType } from '../types';
 
@@ -9,6 +10,10 @@ interface StudentSidebarProps {
   sidebarOpen: boolean;
   profile?: any;
 }
+
+type SidebarNavItem =
+  | { id: ViewType; label: string; icon: LucideIcon; avatar?: never; hidden?: boolean }
+  | { id: ViewType; label: string; avatar: string; icon?: never; hidden?: boolean };
 
 export const StudentSidebar: React.FC<StudentSidebarProps> = ({
   activeView,
@@ -25,28 +30,28 @@ export const StudentSidebar: React.FC<StudentSidebarProps> = ({
   // Professional track is its own thing, but we treat it as "standard" for sidebar tabs
   const isProfessional = educLevel === 'professional';
 
-  const navItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: Home },
-    { id: 'learn', label: 'AI Tutor', icon: Brain },
+  const navItems: SidebarNavItem[] = [
+    { id: 'dashboard' as ViewType, label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'learn' as ViewType, label: 'AI Tutor', avatar: '/avatars/ai_tutor_female.png' },
     { 
-      id: 'quiz', 
+      id: 'quiz' as ViewType, 
       label: 'Practice Quiz', 
-      icon: FileText, 
+      icon: ClipboardList, 
       hidden: isExamStudent // Exam students use Mock Exams instead
     },
     { 
-      id: 'subjects', 
+      id: 'subjects' as ViewType, 
       label: 'Subjects', 
-      icon: BookMarked, 
+      icon: LibraryBig, 
       hidden: isExamStudent // Exam students use Mock Exams instead
     },
     { 
-      id: 'mock-exams', 
+      id: 'mock-exams' as ViewType, 
       label: 'Mock Exams', 
       icon: GraduationCap, 
       hidden: !isExamStudent // Only for JAMB, WAEC, NECO
     },
-    { id: 'progress', label: 'Progress', icon: Trophy },
+    { id: 'progress' as ViewType, label: 'Progress', icon: ChartNoAxesCombined },
   ].filter(item => !item.hidden);
 
   return (
@@ -59,14 +64,23 @@ export const StudentSidebar: React.FC<StudentSidebarProps> = ({
           {navItems.map((item) => (
             <button
               key={item.id}
-              onClick={() => setActiveView(item.id as ViewType)}
+              onClick={() => setActiveView(item.id)}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
                 activeView === item.id
                   ? 'bg-secondary text-foreground'
                   : 'text-muted-foreground hover:bg-secondary/50'
               }`}
             >
-              <item.icon className="w-5 h-5 flex-shrink-0" />
+              {'avatar' in item ? (
+                <img
+                  src={item.avatar}
+                  alt=""
+                  aria-hidden="true"
+                  className="h-6 w-6 flex-shrink-0 rounded-full border border-teal-100 object-cover"
+                />
+              ) : (
+                <item.icon className="w-5 h-5 flex-shrink-0" />
+              )}
               {sidebarOpen && <span className="font-medium">{item.label}</span>}
             </button>
           ))}

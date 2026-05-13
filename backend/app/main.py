@@ -17,6 +17,7 @@ from app.core.limiter import limiter
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from app.db.database import AsyncSessionLocal
+from app.services.brain_power import current_brain_power_date
 
 # CRITICAL: Import all models to ensure SQLAlchemy registry is populated (C-03)
 from app.models import (
@@ -99,7 +100,10 @@ async def reset_brain_power():
     logger.info("⚡ Resetting all students' Brain Power for the new day...")
     async with AsyncSessionLocal() as db:
         try:
-            await db.execute(text("UPDATE student_profiles SET brain_power = 100"))
+            await db.execute(
+                text("UPDATE student_profiles SET brain_power = 100, brain_power_reset_date = :today"),
+                {"today": current_brain_power_date()},
+            )
             await db.commit()
             logger.info("✅ Brain Power reset complete.")
         except Exception as e:
@@ -128,6 +132,7 @@ async def lifespan(app: FastAPI):
     async with AsyncSessionLocal() as db:
         try:
             await db.execute(text("ALTER TABLE teaching_sessions ADD COLUMN IF NOT EXISTS title VARCHAR(255)"))
+            await db.execute(text("ALTER TABLE student_profiles ADD COLUMN IF NOT EXISTS brain_power_reset_date DATE"))
             await db.execute(text("ALTER TABLE student_topic_progress ADD COLUMN IF NOT EXISTS progress_pct INTEGER DEFAULT 0"))
             await db.execute(text("ALTER TABLE student_topic_progress ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'locked'"))
             await db.execute(text("ALTER TABLE student_topic_progress ADD COLUMN IF NOT EXISTS last_accessed TIMESTAMP WITH TIME ZONE"))

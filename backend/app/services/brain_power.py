@@ -1,12 +1,45 @@
 from __future__ import annotations
 
 import math
+from datetime import datetime
 from typing import Iterable, Mapping, Any
+
+try:
+    from zoneinfo import ZoneInfo
+except ImportError:  # pragma: no cover - Python < 3.9 fallback
+    ZoneInfo = None  # type: ignore
 
 
 MAX_BRAIN_POWER = 100
 DAILY_TOKEN_BUDGET = 80_000
 TOKENS_PER_BRAIN_POWER = DAILY_TOKEN_BUDGET // MAX_BRAIN_POWER
+BRAIN_POWER_TIMEZONE = ZoneInfo("Africa/Lagos") if ZoneInfo else None
+
+
+def current_brain_power_date():
+    if BRAIN_POWER_TIMEZONE:
+        return datetime.now(BRAIN_POWER_TIMEZONE).date()
+    return datetime.utcnow().date()
+
+
+def ensure_daily_brain_power(profile: Any) -> bool:
+    """Recharge a profile once per local day.
+
+    The scheduler still resets everyone at midnight, but this makes Brain Power
+    resilient to free-tier sleep, redeploys, missed jobs, and legacy rows that
+    predate the reset-date column.
+    """
+    if not profile:
+        return False
+    today = current_brain_power_date()
+    if getattr(profile, "brain_power_reset_date", None) != today:
+        profile.brain_power = MAX_BRAIN_POWER
+        profile.brain_power_reset_date = today
+        return True
+    if getattr(profile, "brain_power", None) is None:
+        profile.brain_power = MAX_BRAIN_POWER
+        return True
+    return False
 
 
 def daily_token_budget_for_level(education_level: str | None = None) -> int:
@@ -50,7 +83,7 @@ def brain_power_cost_for_tokens(
 
 
 def brain_power_budget_summary(current_brain_power: int | None, education_level: str | None = None) -> dict:
-    current = max(0, min(MAX_BRAIN_POWER, int(current_brain_power or 0)))
+    current = MAX_BRAIN_POWER if current_brain_power is None else max(0, min(MAX_BRAIN_POWER, int(current_brain_power)))
     daily_budget = daily_token_budget_for_level(education_level)
     per_brain_power = tokens_per_brain_power(education_level)
     return {

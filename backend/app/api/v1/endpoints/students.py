@@ -20,7 +20,7 @@ from app.models.subject import Subject, Topic
 from sqlalchemy.orm.attributes import flag_modified
 from app.models.junction_tables import StudentTopicProgress
 from app.services.storage_service import storage_service
-from app.services.brain_power import brain_power_budget_summary
+from app.services.brain_power import brain_power_budget_summary, ensure_daily_brain_power
 from app.services.curriculum_service import curriculum_service
 from app.utils.topic_filters import filter_learning_topics
 
@@ -162,6 +162,10 @@ async def get_student_profile(
         await db.commit()
         await db.refresh(profile)
 
+    if ensure_daily_brain_power(profile):
+        await db.commit()
+        await db.refresh(profile)
+
     return {
         "id": str(profile.id),
         "user_id": str(profile.user_id),
@@ -210,6 +214,10 @@ async def get_my_brain_power(
 
     if not profile:
         raise HTTPException(status_code=404, detail="Student profile not found")
+
+    if ensure_daily_brain_power(profile):
+        await db.commit()
+        await db.refresh(profile)
 
     # Calculate next recharge (midnight UTC)
     now = datetime.now(timezone.utc)

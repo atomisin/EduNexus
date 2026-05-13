@@ -5,6 +5,7 @@ from sqlalchemy import (
     Column,
     String,
     Boolean,
+    Date,
     DateTime,
     ForeignKey,
     Text,
@@ -102,6 +103,7 @@ class StudentProfile(Base):
 
     # Gamification and Energy
     brain_power = Column(Integer, default=100, nullable=False)
+    brain_power_reset_date = Column(Date, nullable=True)
     xp = Column(Integer, default=0)
     level = Column(Integer, default=1)
     current_streak = Column(Integer, default=0)

@@ -27,6 +27,7 @@ from app.services.revision_context import get_revision_context, get_subject_and_
 from app.services.lesson_plan_service import get_or_create_lesson_teaching_plan
 from app.services.brain_power import (
     brain_power_cost_for_tokens,
+    current_brain_power_date,
     estimate_message_tokens,
     estimate_text_tokens,
 )
@@ -379,27 +380,54 @@ def user_key(request: Request):
 
 async def deduct_brain_power(user_id: uuid.UUID, cost: int, db: AsyncSession) -> bool:
     """Batch 3 prep: Deduct brain power safely using atomic SQL"""
+    today = current_brain_power_date()
     result = await db.execute(
         text("""
             UPDATE student_profiles 
-            SET brain_power = GREATEST(0, COALESCE(brain_power, 100) - :cost)
+            SET
+                brain_power = GREATEST(
+                    0,
+                    (
+                        CASE
+                            WHEN brain_power_reset_date IS DISTINCT FROM :today THEN 100
+                            ELSE COALESCE(brain_power, 100)
+                        END
+                    ) - :cost
+                ),
+                brain_power_reset_date = :today
             WHERE user_id = :uid 
-            AND COALESCE(brain_power, 100) >= :cost
+            AND (
+                CASE
+                    WHEN brain_power_reset_date IS DISTINCT FROM :today THEN 100
+                    ELSE COALESCE(brain_power, 100)
+                END
+            ) >= :cost
         """),
-        {"cost": cost, "uid": user_id},
+        {"cost": cost, "uid": user_id, "today": today},
     )
     await db.commit()
     return result.rowcount > 0
 
 
 async def refund_brain_power(user_id: uuid.UUID, cost: int, db: AsyncSession) -> None:
+    today = current_brain_power_date()
     await db.execute(
         text("""
             UPDATE student_profiles
-            SET brain_power = LEAST(100, COALESCE(brain_power, 0) + :cost)
+            SET
+                brain_power = LEAST(
+                    100,
+                    (
+                        CASE
+                            WHEN brain_power_reset_date IS DISTINCT FROM :today THEN 100
+                            ELSE COALESCE(brain_power, 0)
+                        END
+                    ) + :cost
+                ),
+                brain_power_reset_date = :today
             WHERE user_id = :uid
         """),
-        {"cost": cost, "uid": user_id},
+        {"cost": cost, "uid": user_id, "today": today},
     )
     await db.commit()
 

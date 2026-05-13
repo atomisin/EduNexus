@@ -348,6 +348,7 @@ export const StudentDashboard = ({
         assessmentStep={assessmentStep}
         learningStyleQuestions={learningStyleQuestions}
         handleAssessmentAnswer={handleAssessmentAnswer}
+        isUpdating={isUpdating}
       />
     </div>
   );

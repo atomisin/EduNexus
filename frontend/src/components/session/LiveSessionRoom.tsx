@@ -15,7 +15,7 @@ import { RoomEvent, LocalVideoTrack } from 'livekit-client';
 import '@livekit/components-styles';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Video, MessageSquare, X, Sparkles, BarChart3, ChevronRight, FileText, PenTool, Camera, LogOut, Volume2, Mic, BookOpen, Maximize2, Zap, Activity, BarChart2, Users } from 'lucide-react';
+import { Video, MessageSquare, X, Sparkles, BarChart3, ChevronRight, FileText, PenTool, Camera, LogOut, Volume2, Mic, BookOpen, Maximize2, Zap, Activity, BarChart2, Users, Clock } from 'lucide-react';
 import { SessionMetrics } from './SessionMetrics';
 import { Whiteboard } from './Whiteboard';
 import { VirtualBackgroundControl } from './VirtualBackgroundControl';
@@ -23,6 +23,99 @@ import { sessionAPI, engagementAPI, aiAPI } from '@/services/api';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
 import { FloatingContentModal } from './FloatingContentModal';
+import AcademicMarkdown from '@/components/AcademicMarkdown';
+
+const smartPrepText = (value: any): string => {
+    if (value == null) return "";
+    if (typeof value === "string") return value.trim();
+    if (typeof value === "number" || typeof value === "boolean") return String(value);
+    if (Array.isArray(value)) return value.map(smartPrepText).filter(Boolean).join("; ");
+    if (typeof value === "object") {
+        for (const key of ["text", "point", "title", "objective", "content", "description", "explanation", "task"]) {
+            if (value[key]) return smartPrepText(value[key]);
+        }
+        return Object.entries(value)
+            .map(([key, item]) => {
+                const text = smartPrepText(item);
+                return text ? `${key.replace(/_/g, " ")}: ${text}` : "";
+            })
+            .filter(Boolean)
+            .join("; ");
+    }
+    return String(value).trim();
+};
+
+const toList = (value: any): string[] => {
+    if (!value) return [];
+    if (Array.isArray(value)) return value.map(smartPrepText).filter(Boolean);
+    return smartPrepText(value).split(/[\n;]/).map((item) => item.replace(/^[-*\d.]\s*/, '').trim()).filter(Boolean);
+};
+
+const assignmentMarkdown = (assignment: any): string => {
+    if (!assignment) return "";
+    if (typeof assignment === "string") return assignment.trim();
+    const title = smartPrepText(assignment.title);
+    const instructions = smartPrepText(assignment.instructions);
+    const tasks = toList(assignment.tasks || assignment.questions);
+    return [
+        title ? `### ${title}` : "",
+        instructions,
+        tasks.length ? tasks.map((task, index) => `${index + 1}. ${task}`).join("\n") : "",
+    ].filter(Boolean).join("\n\n");
+};
+
+const answerToIndex = (answer: any): number | null => {
+    if (typeof answer === 'number' && Number.isFinite(answer)) return answer;
+    if (typeof answer === 'string') {
+        const trimmed = answer.trim();
+        if (/^[A-D]$/i.test(trimmed)) return trimmed.toUpperCase().charCodeAt(0) - 65;
+        const numeric = Number(trimmed);
+        if (Number.isFinite(numeric)) return numeric;
+    }
+    return null;
+};
+
+const normalizeQuizQuestions = (quiz: any): any[] => {
+    const rawQuestions = Array.isArray(quiz) ? quiz : Array.isArray(quiz?.questions) ? quiz.questions : [];
+
+    return rawQuestions
+        .map((question: any, index: number) => {
+            const options = Array.isArray(question?.options)
+                ? question.options
+                : Array.isArray(question?.choices)
+                    ? question.choices
+                    : [];
+            const correctIndex = answerToIndex(
+                question?.correct_index ??
+                question?.correctAnswer ??
+                question?.correct_answer ??
+                question?.answer
+            );
+            const text = smartPrepText(question?.text || question?.question || question?.prompt);
+
+            if (!text || options.length < 2 || correctIndex == null || correctIndex < 0 || correctIndex >= options.length) {
+                return null;
+            }
+
+            return {
+                id: question?.id || `pop-${Date.now()}-${index}`,
+                text,
+                question: text,
+                options: options.map(smartPrepText),
+                correct_index: correctIndex,
+                correct_answer: String.fromCharCode(65 + correctIndex),
+                explanation: smartPrepText(question?.explanation) || "Review the key idea from today's lesson.",
+            };
+        })
+        .filter(Boolean);
+};
+
+const formatCountdown = (seconds: number) => {
+    const normalized = Math.max(0, Math.floor(seconds));
+    const mins = Math.floor(normalized / 60);
+    const secs = normalized % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+};
 
 interface ErrorBoundaryProps {
     children: ReactNode;
@@ -73,7 +166,10 @@ const SessionContent = ({
     setAiContent,
     setShowAiContent,
     floatingContent,
-    setFloatingContent
+    setFloatingContent,
+    localVideoTrack,
+    showVirtualBg,
+    setShowVirtualBg
 }: any) => {
     const room = useRoomContext();
 
@@ -93,14 +189,17 @@ const SessionContent = ({
             } else if (data.type === 'POP_QUIZ') {
                 setFloatingContent({
                     type: 'pop_quiz',
-                    content: data.quiz.questions
+                    content: data.quiz
                 });
+                window.setTimeout(() => window.dispatchEvent(new Event('edunexus:notifications-refresh')), 1500);
                 toast(`New Pop Quiz: ${data.quiz.title}`, { icon: '📝', style: { color: '#fff', background: 'hsl(var(--primary))', fontWeight: '600' } });
             } else if (data.type === 'AI_CONTENT') {
                 setFloatingContent({
                     type: 'notes',
-                    content: data.data.content
+                    content: data.data
                 });
+                setAiContent(data.data);
+                window.setTimeout(() => window.dispatchEvent(new Event('edunexus:notifications-refresh')), 1500);
                 toast(`Teacher shared new lesson material!`, { icon: '📚', style: { color: '#fff', background: 'hsl(var(--primary))', fontWeight: '600' } });
             }
         };
@@ -166,43 +265,54 @@ const SessionContent = ({
     const triggerPopQuiz = async () => {
         if (!room) return;
         try {
-            toast.info("Generating lesson-specific quiz...");
-            // Use topic/subject if available for better prompt
-            const contextStr = title ? `lesson about: "${title}"` : 'current lesson';
-            const prompt = `Generate a single multiple-choice question for a 30-second "Pop Quiz" during a live ${contextStr}. 
-            Respond with ONLY valid JSON: {"question": "...", "options": ["A", "B", "C", "D"], "correct_answer": "A/B/C/D", "explanation": "..."}`;
+            toast.info("Loading the saved lesson quiz...");
+            const [latestSessionResponse, shared] = await Promise.all([
+                sessionAPI.get(sessionId).catch(() => null),
+                sessionAPI.getSharedContent(sessionId).catch(() => null),
+            ]);
+            const latestSession = latestSessionResponse?.session || latestSessionResponse;
+            const materials = latestSession?.context?.lesson_materials || {};
+            const quizCandidates = [
+                latestSession?.context?.active_pop_quiz,
+                materials.pop_quiz,
+                latestSession?.pre_session_quiz,
+                shared?.pop_quiz,
+            ];
 
-            const response = await aiAPI.chat([{ role: 'user', content: prompt }], 'tutoring');
-            const content = response.response || response.message || "";
-
-            let quizData;
-            try {
-                const jsonMatch = content.match(/\{.*\}/s);
-                quizData = jsonMatch ? JSON.parse(jsonMatch[0]) : null;
-            } catch (e) {
-                console.error("Failed to parse quiz JSON:", e);
+            let questions: any[] = [];
+            const currentTopic = latestSession?.context?.topic || shared?.topic || title || 'Quick Check';
+            let quizTitle = `In-class quiz: ${currentTopic}`;
+            for (const candidate of quizCandidates) {
+                const normalized = normalizeQuizQuestions(candidate);
+                if (normalized.length) {
+                    questions = normalized;
+                    const candidateTitle = smartPrepText(candidate?.title);
+                    if (candidateTitle && !/pre[-\s]?session/i.test(candidateTitle)) {
+                        quizTitle = candidateTitle;
+                    }
+                    break;
+                }
             }
 
-            if (!quizData) {
-                quizData = {
-                    question: `Quick check: What is the most important concept in ${title || 'this lesson'}?`,
-                    options: ["Concept A", "Concept B", "The core principle", "All of the above"],
-                    correct_answer: "C",
-                    explanation: "Focus on the core principle!"
-                };
+            if (!questions.length) {
+                toast.error("No saved pop quiz is available for this session yet.");
+                return;
             }
 
+            const quizPayload = { title: quizTitle, questions };
             const encoder = new TextEncoder();
+            await sessionAPI.pushContent(sessionId, {
+                content_type: 'pop_quiz',
+                content: quizPayload,
+            });
             const data = encoder.encode(JSON.stringify({
                 type: 'POP_QUIZ',
-                quiz: {
-                    title: `Pop Quiz: ${title || 'Quick Check'}`,
-                    questions: [{ id: `pop-${Date.now()}`, ...quizData }]
-                }
+                quiz: quizPayload
             }));
             room.localParticipant.publishData(data, { reliable: true });
             toast.success("Pop Quiz triggered for all students!", { style: { color: '#fff', background: '#0d9488', fontWeight: '600' } });
         } catch (error) {
+            console.error("Failed to trigger saved pop quiz:", error);
             toast.error("Failed to trigger pop quiz");
         }
     };
@@ -283,6 +393,12 @@ const SessionContent = ({
                     }}
                 />
             )}
+
+            <VirtualBackgroundControl
+                localVideoTrack={localVideoTrack}
+                isOpen={showVirtualBg}
+                onClose={() => setShowVirtualBg(false)}
+            />
         </div>
     );
 };
@@ -325,10 +441,12 @@ export const LiveSessionRoom = ({
     // Audio gating: start with audio=false to avoid AudioContext before user gesture
     const [isAudioEnabled, setIsAudioEnabled] = useState(false);
     // AI content panel
-    const [aiContent, setAiContent] = useState<{ title: string; content: string; pop_quiz?: any; assignment?: string } | null>(null);
+    const [aiContent, setAiContent] = useState<{ title: string; content: string; pop_quiz?: any; assignment?: any } | null>(null);
     const [showAiContent, setShowAiContent] = useState(false);
     const [aiLoading, setAiLoading] = useState(false);
     const [floatingContent, setFloatingContent] = useState<any>(null);
+    const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
+    const [timeWarningShown, setTimeWarningShown] = useState(false);
 
     // Component to capture room context and local video track
     const RoomCapturer = ({ onRoomReady }: { onRoomReady: (r: any) => void }) => {
@@ -350,27 +468,118 @@ export const LiveSessionRoom = ({
         return null;
     };
 
-    // Poll for session metrics if teacher
+    // Poll session data. Teachers need live metrics; students need shared
+    // materials and the planned class duration.
     useEffect(() => {
-        if (!isTeacher) return;
-
-        const fetchMetrics = async () => {
+        const fetchSession = async () => {
             try {
                 const data = await sessionAPI.get(sessionId);
                 setSessionData(data.session || data);
             } catch (error) {
-                console.error('Failed to fetch live metrics:', error);
+                console.error('Failed to fetch live session data:', error);
             }
         };
 
-        fetchMetrics();
-        const interval = setInterval(fetchMetrics, 5000);
+        fetchSession();
+        const interval = setInterval(fetchSession, isTeacher ? 5000 : 30000);
         return () => clearInterval(interval);
     }, [sessionId, isTeacher]);
+
+    useEffect(() => {
+        if (!sessionData) return;
+
+        const plannedMinutes = Number(sessionData.duration_minutes || 0);
+        const startValue = sessionData.actual_start || sessionData.scheduled_start;
+        if (!plannedMinutes || !startValue) {
+            setRemainingSeconds(null);
+            return;
+        }
+
+        const startedAt = new Date(startValue).getTime();
+        const plannedSeconds = plannedMinutes * 60;
+
+        const updateRemaining = () => {
+            const elapsed = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
+            const remaining = Math.max(0, plannedSeconds - elapsed);
+            setRemainingSeconds(remaining);
+
+            if (isTeacher && !timeWarningShown && elapsed >= plannedSeconds * 0.9) {
+                const minutesLeft = Math.max(1, Math.ceil(remaining / 60));
+                toast.warning(`About ${minutesLeft} minute${minutesLeft === 1 ? '' : 's'} left in this planned session. Start wrapping up or note where to continue next class.`);
+                setTimeWarningShown(true);
+            }
+        };
+
+        updateRemaining();
+        const timer = setInterval(updateRemaining, 1000);
+        return () => clearInterval(timer);
+    }, [sessionData?.actual_start, sessionData?.scheduled_start, sessionData?.duration_minutes, isTeacher, timeWarningShown]);
+
+    const buildSavedPrepContent = async () => {
+        const shared = await sessionAPI.getSharedContent(sessionId).catch(() => null);
+        const latestSession = sessionData || (await sessionAPI.get(sessionId).then((data: any) => data.session || data));
+        const material = latestSession?.context?.lesson_materials || {};
+        const outline = toList(latestSession?.session_outline || material.outline);
+        const assignment = latestSession?.take_home_assignment || shared?.assignment || material.assignment;
+        const quiz = latestSession?.pre_session_quiz?.questions || material.pop_quiz || [];
+        const tips = toList(latestSession?.context?.teacher_tips || material.teacher_tips);
+        const note = latestSession?.class_notes || shared?.notes || material.class_note;
+        const topic = latestSession?.context?.topic || shared?.topic || title || 'Lesson';
+
+        if (!outline.length && !note?.content && !assignment && !quiz.length) {
+            return null;
+        }
+
+        const parts = [
+            `# ${topic}`,
+            outline.length ? `## Lesson outline\n${outline.map((point) => `- ${point}`).join('\n')}` : '',
+            note?.content ? `## Class note\n${note.content}` : '',
+            quiz.length ? `## Pre-session checks\n${quiz.length} question${quiz.length === 1 ? '' : 's'} already prepared for this class.` : '',
+            assignment ? `## Take-home assignment\n${assignmentMarkdown(assignment)}` : '',
+            tips.length ? `## Teacher tips\n${tips.map((tip) => `- ${tip}`).join('\n')}` : '',
+        ].filter(Boolean);
+
+        return {
+            title: `Prep material: ${topic}`,
+            content: parts.join('\n\n'),
+            pop_quiz: quiz,
+            assignment,
+        };
+    };
+
+    const buildSavedNotesContent = async () => {
+        const shared = await sessionAPI.getSharedContent(sessionId).catch(() => null);
+        const latestSession = sessionData || (await sessionAPI.get(sessionId).then((data: any) => data.session || data));
+        const material = latestSession?.context?.lesson_materials || {};
+        const notes = latestSession?.class_notes || shared?.notes || material.class_note;
+        const assignment = latestSession?.take_home_assignment || shared?.assignment || material.assignment;
+        const topic = latestSession?.context?.topic || shared?.topic || title || 'Class notes';
+        const content = typeof notes === 'string' ? notes : notes?.content;
+
+        if (!content && !assignment) return null;
+
+        return {
+            title: notes?.title || `Class notes: ${topic}`,
+            content: [
+                content || '',
+                assignment ? `## Take-home assignment\n${assignmentMarkdown(assignment)}` : '',
+            ].filter(Boolean).join('\n\n'),
+            assignment,
+        };
+    };
 
     const handleSmartPrep = async () => {
         try {
             setAiLoading(true);
+            const savedPrep = await buildSavedPrepContent();
+            if (savedPrep) {
+                setAiContent(savedPrep);
+                setShowAiContent(true);
+                toast.success("Saved prep material loaded.", { style: { color: '#fff', background: '#059669', fontWeight: '600' } });
+            } else {
+                toast.error("No saved prep material is available for this session yet.");
+            }
+            return;
             toast('AI Helper is preparing your lesson materials...', { icon: '🤖', style: { color: '#fff', background: 'hsl(var(--primary))', fontWeight: '600' } });
             
             const studentId =
@@ -386,11 +595,15 @@ export const LiveSessionRoom = ({
             const response = await sessionAPI.prepareSmartLesson(studentId, sessionData.subject_id, sessionData.topic_id || sessionData.context?.topic_id);
             if (response.success && response.materials) {
                 const materials = response.materials;
+                const outline = Array.isArray(materials.outline)
+                    ? materials.outline.map(smartPrepText).filter(Boolean)
+                    : smartPrepText(materials.outline).split(";").map((item) => item.trim()).filter(Boolean);
+                const assignment = smartPrepText(materials.assignment) || "Review the lesson and prepare one question for the next class.";
                 const contentData = {
                     title: `🤖 Smart Prep: ${response.topic}`,
-                    content: `# ${response.topic}\n\n## Lesson outline\n${materials.outline.map((p: string) => `- ${p}`).join('\n')}\n\n## Take-home assignment\n${materials.assignment}\n\n## Student instructions\n- Review the lesson outline before the next class.\n- Complete the take-home task and be ready to explain your working.`,
+                    content: `# ${response.topic}\n\n## Lesson outline\n${outline.map((p: string) => `- ${p}`).join('\n')}\n\n## Take-home assignment\n${assignment}\n\n## Student instructions\n- Review the lesson outline before the next class.\n- Complete the take-home task and be ready to explain your working.`,
                     pop_quiz: materials.pop_quiz,
-                    assignment: materials.assignment
+                    assignment
                 };
                 setAiContent(contentData);
                 setShowAiContent(true);
@@ -407,6 +620,15 @@ export const LiveSessionRoom = ({
     const handleGenerateNotes = async () => {
         try {
             setAiLoading(true);
+            const savedNotes = await buildSavedNotesContent();
+            if (savedNotes) {
+                setAiContent(savedNotes);
+                setShowAiContent(true);
+                toast.success("Saved class note loaded. Review before sending.", { style: { color: '#fff', background: '#059669', fontWeight: '600' } });
+            } else {
+                toast.error("No saved class note is available for this session yet.");
+            }
+            return;
             toast('Generating session notes...', { icon: '📝', style: { color: '#fff', background: 'hsl(var(--accent))', fontWeight: '600' } });
             const response = await aiAPI.generateNotes(sessionId);
             if (response.success) {
@@ -432,6 +654,36 @@ export const LiveSessionRoom = ({
         }
     };
 
+    const handleStudentOpenNotes = async () => {
+        if (aiContent) {
+            setShowAiContent(true);
+            return;
+        }
+
+        try {
+            const savedNotes = await buildSavedNotesContent();
+            if (savedNotes) {
+                setAiContent(savedNotes);
+                setShowAiContent(true);
+                return;
+            }
+            const shared = await sessionAPI.getSharedContent(sessionId);
+            const notes = shared?.notes;
+            const content =
+                typeof notes === 'string'
+                    ? notes
+                    : notes?.content || 'No shared note is available yet.';
+            setAiContent({
+                title: notes?.title || shared?.topic || 'Class notes',
+                content,
+                assignment: shared?.assignment?.instructions || shared?.assignment,
+            });
+            setShowAiContent(true);
+        } catch (error) {
+            toast.error('No class note has been shared yet.');
+        }
+    };
+
     return (
         <div className={`flex min-w-0 max-w-full flex-col flex-1 min-h-0 bg-slate-950 text-white overflow-hidden transition-all duration-300 relative ${isTheaterMode ? 'rounded-none border-0' : 'rounded-lg border border-slate-800 shadow-2xl'}`}>
             {/* Session Header */}
@@ -446,6 +698,12 @@ export const LiveSessionRoom = ({
                             <Badge variant="secondary" className="shrink-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/20">
                                 Live
                             </Badge>
+                            {remainingSeconds !== null && (
+                                <Badge variant="outline" className={`shrink-0 gap-1 border-slate-700 bg-slate-950/60 text-slate-200 ${remainingSeconds <= 300 ? 'border-amber-500/40 text-amber-300' : ''}`}>
+                                    <Clock className="h-3 w-3" />
+                                    {formatCountdown(remainingSeconds)}
+                                </Badge>
+                            )}
                         </h2>
                         <p className="hidden sm:block text-xs text-slate-400 truncate">Room: {roomName}</p>
                     </div>
@@ -489,7 +747,7 @@ export const LiveSessionRoom = ({
                         <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => aiContent && setShowAiContent(true)}
+                            onClick={handleStudentOpenNotes}
                             className="rounded-lg gap-2 text-amber-400 hover:bg-amber-500/10 px-2 sm:px-3"
                         >
                             <BookOpen className="w-4 h-4" />
@@ -529,15 +787,25 @@ export const LiveSessionRoom = ({
                                 variant="destructive"
                                 size="sm"
                                 onClick={async () => {
-                                    if (window.confirm("Are you sure you want to END the session for everyone? This will generate final notes and move it to history.")) {
-                                        try {
-                                            await sessionAPI.end(sessionId);
-                                            onDisconnect();
-                                        } catch (error) {
-                                            console.error("Failed to end session:", error);
-                                            toast.error("Failed to end session properly");
-                                            onDisconnect();
-                                        }
+                                    if (!window.confirm("End this session for everyone? EduNexus will save the class history and continuity point.")) {
+                                        return;
+                                    }
+
+                                    const continuityNotes = window.prompt(
+                                        "Where did this class stop? Add a short note for the next class, for example: Covered examples 1-3; start next class from guided practice on modular inverse."
+                                    );
+
+                                    if (continuityNotes === null) {
+                                        return;
+                                    }
+
+                                    try {
+                                        await sessionAPI.end(sessionId, continuityNotes.trim());
+                                        onDisconnect();
+                                    } catch (error) {
+                                        console.error("Failed to end session:", error);
+                                        toast.error("Failed to end session properly");
+                                        onDisconnect();
                                     }
                                 }}
                                 className="rounded-lg gap-2 px-2 sm:px-3"
@@ -610,6 +878,9 @@ export const LiveSessionRoom = ({
                                 setShowAiContent={setShowAiContent}
                                 floatingContent={floatingContent}
                                 setFloatingContent={setFloatingContent}
+                                localVideoTrack={localVideoTrack}
+                                showVirtualBg={showVirtualBg}
+                                setShowVirtualBg={setShowVirtualBg}
                             />
                             <RoomAudioRenderer />
                             {/* Audio gate overlay — shown until user clicks 'Join with Audio' */}
@@ -644,7 +915,7 @@ export const LiveSessionRoom = ({
 
                 {/* AI Explanations / Notes Panel */}
                 {showAiContent && aiContent && (
-                    <div className="absolute inset-y-0 right-0 w-full min-w-0 sm:w-96 bg-slate-900 border-l border-slate-700 flex flex-col z-[60] animate-in slide-in-from-right duration-300 shadow-2xl overflow-hidden">
+                    <div className="absolute inset-y-0 right-0 w-full min-w-0 min-h-0 sm:w-96 bg-slate-900 border-l border-slate-700 flex flex-col z-[60] animate-in slide-in-from-right duration-300 shadow-2xl overflow-hidden">
                         <div className="p-3 sm:p-4 border-b border-slate-700 flex items-center justify-between bg-slate-800 gap-2">
                             <div className="flex min-w-0 items-center gap-2">
                                 <Sparkles className="w-4 h-4 text-amber-400" />
@@ -654,7 +925,7 @@ export const LiveSessionRoom = ({
                                 <X className="w-4 h-4" />
                             </Button>
                         </div>
-                        <ScrollArea className="flex-1 overflow-y-auto">
+                        <ScrollArea className="min-h-0 flex-1 overflow-y-auto">
                             <div className="min-w-0 max-w-full break-words p-3 [overflow-wrap:anywhere] prose prose-invert prose-sm prose-p:max-w-full sm:p-5" dangerouslySetInnerHTML={{ __html: (() => {
                                 // Lightweight markdown-to-HTML for AI content
                                 const md = aiContent.content || '';
@@ -686,28 +957,19 @@ export const LiveSessionRoom = ({
                                             const encoder = new TextEncoder();
                                             // Handle both regular notes and pop quizzes from smart assistant
                                             if (aiContent.pop_quiz) {
-                                                // 1. Push Pop Quiz
-                                                const quizData = encoder.encode(JSON.stringify({ 
-                                                    type: 'POP_QUIZ', 
-                                                    quiz: {
-                                                        title: `Quick Quiz: ${title}`,
-                                                        questions: aiContent.pop_quiz
-                                                    } 
-                                                }));
-                                                room.localParticipant.publishData(quizData, { reliable: true });
-
-                                                // 2. Push Notes too
-                                                const notesData = encoder.encode(JSON.stringify({ type: 'AI_CONTENT', data: aiContent }));
-                                                room.localParticipant.publishData(notesData, { reliable: true });
-
-                                                // 3. Send to Student Inboxes (Task 4)
+                                                const normalizedQuiz = normalizeQuizQuestions(aiContent.pop_quiz);
+                                                if (!normalizedQuiz.length) {
+                                                    toast.error("No valid saved quiz is available to send.");
+                                                    return;
+                                                }
+                                                const quizPayload = {
+                                                    title: `Quick Quiz: ${title || aiContent.title || 'Live Session'}`,
+                                                    questions: normalizedQuiz
+                                                };
                                                 try {
                                                     await sessionAPI.pushContent(sessionId, {
                                                         content_type: 'pop_quiz',
-                                                        content: {
-                                                            title: `Quick Quiz: ${title}`,
-                                                            questions: aiContent.pop_quiz
-                                                        }
+                                                        content: quizPayload
                                                     });
                                                     await sessionAPI.pushContent(sessionId, {
                                                         content_type: 'notes',
@@ -715,12 +977,21 @@ export const LiveSessionRoom = ({
                                                     });
                                                 } catch (e) {
                                                     console.warn("Failed to push to inbox:", e);
+                                                    toast.error("Could not save this content to student inboxes.");
+                                                    return;
                                                 }
+
+                                                const quizData = encoder.encode(JSON.stringify({ 
+                                                    type: 'POP_QUIZ', 
+                                                    quiz: quizPayload
+                                                }));
+                                                room.localParticipant.publishData(quizData, { reliable: true });
+
+                                                const notesData = encoder.encode(JSON.stringify({ type: 'AI_CONTENT', data: aiContent }));
+                                                room.localParticipant.publishData(notesData, { reliable: true });
 
                                                 toast.success("Quiz and Notes pushed to students!");
                                             } else {
-                                                const data = encoder.encode(JSON.stringify({ type: 'AI_CONTENT', data: aiContent }));
-                                                room.localParticipant.publishData(data, { reliable: true });
                                                 try {
                                                     await sessionAPI.pushContent(sessionId, {
                                                         content_type: 'notes',
@@ -728,7 +999,11 @@ export const LiveSessionRoom = ({
                                                     });
                                                 } catch (e) {
                                                     console.warn("Failed to push notes to inbox:", e);
+                                                    toast.error("Could not save this note to student inboxes.");
+                                                    return;
                                                 }
+                                                const data = encoder.encode(JSON.stringify({ type: 'AI_CONTENT', data: aiContent }));
+                                                room.localParticipant.publishData(data, { reliable: true });
                                                 toast.success("Content shared with all students!");
                                             }
                                         }
@@ -796,12 +1071,6 @@ export const LiveSessionRoom = ({
                 </div>
             )}
 
-            {/* Virtual Background Control */}
-            <VirtualBackgroundControl
-                localVideoTrack={localVideoTrack}
-                isOpen={showVirtualBg}
-                onClose={() => setShowVirtualBg(false)}
-            />
         </div>
     );
 };

@@ -24,6 +24,7 @@ from jose import jwt, JWTError
 from app.core.config import settings
 from app.services.ai_coordinator import ai_coordinator
 from app.services.revision_context import get_revision_context, get_subject_and_topic
+from app.services.lesson_plan_service import get_or_create_lesson_teaching_plan
 from app.services.brain_power import (
     brain_power_cost_for_tokens,
     estimate_message_tokens,
@@ -589,17 +590,30 @@ async def chat(
         lesson_context = chat_req.context or {}
         subject_id = lesson_context.get("subject_id")
         topic_id = lesson_context.get("topic_id")
+        subject = None
+        topic = None
         if subject_id and topic_id:
             await ensure_ai_topic_unlocked(db, current_user.id, subject_id, topic_id)
-        if subject_id and topic_id and not lesson_context.get("revision_context"):
             subject, topic = await get_subject_and_topic(db, subject_id, topic_id)
-            if subject and topic:
+            if subject and topic and not lesson_context.get("revision_context"):
                 revision_context = await get_revision_context(db, subject, topic)
                 if revision_context:
                     lesson_context = {
                         **lesson_context,
                         "revision_context": revision_context,
                     }
+            if subject and topic and not lesson_context.get("lesson_teaching_plan"):
+                lesson_plan = await get_or_create_lesson_teaching_plan(
+                    db=db,
+                    subject=subject,
+                    topic=topic,
+                    education_level=student_profile.education_level if student_profile else "secondary",
+                    user_id=current_user.id,
+                )
+                lesson_context = {
+                    **lesson_context,
+                    "lesson_teaching_plan": lesson_plan,
+                }
 
         # Refactored for Batch 10: Use AI Coordinator for persona-based response
         result = await ai_coordinator.get_chat_response(

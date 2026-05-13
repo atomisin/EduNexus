@@ -158,6 +158,7 @@ export const StudentViewRouter: React.FC<StudentViewRouterProps> = ({
         }}
         suggestedTopics={suggestedTopics}
         weaknessAreas={weaknessAreas}
+        progress={progress}
         setActiveView={setActiveView}
         loading={isLoading}
         topics={topics}

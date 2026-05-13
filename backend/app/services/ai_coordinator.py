@@ -138,12 +138,52 @@ STAGE_RESPONSE_RULES = {
 }
 
 
+def _compact_plan_items(items: Any, limit: int = 5) -> str:
+    if not isinstance(items, list):
+        return "Not specified."
+    cleaned = [str(item).strip() for item in items if str(item or "").strip()]
+    if not cleaned:
+        return "Not specified."
+    if len(cleaned) > limit:
+        cleaned = cleaned[:limit] + [f"...and {len(items) - limit} more"]
+    return "; ".join(cleaned)
+
+
+def _plan_stage_for_lesson_stage(stage: str, user_turn_count: int = 0) -> str:
+    stage = (stage or "intro").strip().lower()
+    if stage == "intro":
+        return "intro"
+    if stage in {"teach", "check_understanding"}:
+        return "concept"
+    if stage == "remediate":
+        return "worked_example"
+    if stage == "practice":
+        return "independent_practice" if user_turn_count >= 4 else "guided_practice"
+    if stage in {"mastery_ready", "mastery_quiz", "completed"}:
+        return "mastery_check"
+    return "concept"
+
+
+def _find_plan_step(plan: Dict[str, Any], plan_stage: str) -> Dict[str, str]:
+    sequence = plan.get("teaching_sequence") if isinstance(plan, dict) else None
+    if isinstance(sequence, list):
+        for item in sequence:
+            if not isinstance(item, dict):
+                continue
+            if str(item.get("stage") or "").strip().lower() == plan_stage:
+                return {
+                    "stage": plan_stage,
+                    "objective": str(item.get("objective") or "").strip(),
+                }
+    return {"stage": plan_stage, "objective": "Teach the current lesson step without drifting."}
+
+
 def build_lesson_control_prompt(lesson_context: Optional[Dict[str, Any]]) -> str:
     lesson_context = lesson_context or {}
     stage = lesson_context.get("lesson_stage", "intro")
     active_subtopic = lesson_context.get("active_subtopic")
-    user_turn_count = lesson_context.get("user_turn_count", 0)
-    assistant_turn_count = lesson_context.get("assistant_turn_count", 0)
+    user_turn_count = int(lesson_context.get("user_turn_count") or 0)
+    assistant_turn_count = int(lesson_context.get("assistant_turn_count") or 0)
     stage_rule = STAGE_RESPONSE_RULES.get(stage, STAGE_RESPONSE_RULES["teach"])
 
     prompt = (
@@ -155,6 +195,25 @@ def build_lesson_control_prompt(lesson_context: Optional[Dict[str, Any]]) -> str
     )
     if active_subtopic:
         prompt += f"\n- Active focus area: {active_subtopic}"
+
+    lesson_plan = lesson_context.get("lesson_teaching_plan") or {}
+    if isinstance(lesson_plan, dict) and lesson_plan:
+        plan_stage = _plan_stage_for_lesson_stage(stage, user_turn_count)
+        plan_step = _find_plan_step(lesson_plan, plan_stage)
+        prompt += (
+            "\n\nLESSON TEACHING PLAN:"
+            f"\n- Lesson goal: {lesson_plan.get('lesson_goal') or 'Not specified.'}"
+            f"\n- Current plan step: {plan_step.get('stage')} - {plan_step.get('objective') or 'Teach the current step clearly.'}"
+            f"\n- Scope boundaries: {_compact_plan_items(lesson_plan.get('scope_boundaries'))}"
+            f"\n- Prerequisites to activate when needed: {_compact_plan_items(lesson_plan.get('prerequisites'), 4)}"
+            f"\n- Likely misconceptions: {_compact_plan_items(lesson_plan.get('misconceptions'), 4)}"
+            f"\n- Allowed examples: {_compact_plan_items(lesson_plan.get('allowed_examples'), 4)}"
+            f"\n- Forbidden drift: {_compact_plan_items(lesson_plan.get('forbidden_drift'), 4)}"
+            f"\n- Mastery evidence: {_compact_plan_items(lesson_plan.get('mastery_criteria'), 4)}"
+            "\nPLAN RULE: Teach only inside this plan. Do not advance to the next lesson, adjacent range, or broader chapter unless the platform changes the active lesson."
+            "\nPLAN RULE: If the learner is bored or moving quickly, increase challenge inside the allowed examples and mastery criteria; do not skip the lesson structure."
+            "\nPLAN RULE: If the learner struggles, use prerequisites and misconceptions to remediate before continuing."
+        )
     revision_context = lesson_context.get("revision_context") or {}
     if revision_context.get("is_revision"):
         source_topics = revision_context.get("source_topics") or []
@@ -264,15 +323,17 @@ def infer_lesson_control(
 
     asks_for_mastery = any(phrase in latest_user for phrase in ("mastery test", "test me", "final quiz"))
     asks_for_practice = asks_for_mastery or any(phrase in latest_user for phrase in ("quiz me", "practice", "question"))
+    bored = any(phrase in latest_user for phrase in ("boring", "bored", "repeating", "repetition", "too easy", "already covered"))
     confused = any(phrase in latest_user for phrase in ("confused", "stuck", "don't understand", "dont understand", "lost"))
     confident = any(phrase in latest_user for phrase in MASTERY_CONFIDENCE_PHRASES)
 
-    mastery_ready = marker_triggered or (
+    has_readiness_evidence = (
         user_turn_count >= 3
         and assistant_turn_count >= 2
-        and confident
         and previous_stage in {"practice", "mastery_ready"}
+        and (confident or marker_triggered)
     )
+    mastery_ready = has_readiness_evidence
 
     if mastery_ready:
         stage = "mastery_ready"
@@ -281,6 +342,10 @@ def infer_lesson_control(
     elif confused:
         stage = "remediate"
         next_actions = ["simplify", "worked_example", "smaller_steps"]
+        ui_action = None
+    elif bored:
+        stage = "practice"
+        next_actions = ["challenge_question", "new_example", "fast_check"]
         ui_action = None
     elif asks_for_practice:
         stage = "practice"
@@ -1182,6 +1247,7 @@ Then explain the concept differently.
                 
 CRITICAL RULE FOR MASTERY QUIZ:
 If you have fully taught ALL the required concepts for the current topic or the active focus area/subtopic, and the student has demonstrated clear understanding through an answer or application, append the exact string [TRIGGER_MASTERY] at the very end of your response. Do not trigger from polite agreement alone. If unsure, ask one checkpoint question instead.
+If the learner says the lesson is boring, repetitive, too easy, or asks for a test too early, do not trigger mastery immediately. Increase challenge inside the current lesson with one stronger practice task or a faster checkpoint first.
 """
 
         # 5. Call LLM
@@ -1242,6 +1308,119 @@ If you have fully taught ALL the required concepts for the current topic or the 
         """
         Generates lesson materials (Outline, Pop Quiz, Assignment)
         """
+        def material_text(value: Any) -> str:
+            if value is None:
+                return ""
+            if isinstance(value, str):
+                return value.strip()
+            if isinstance(value, (int, float, bool)):
+                return str(value)
+            if isinstance(value, list):
+                return "; ".join(material_text(item) for item in value if material_text(item))
+            if isinstance(value, dict):
+                for key in ("text", "point", "title", "objective", "content", "description", "explanation", "task"):
+                    if value.get(key):
+                        return material_text(value.get(key))
+                return "; ".join(
+                    f"{str(key).replace('_', ' ').title()}: {material_text(item)}"
+                    for key, item in value.items()
+                    if material_text(item)
+                )
+            return str(value).strip()
+
+        def material_list(value: Any, limit: int = 6) -> List[str]:
+            if isinstance(value, list):
+                items = value
+            elif isinstance(value, str):
+                items = [value]
+            else:
+                items = []
+            return [material_text(item) for item in items if material_text(item)][:limit]
+
+        def fallback_assignment_tasks() -> List[str]:
+            technical_subjects = (
+                "mathematics",
+                "physics",
+                "chemistry",
+                "accounting",
+                "economics",
+                "computer",
+                "data processing",
+                "financial",
+                "further mathematics",
+            )
+            is_technical = any(key in (subject or "").lower() for key in technical_subjects)
+            if is_technical:
+                return [
+                    f"Foundation: state the key rule or method used in the part of {topic} covered today.",
+                    f"Practice from today's class: solve two class-level questions on {topic}, showing every important step.",
+                    "Method check: write one sentence explaining why your method works for one solved question.",
+                    "Application: create one original example and solve it completely.",
+                    "Continuity: write the exact point where the class stopped and one question you want clarified next time.",
+                    "Stretch, if this part has been taught: attempt one harder question that combines two ideas from the lesson.",
+                ]
+            return [
+                f"Foundation: explain the meaning of the part of {topic} covered today using correct subject vocabulary.",
+                f"Class recap: write four important points from today's class on {topic}.",
+                "Application: give one real-life example or case study connected to the lesson.",
+                "Understanding check: answer one question that shows you can use the idea.",
+                "Continuity: write the exact point where the class stopped and one question you want clarified next time.",
+                "Stretch, if this part has been taught: connect today's idea to the next part of the lesson in two or three sentences.",
+            ]
+
+        def normalize_assignment(raw_assignment: Any) -> Dict[str, Any]:
+            fallback_tasks = fallback_assignment_tasks()
+            if isinstance(raw_assignment, dict):
+                title = material_text(raw_assignment.get("title")) or f"Take-home assignment: {topic}"
+                instructions = material_text(raw_assignment.get("instructions")) or (
+                    "Complete the tasks progressively in your notebook. Start with the parts covered in today's class, "
+                    "then attempt the application and stretch tasks only as far as the teacher has introduced them."
+                )
+                tasks = material_list(raw_assignment.get("tasks") or raw_assignment.get("questions"), 6)
+            else:
+                title = f"Take-home assignment: {topic}"
+                instructions = material_text(raw_assignment) or (
+                    "Complete the tasks progressively in your notebook. Start with the parts covered in today's class, "
+                    "then attempt the application and stretch tasks only as far as the teacher has introduced them."
+                )
+                tasks = []
+
+            if len(tasks) < 3 or all(len(task.split()) < 8 for task in tasks):
+                tasks = (tasks + [task for task in fallback_tasks if task not in tasks])[:6]
+
+            return {
+                "title": title,
+                "instructions": instructions,
+                "tasks": tasks,
+            }
+
+        def normalize_pop_quiz(raw_quiz: Any) -> List[Dict[str, Any]]:
+            questions = raw_quiz.get("questions") if isinstance(raw_quiz, dict) else raw_quiz
+            if not isinstance(questions, list):
+                return []
+            normalized = []
+            for item in questions[:5]:
+                if not isinstance(item, dict):
+                    continue
+                options = item.get("options") or []
+                if not isinstance(options, list):
+                    options = []
+                options = [material_text(option) for option in options if material_text(option)][:4]
+                if len(options) < 2:
+                    continue
+                try:
+                    correct_index = int(item.get("correct_index", 0))
+                except (TypeError, ValueError):
+                    correct_index = 0
+                correct_index = max(0, min(correct_index, len(options) - 1))
+                normalized.append({
+                    "text": material_text(item.get("text") or item.get("question")),
+                    "options": options,
+                    "correct_index": correct_index,
+                    "explanation": material_text(item.get("explanation")),
+                })
+            return [item for item in normalized if item["text"]]
+
         prompt = f"""
         Act as a "Smart Teaching Assistant" for a Nigerian teacher.
         Prepare lesson materials for '{student_name}' ({education_level}) on the topic '{topic}' in '{subject}'.
@@ -1257,13 +1436,18 @@ If you have fully taught ALL the required concepts for the current topic or the 
            - "explanation": A brief explanation of why the answer is correct."""
            
         if generate_assignments:
-            prompt += """\n        3. "assignment": A 1-sentence take-home task for the student."""
+            prompt += """\n        3. "assignment": An object with:
+           - "title": A short assignment title.
+           - "instructions": A clear homework instruction.
+           - "tasks": 4-6 specific tasks in progressive order because the whole lesson may span multiple live sessions. Move from today's covered part, to practice, application, continuity notes, and optional stretch/prep for the next class. For technical subjects, include concrete calculations, procedures, worked steps, diagrams, data interpretation, or problem solving as appropriate. Include a continuity task asking where the class stopped. Do not include answer keys."""
             
         if suggest_videos:
             prompt += """\n        4. "suggested_videos": A list of 1-3 highly relevant search terms to find YouTube videos for this topic."""
 
         prompt += """\n
         Make the content appropriate for the grade level and culturally relevant to Nigeria.
+        Keep every task inside the selected topic. Do not drift into the next lesson.
+        Do not assume the teacher finished the entire lesson in one class. Phrase stretch tasks as optional or "if taught".
         Return ONLY a JSON object.
         """
         response = await self.llm.generate(prompt, temperature=0.7, format="json_object", user_id=user_id)
@@ -1271,15 +1455,22 @@ If you have fully taught ALL the required concepts for the current topic or the 
             data = json.loads(response)
             # Ensure it has the expected keys
             if "outline" not in data: data["outline"] = ["Overview", "Core Principles", "Practical Examples"]
-            if "pop_quiz" not in data: data["pop_quiz"] = []
-            if "assignment" not in data: data["assignment"] = "Research more on this topic."
+            data["outline"] = [material_text(point) for point in (data.get("outline") or []) if material_text(point)]
+            if not data["outline"]:
+                data["outline"] = ["Overview", "Core principles", "Practical examples"]
+            data["pop_quiz"] = normalize_pop_quiz(data.get("pop_quiz"))
+            data["assignment"] = normalize_assignment(data.get("assignment"))
+            if "suggested_videos" in data:
+                data["suggested_videos"] = [
+                    material_text(item) for item in (data.get("suggested_videos") or []) if material_text(item)
+                ][:3]
             return data
         except Exception as e:
             logger.error(f"Failed to parse smart prep JSON: {e}")
             return {
                 "outline": ["Introduction", "Core Concepts", "Examples", "Summary"],
                 "pop_quiz": [],
-                "assignment": "Review the topic at home."
+                "assignment": normalize_assignment(None)
             }
 
 

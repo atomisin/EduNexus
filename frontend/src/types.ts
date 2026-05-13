@@ -61,6 +61,9 @@ export interface Session {
   aiConfig?: AIConfig;
   subject_name?: string;
   topic_name?: string;
+  session_outline?: any;
+  class_notes?: any;
+  take_home_assignment?: any;
   pre_session_quiz?: Quiz;
   post_session_quiz?: Quiz;
   student_access_code?: string;

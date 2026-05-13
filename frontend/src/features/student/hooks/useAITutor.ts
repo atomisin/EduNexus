@@ -297,7 +297,7 @@ export const useAITutor = (profile?: any, getFullName?: () => string) => {
       const hasNext = aiContent.includes('---NEXT---');
       const hasQuestion = aiContent.includes('---QUESTION---');
       const hasCTA = aiContent.includes('---CTA---');
-      const shouldStartMasteryQuiz = response.ui_action === 'start_mastery_quiz' || response.should_start_mastery_quiz === true || aiContent.includes('[TRIGGER_MASTERY]');
+      const shouldStartMasteryQuiz = response.ui_action === 'start_mastery_quiz' || response.should_start_mastery_quiz === true;
       const cleanContent = cleanTutorResponse(aiContent);
       const nextLessonStage: LessonStage = shouldStartMasteryQuiz
         ? 'mastery_quiz'

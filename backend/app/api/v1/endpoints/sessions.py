@@ -15,6 +15,7 @@ import asyncio
 from datetime import datetime, timedelta, timezone
 from jose import jwt, JWTError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 import uuid
@@ -36,6 +37,7 @@ from app.models.session import (
     SessionType,
     AIConfigModel,
     CreateSessionRequest,
+    EndSessionRequest,
     UpdateSessionRequest,
     SessionResponse,
 )
@@ -215,6 +217,39 @@ async def create_session(
         )
 
 
+@router.get("/last-history", response_model=Dict[str, Any])
+async def get_last_session_history(
+    subject_id: str,
+    student_ids: str,  # Comma separated
+    db: AsyncSession = Depends(get_async_db),
+    current_user: User = Depends(get_current_teacher),
+):
+    """Fetch the most recent session's continuity notes for a subject/student group"""
+    try:
+        manager = SessionManager(db)
+        s_ids = [sid for sid in student_ids.split(",") if sid]
+        last_session = await manager.get_last_session_for_context(
+            teacher_id=str(current_user.id), subject_id=subject_id, student_ids=s_ids
+        )
+
+        if not last_session:
+            return {"found": False}
+
+        return {
+            "found": True,
+            "session_id": str(last_session.id),
+            "continuity_notes": last_session.continuity_notes,
+            "topic_name": last_session.topic.name if last_session.topic else None,
+            "topic_id": str(last_session.topic_id) if last_session.topic_id else None,
+            "actual_end": last_session.actual_end.isoformat()
+            if last_session.actual_end
+            else None,
+        }
+    except Exception as e:
+        logger.error(f"Error fetching last session history: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/{session_id}", response_model=SessionResponse)
 async def get_session(
     session_id: str,
@@ -293,6 +328,7 @@ async def start_session(
 @router.post("/{session_id}/end", response_model=SessionResponse)
 async def end_session(
     session_id: str,
+    request: EndSessionRequest = EndSessionRequest(),
     db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_teacher),
 ):
@@ -307,7 +343,7 @@ async def end_session(
         if str(session.teacher_id) != str(current_user.id):
             raise HTTPException(status_code=403, detail="Not authorized")
 
-        session = await manager.end_session(session_id)
+        session = await manager.end_session(session_id, request.continuity_notes)
 
         return SessionResponse(
             success=True,
@@ -499,38 +535,6 @@ async def leave_session(
         )
 
 
-@router.get("/last-history", response_model=Dict[str, Any])
-async def get_last_session_history(
-    subject_id: str,
-    student_ids: str,  # Comma separated
-    db: AsyncSession = Depends(get_async_db),
-    current_user: User = Depends(get_current_teacher),
-):
-    """Fetch the most recent session's continuity notes for a subject/student group"""
-    try:
-        manager = SessionManager(db)
-        s_ids = student_ids.split(",")
-        last_session = await manager.get_last_session_for_context(
-            teacher_id=str(current_user.id), subject_id=subject_id, student_ids=s_ids
-        )
-
-        if not last_session:
-            return {"found": False}
-
-        return {
-            "found": True,
-            "session_id": str(last_session.id),
-            "continuity_notes": last_session.continuity_notes,
-            "topic_name": last_session.topic.name if last_session.topic else None,
-            "actual_end": last_session.actual_end.isoformat()
-            if last_session.actual_end
-            else None,
-        }
-    except Exception as e:
-        logger.error(f"Error fetching last session history: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 @router.get("/prepare-lesson/{student_id}/{subject_id}", response_model=dict)
 async def prepare_smart_lesson(
     student_id: str,
@@ -577,17 +581,23 @@ async def push_session_content(
         if not session or str(session.teacher_id) != str(current_user.id):
             raise HTTPException(status_code=403, detail="Not authorized")
 
-        # Save to context so students can retrieve/submit later if they miss the WS message
+        context = dict(session.context or {})
+
+        # Save to context so students can retrieve/submit later if they miss the WS message.
+        # JSONB in-place mutation is easy to miss, so assign a fresh dict.
         if request.content_type == "pop_quiz":
-            session.context["active_pop_quiz"] = request.content
+            context["active_pop_quiz"] = request.content
             msg_type = MessageType.CONTENT_SHARED  # We'll map this in Task 3
         else:
-            session.context["active_notes"] = request.content
-            session.class_notes = request.content if isinstance(request.content, dict) else {"content": request.content}
+            context["active_notes"] = request.content
+            session.class_notes = (
+                request.content
+                if isinstance(request.content, dict)
+                else {"content": request.content}
+            )
             msg_type = MessageType.CONTENT_SHARED
 
-        # Force context update
-        session.context = dict(session.context)
+        session.context = context
         await db.commit()
 
         # Broadcast via WebSocket
@@ -623,14 +633,34 @@ async def push_session_content(
             stmt = select(SessionStudent.student_id).filter(SessionStudent.session_id == uuid.UUID(session_id))
             res = await db.execute(stmt)
             student_ids = res.scalars().all()
+
+            legacy_student_ids = session.context.get("enrolled_students", []) if session.context else []
+            for legacy_id in legacy_student_ids:
+                try:
+                    legacy_uuid = uuid.UUID(str(legacy_id))
+                except (TypeError, ValueError):
+                    continue
+                if legacy_uuid not in student_ids:
+                    student_ids.append(legacy_uuid)
             
         content_label = request.content_type.replace('_', ' ').title()
+        note_title = None
+        if request.content_type == "notes":
+            if isinstance(request.content, dict):
+                note_title = request.content.get("title")
+                if not note_title and isinstance(request.content.get("content"), dict):
+                    note_title = request.content["content"].get("title")
+            note_title = note_title or session.context.get("topic") or session.title or "Class Note"
         for sid in student_ids:
             notif = Notification(
                 user_id=sid,
                 type="content_shared",
-                title=f"New {content_label} Shared",
-                message=f"Your teacher has shared a new {content_label} with you from the live session. Open this notification to review it.",
+                title=f"{content_label}: {note_title}" if note_title else f"New {content_label} Shared",
+                message=(
+                    "Your class note has been saved to your inbox. You can open it anytime until you delete it."
+                    if request.content_type == "notes"
+                    else f"Your teacher has shared a new {content_label} with you from the live session. Open this notification to review it."
+                ),
                 link=f"/session-content/{session_id}",
                 created_at=datetime.now(timezone.utc)
             )
@@ -705,10 +735,19 @@ async def generate_session_outline(
         if not session or str(session.teacher_id) != str(current_user.id):
             raise HTTPException(status_code=403, detail="Not authorized")
 
+        if session.session_outline:
+            return {"success": True, "outline": session.session_outline, "source": "session"}
+
+        material_outline = (session.context or {}).get("lesson_materials", {}).get("outline")
+        if material_outline:
+            session.session_outline = material_outline
+            await db.commit()
+            return {"success": True, "outline": material_outline, "source": "lesson_material"}
+
         outline = await manager._generate_session_outline(session)
         session.session_outline = outline
         await db.commit()
-        return {"success": True, "outline": outline}
+        return {"success": True, "outline": outline, "source": "generated"}
     except Exception as e:
         logger.error(f"Error generating outline: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { toast } from 'sonner';
 import { studentAPI } from '@/services/api';
 
@@ -11,15 +11,36 @@ export const useProfileAssessment = (profile?: any, setProfile?: (p: any) => voi
     school_name: profile?.school_name || '',
     curriculum_type: profile?.curriculum_type || '',
     course_name: profile?.course_name || '',
-    best_study_time: profile?.best_study_time || 'Morning',
+    best_study_time: profile?.best_study_time || '',
     attention_span_minutes: profile?.attention_span_minutes || 30,
+    department: profile?.department,
+    exam_targets: profile?.exam_targets || [],
+    jamb_subjects: profile?.jamb_subjects || [],
   });
   const [isUpdating, setIsUpdating] = useState(false);
 
   const [assessmentStep, setAssessmentStep] = useState(0);
+  const [assessmentAnswers, setAssessmentAnswers] = useState<number[]>([]);
   const [learningStyleQuestions, setLearningStyleQuestions] = useState<any[]>([]);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(profile?.avatar_url || null);
+
+  useEffect(() => {
+    setLearningStyle(profile?.learning_style);
+    setAvatarUrl(profile?.avatar_url || null);
+    setProfileForm({
+      education_level: profile?.education_level || '',
+      grade_level: profile?.grade_level || '',
+      school_name: profile?.school_name || '',
+      curriculum_type: profile?.curriculum_type || '',
+      course_name: profile?.course_name || '',
+      best_study_time: profile?.best_study_time || '',
+      attention_span_minutes: profile?.attention_span_minutes || 30,
+      department: profile?.department,
+      exam_targets: profile?.exam_targets || [],
+      jamb_subjects: profile?.jamb_subjects || [],
+    });
+  }, [profile]);
 
   const fetchQuestions = useCallback(async () => {
     try {
@@ -27,6 +48,7 @@ export const useProfileAssessment = (profile?: any, setProfile?: (p: any) => voi
       setLearningStyleQuestions(data.questions || data || []);
     } catch (err) {
       console.error('Failed to fetch questions:', err);
+      toast.error('Could not load the learning style assessment.');
     }
   }, []);
 
@@ -34,6 +56,7 @@ export const useProfileAssessment = (profile?: any, setProfile?: (p: any) => voi
     fetchQuestions();
     setIsAssessmentOpen(true);
     setAssessmentStep(0);
+    setAssessmentAnswers([]);
   }, [fetchQuestions]);
 
   const closeAssessment = useCallback(() => setIsAssessmentOpen(false), []);
@@ -76,20 +99,36 @@ export const useProfileAssessment = (profile?: any, setProfile?: (p: any) => voi
     }
   }, [profile, setProfile]);
 
-  const submitAssessment = useCallback(async (dominantStyle: string) => {
+  const submitAssessment = useCallback(async (optionIndex: number) => {
+    const nextAnswers = [...assessmentAnswers];
+    nextAnswers[assessmentStep] = optionIndex;
+    setAssessmentAnswers(nextAnswers);
+
+    if (assessmentStep < learningStyleQuestions.length - 1) {
+      setAssessmentStep(assessmentStep + 1);
+      return;
+    }
+
     setIsUpdating(true);
     try {
-      await studentAPI.updateProfile({ learning_style: dominantStyle });
-      toast.success(`Assessment Complete! You are a ${dominantStyle} learner! 🎓`);
+      const result = await studentAPI.submitLearningStyleAssessment(nextAnswers);
+      const dominantStyle = result.dominant_style;
+      toast.success(`Learning profile updated: ${dominantStyle} learner.`);
       setLearningStyle(dominantStyle);
-      if (setProfile) setProfile({ ...profile, learning_style: dominantStyle });
+      if (setProfile) {
+        setProfile({
+          ...profile,
+          learning_style: dominantStyle,
+          learning_recommendations: result.recommendations || profile?.learning_recommendations,
+        });
+      }
       setIsAssessmentOpen(false);
     } catch (err) {
-      toast.error("Failed to save assessment result");
+      toast.error('Failed to save assessment result');
     } finally {
       setIsUpdating(false);
     }
-  }, [profile, setProfile]);
+  }, [assessmentAnswers, assessmentStep, learningStyleQuestions.length, profile, setProfile]);
 
   return {
     learningStyle,

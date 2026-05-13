@@ -15,6 +15,11 @@ interface UserCardProps {
     status?: string;
     created_at?: string;
     avatar_url?: string;
+    education_level?: string | null;
+    grade_level?: string | null;
+    class_level?: string | null;
+    department?: string | null;
+    curriculum_type?: string | null;
   };
   variant: 'pending' | 'approved' | 'suspended';
   onApprove: (userId: string) => void;
@@ -31,6 +36,21 @@ export const UserCard: React.FC<UserCardProps> = ({ user, variant, onApprove, on
 
   const nameClass = variant === 'suspended' ? 'font-semibold text-lg text-slate-500' : 'font-semibold text-lg';
   const emailClass = variant === 'suspended' ? 'text-slate-400' : 'text-slate-500';
+  const formatClassLevel = (value?: string | null) => {
+    if (!value) return '';
+    return value
+      .replace(/_/g, ' ')
+      .replace(/\bss\s*(\d)\b/gi, 'SS $1')
+      .replace(/\bjss\s*(\d)\b/gi, 'JSS $1')
+      .replace(/\bp\s*(\d)\b/gi, 'Primary $1')
+      .replace(/\bprimary\s*(\d)\b/gi, 'Primary $1')
+      .replace(/\s+/g, ' ')
+      .trim();
+  };
+
+  const studentClass = user.role?.toLowerCase() === 'student'
+    ? formatClassLevel(user.class_level || user.grade_level || user.education_level)
+    : '';
 
   return (
     <Card className="rounded-lg border-border shadow-none">
@@ -51,6 +71,16 @@ export const UserCard: React.FC<UserCardProps> = ({ user, variant, onApprove, on
                   <Badge variant="outline" className={`capitalize${variant === 'suspended' ? ' opacity-50' : ''}`}>
                     {user.role}
                   </Badge>
+                  {studentClass && (
+                    <Badge variant="outline" className="border-primary/25 bg-primary/5 text-primary">
+                      {studentClass}{user.department ? ` (${user.department})` : ''}
+                    </Badge>
+                  )}
+                  {user.role?.toLowerCase() === 'student' && user.curriculum_type && (
+                    <Badge variant="outline" className="text-muted-foreground">
+                      {formatClassLevel(user.curriculum_type)}
+                    </Badge>
+                  )}
                   {variant === 'pending' && (
                     <Badge className="bg-amber-100 text-amber-700">Pending Approval</Badge>
                   )}

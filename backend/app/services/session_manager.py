@@ -24,6 +24,7 @@ from app.services.livekit_service import livekit_service
 from app.services.llm_service import llm_service
 from app.services.engagement_tracker import engagement_tracker
 from app.services.ai_coordinator import ai_coordinator
+from app.services.lesson_material_service import get_or_create_shared_lesson_material
 from app.models.student_progress import StudentSubjectProgress
 
 logger = logging.getLogger(__name__)
@@ -110,15 +111,16 @@ class SessionManager:
             students_to_enroll = [str(row[0]) for row in result.fetchall()]
             logger.info(f"Auto-enrolled {len(students_to_enroll)} students for session")
 
-        # Build the minimum context needed for the create response. Continuity,
-        # quizzes, notes, and assignments are prepared after the session exists.
+        # Build the lesson context and continuity pointer. Heavy notes/quizzes
+        # are still prepared after the session exists, but revision points are
+        # lightweight and needed before the class starts.
         context = await self._build_context(
             teacher_id=teacher_id,
             subject_id=request.subject_id,
             topic_id=request.topic_id,
             student_ids=students_to_enroll,
             previous_session_id=request.previous_session_id,
-            include_continuity=False,
+            include_continuity=True,
         )
 
         # Set AI config with defaults
@@ -194,8 +196,16 @@ class SessionManager:
         await self.db.commit()
         await self.db.refresh(session)
 
+        if session.subject_id and session.topic_id:
+            try:
+                await self._attach_shared_lesson_material(session, students_to_enroll)
+                await self.db.commit()
+                await self.db.refresh(session)
+            except Exception as material_error:
+                logger.error(f"Session material preparation failed for {session.id}: {material_error}")
+
         # Try scheduling eager generation of smart materials
-        if background_tasks and session.subject_id and students_to_enroll:
+        if background_tasks and session.subject_id and students_to_enroll and not session.topic_id:
             student_id = students_to_enroll[0]
             background_tasks.add_task(
                 self._eagerly_prepare_smart_lesson_bg,
@@ -205,6 +215,68 @@ class SessionManager:
 
         logger.info(f"Session {session.id} created successfully")
         return session
+
+    async def _infer_session_education_level(
+        self,
+        session: TeachingSession,
+        student_ids: Optional[List[str]] = None,
+    ) -> str:
+        if student_ids:
+            try:
+                stmt = select(StudentProfile).filter(
+                    StudentProfile.user_id == uuid.UUID(student_ids[0])
+                )
+                result = await self.db.execute(stmt)
+                profile = result.scalars().first()
+                if profile and profile.education_level:
+                    return profile.education_level
+            except Exception as exc:
+                logger.warning(f"Could not infer student education level: {exc}")
+        if session.context and session.context.get("level"):
+            return session.context["level"]
+        if session.subject and session.subject.grade_levels:
+            return session.subject.grade_levels[0]
+        if session.subject and session.subject.education_level:
+            return session.subject.education_level
+        return "secondary"
+
+    async def _attach_shared_lesson_material(
+        self,
+        session: TeachingSession,
+        student_ids: Optional[List[str]] = None,
+    ) -> None:
+        """Attach canonical lesson material to a session copy for teacher review."""
+        if not session.subject or not session.topic:
+            return
+
+        education_level = await self._infer_session_education_level(session, student_ids)
+        material = await get_or_create_shared_lesson_material(
+            db=self.db,
+            subject=session.subject,
+            topic=session.topic,
+            education_level=education_level,
+            user_id=session.teacher_id,
+        )
+
+        session.session_outline = material.get("outline") or []
+        session.class_notes = material.get("class_note") or {}
+        session.pre_session_quiz = {
+            "title": f"Pre-session check: {session.topic.name}",
+            "questions": material.get("pop_quiz") or [],
+            "status": "ready" if material.get("pop_quiz") else "unavailable",
+        }
+        session.take_home_assignment = material.get("assignment")
+        session.assignments_generated = [material.get("assignment")] if material.get("assignment") else []
+        session.videos_suggested = material.get("video_search_terms") or []
+        session.context = {
+            **(session.context or {}),
+            "lesson_materials": material,
+            "active_notes": material.get("class_note") or {},
+            "active_pop_quiz": session.pre_session_quiz,
+            "active_assignments": material.get("assignment"),
+            "teacher_tips": material.get("teacher_tips") or [],
+            "suggested_videos": material.get("video_search_terms") or [],
+        }
 
     async def _eagerly_prepare_smart_lesson_bg(self, session_id: str, student_id: str):
         """Background task to fully generate lesson outline and pop quiz, ready before live session starts."""
@@ -230,6 +302,10 @@ class SessionManager:
                 user_stmt = select(User).filter(User.id == uuid.UUID(student_id))
                 user_res = await bg_db.execute(user_stmt)
                 student = user_res.scalars().first()
+
+                profile_stmt = select(StudentProfile).filter(StudentProfile.user_id == uuid.UUID(student_id))
+                profile_res = await bg_db.execute(profile_stmt)
+                student_profile = profile_res.scalars().first()
                 
                 if student:
                     context = await manager._build_context(
@@ -262,7 +338,7 @@ class SessionManager:
                     ai_settings = session.ai_config or {}
                     prep_data = await ai_coordinator.generate_smart_prep(
                         student_name=student.full_name or "Student",
-                        education_level=student.education_level or "Secondary",
+                        education_level=(student_profile.education_level if student_profile else None) or "Secondary",
                         subject=session.context.get("subject", "General Topic"),
                         topic=session.context.get("topic", "Overview"),
                         proficiency=progress.overall_mastery if progress else 0.5,
@@ -410,7 +486,11 @@ class SessionManager:
             )
             raise
 
-    async def end_session(self, session_id: str) -> TeachingSession:
+    async def end_session(
+        self,
+        session_id: str,
+        teacher_continuity_notes: Optional[str] = None,
+    ) -> TeachingSession:
         """
         End a session and generate post-session content
         - Generate session summary
@@ -472,11 +552,16 @@ class SessionManager:
         except Exception as e:
             logger.error(f"Failed to generate end session content: {e}")
 
-        # Extract continuity points for next session
-        try:
-            session.continuity_notes = await self._extract_continuity_points(session)
-        except Exception as e:
-            logger.error(f"Failed to extract continuity: {e}")
+        # Preserve the teacher's actual stopping point when provided. This is
+        # more accurate than inferring continuity from transcript fragments.
+        clean_continuity = (teacher_continuity_notes or "").strip()
+        if clean_continuity:
+            session.continuity_notes = clean_continuity
+        else:
+            try:
+                session.continuity_notes = await self._extract_continuity_points(session)
+            except Exception as e:
+                logger.error(f"Failed to extract continuity: {e}")
 
         # Generate Class Notes for review
         try:
@@ -577,6 +662,10 @@ class SessionManager:
         user_res = await self.db.execute(user_stmt)
         student = user_res.scalars().first()
 
+        profile_stmt = select(StudentProfile).filter(StudentProfile.user_id == uuid.UUID(student_id))
+        profile_res = await self.db.execute(profile_stmt)
+        student_profile = profile_res.scalars().first()
+
         subj_stmt = select(Subject).filter(Subject.id == uuid.UUID(subject_id))
         subj_res = await self.db.execute(subj_stmt)
         subject = subj_res.scalars().first()
@@ -597,7 +686,7 @@ class SessionManager:
         # 4. Call AI Coordinator to generate materials
         prep_data = await ai_coordinator.generate_smart_prep(
             student_name=student.full_name or "Student",
-            education_level=student.education_level or "Secondary",
+            education_level=(student_profile.education_level if student_profile else None) or "Secondary",
             subject=subject.name,
             topic=current_topic_name,
             proficiency=progress.overall_mastery if progress else 0.5
@@ -1257,6 +1346,13 @@ class SessionManager:
             if topic:
                 context["topic"] = topic.name
                 context["topic_id"] = topic_id
+
+        if include_continuity and previous_session_id:
+            last_session = await self._get_session(previous_session_id)
+            if last_session and last_session.continuity_notes:
+                context["revision_points"] = self._parse_revision_points(
+                    last_session.continuity_notes
+                )
 
         # If no explicit previous session, find the last one for this context
         if include_continuity and not previous_session_id and subject_id and student_ids:

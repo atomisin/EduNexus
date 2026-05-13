@@ -29,6 +29,12 @@ interface UserType {
   last_login?: string;
   phone_number?: string;
   emailVerified?: boolean;
+  email_verified_at?: string | null;
+  education_level?: string | null;
+  grade_level?: string | null;
+  class_level?: string | null;
+  department?: string | null;
+  curriculum_type?: string | null;
   avatar_url?: string;
 }
 
@@ -104,7 +110,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   const handleApproveUser = async (userId: string) => {
     try {
-      await adminAPI.updateUser(userId, { status: 'active', is_active: true });
+      await adminAPI.approveUser(userId);
       toast.success('User approved successfully!');
       fetchUsers();
     } catch (error: any) {
@@ -142,8 +148,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     return matchesSearch && matchesRole;
   });
 
-  const pendingUsers = filteredUsers.filter(u => 
-    u.status === 'pending' || u.status === 'pending_approval' || u.status === 'PENDING'
+  const pendingUsers = filteredUsers.filter(u =>
+    (u.status === 'pending' || u.status === 'pending_approval' || u.status === 'PENDING') && Boolean(u.email_verified_at)
   );
   const approvedUsers = filteredUsers.filter(u => 
     u.status === 'active' || u.status === 'approved' || u.status === 'APPROVED'

@@ -48,7 +48,7 @@ interface ProfileViewProps {
   setAvatarUrl: (url: string | null) => void;
   subjects: any[];
   enrolledSubjects: string[];
-  getLearningStyleLabel: (style: string | undefined) => { label: string };
+  getLearningStyleLabel: (style: string | undefined) => { label: string; desc?: string };
   startAssessment: () => void;
 }
 
@@ -91,6 +91,7 @@ export const ProfileView = ({
   const jambSubjects = subjects.filter(
     (subject) => subject.grade_levels?.includes('JAMB') || subject.grade_levels?.includes('SS3')
   );
+  const learningStyle = getLearningStyleLabel(profile?.learning_style);
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-4 sm:space-y-5">
@@ -375,7 +376,12 @@ export const ProfileView = ({
           <CardContent className="space-y-4 px-4 pb-5 sm:px-5">
             <div className="rounded-lg border border-border bg-subtle p-4">
               <label className="text-sm text-muted-foreground">Learning Style</label>
-              <p className="font-medium">{getLearningStyleLabel(profile?.learning_style).label}</p>
+              <p className="font-medium">{profile?.learning_style ? learningStyle.label : 'Not assessed yet'}</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {profile?.learning_style
+                  ? learningStyle.desc || 'EduNexus will use this to tune explanations and study guidance.'
+                  : 'Take the short assessment so EduNexus can adapt explanations to how you learn best.'}
+              </p>
             </div>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-1">
@@ -392,7 +398,12 @@ export const ProfileView = ({
                     </SelectContent>
                   </Select>
                 ) : (
-                  <p className="font-medium">{profile?.best_study_time || 'Not set'}</p>
+                  <>
+                    <p className="font-medium">{profile?.best_study_time || 'Not set'}</p>
+                    {!profile?.best_study_time && (
+                      <p className="mt-1 text-xs text-muted-foreground">Use Edit Profile to set when you prefer studying.</p>
+                    )}
+                  </>
                 )}
               </div>
 
@@ -416,7 +427,7 @@ export const ProfileView = ({
 
             {!isEditingProfile && (
               <Button className="mt-2 w-full rounded-lg" onClick={startAssessment}>
-                Take Learning Style Assessment
+                {profile?.learning_style ? 'Retake Learning Style Assessment' : 'Take Learning Style Assessment'}
               </Button>
             )}
           </CardContent>

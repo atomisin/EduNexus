@@ -157,6 +157,7 @@ interface AIChatSectionProps {
   setEnergy: (val: any) => void;
   suggestedTopics: any[];
   weaknessAreas: string[];
+  progress?: any;
   setActiveView: (view: any) => void;
   loading: boolean;
   topics: any[];
@@ -207,6 +208,7 @@ export const AIChatSection = ({
   setEnergy,
   suggestedTopics,
   weaknessAreas,
+  progress,
   setActiveView,
   loading,
   topics,
@@ -260,9 +262,30 @@ export const AIChatSection = ({
   const focusTopicLabel = formatTopicName((typeof viewingSubtopic === 'object' ? (viewingSubtopic as any)?.name : viewingSubtopic) || activeSubtopic || selectedTopic?.name || 'this topic');
   const conversationTurns = aiChatMessages.filter((m: any) => m.role === 'user').length;
   const lessonStageLabel = (lessonController?.stage || 'intro').replace(/_/g, ' ');
+  const progressSummary = progress?.summary || {};
+  const recentActivityCount = Array.isArray(progress?.recent_activities)
+    ? progress.recent_activities.length
+    : Array.isArray(progress?.recent_activity)
+      ? progress.recent_activity.length
+      : 0;
+  const quizzesTaken = Math.max(
+    Number(profile?.total_quizzes || 0),
+    Number(profile?.quiz_count || 0),
+    Number(progress?.total_quizzes || 0),
+    Number(progressSummary.total_quizzes || 0),
+  );
   const pathProgress = topicsForCurrentSubject.length
     ? Math.round((topicsForCurrentSubject.filter((s: any) => s.status === 'completed').length / topicsForCurrentSubject.length) * 100)
     : 0;
+  const completedLessons = Math.max(
+    topicsForCurrentSubject.filter((topic: any) => topic.status === 'completed').length,
+    Number(progressSummary.total_lessons || 0),
+  );
+  const hasLearningSignals = quizzesTaken > 0
+    || completedLessons > 0
+    || pathProgress > 0
+    || Number(progressSummary.total_time_spent || 0) > 0
+    || recentActivityCount > 0;
   const currentTopicIndex = topicsForCurrentSubject.findIndex((topic: any) => topic.id === selectedTopic?.id);
   const unlockedNextTopicId = aiState?.result?.next_topic_unlocked;
   const nextLessonCandidate =
@@ -331,21 +354,36 @@ export const AIChatSection = ({
   const learningGoal = useMemo(() => {
     const badges = Array.isArray(profile?.badges) ? profile.badges : [];
     const quizBadgeEarned = badges.some((badge: any) => /quiz/i.test(String(badge?.name || badge)));
-    const quizzesTaken = Number(profile?.total_quizzes || profile?.quiz_count || 0);
-    const completedLessons = topicsForCurrentSubject.filter((topic: any) => topic.status === 'completed').length;
     const streak = Number(profile?.current_streak || 0);
 
     if (!quizBadgeEarned && quizzesTaken < 3) {
-      return { title: 'Next Badge: Quiz Whiz', progress: Math.min(100, Math.round((quizzesTaken / 3) * 100)), note: `${Math.max(1, 3 - quizzesTaken)} more quizzes to unlock` };
+      const remaining = Math.max(0, 3 - quizzesTaken);
+      return {
+        title: 'Next Badge: Quiz Whiz',
+        progress: Math.min(100, Math.round((quizzesTaken / 3) * 100)),
+        note: hasLearningSignals
+          ? `${remaining} more ${remaining === 1 ? 'quiz' : 'quizzes'} to unlock`
+          : 'Take your first mastery quiz to start badge progress',
+      };
     }
     if (completedLessons < 3) {
-      return { title: 'Next Badge: Lesson Builder', progress: Math.min(100, Math.round((completedLessons / 3) * 100)), note: `${Math.max(1, 3 - completedLessons)} more lessons to unlock` };
+      const remaining = Math.max(0, 3 - completedLessons);
+      return {
+        title: 'Next Badge: Lesson Builder',
+        progress: Math.min(100, Math.round((completedLessons / 3) * 100)),
+        note: `${remaining} more ${remaining === 1 ? 'lesson' : 'lessons'} to unlock`,
+      };
     }
     if (streak < 3) {
-      return { title: 'Next Badge: Consistency Star', progress: Math.min(100, Math.round((streak / 3) * 100)), note: `${Math.max(1, 3 - streak)} more study days to unlock` };
+      const remaining = Math.max(0, 3 - streak);
+      return {
+        title: 'Next Badge: Consistency Star',
+        progress: Math.min(100, Math.round((streak / 3) * 100)),
+        note: `${remaining} more study ${remaining === 1 ? 'day' : 'days'} to unlock`,
+      };
     }
     return { title: 'Next Badge: Mastery Builder', progress: Math.max(65, pathProgress), note: 'Keep learning to raise your mastery' };
-  }, [pathProgress, profile?.badges, profile?.current_streak, profile?.quiz_count, profile?.total_quizzes, topicsForCurrentSubject]);
+  }, [completedLessons, hasLearningSignals, pathProgress, profile?.badges, profile?.current_streak, quizzesTaken]);
 
   const submitChatInput = useCallback(async () => {
     const message = chatInput.trim();
@@ -1375,7 +1413,9 @@ export const AIChatSection = ({
                     <div className="py-4 text-center">
                       <p className="text-xs text-muted-foreground flex flex-col items-center gap-2">
                         <Sparkles className="w-6 h-6 opacity-30" />
-                        Practice more to unlock suggestions
+                        {hasLearningSignals
+                          ? 'No extra topic suggestions right now'
+                          : 'Complete a lesson or mastery quiz to generate suggestions'}
                       </p>
                     </div>
                   )}
@@ -1394,7 +1434,11 @@ export const AIChatSection = ({
                   {actionableWeaknessAreas.length > 0 ? actionableWeaknessAreas.map((area, idx) => (
                     <Badge key={idx} variant="destructive" className="rounded-lg px-2.5 py-1">{area}</Badge>
                   )) : (
-                    <p className="text-xs text-muted-foreground italic">You're doing great! No specific weaknesses identified.</p>
+                    <p className="text-xs text-muted-foreground italic">
+                      {hasLearningSignals
+                        ? 'No specific weaknesses identified from your recent activity.'
+                        : 'Complete a lesson or quiz so EduNexus can identify improvement areas.'}
+                    </p>
                   )}
                 </div>
               </CardContent>

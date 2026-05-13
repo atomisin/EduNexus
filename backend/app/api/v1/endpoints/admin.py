@@ -29,6 +29,18 @@ import io
 router = APIRouter()
 
 
+def _is_approval_status(value: Optional[str]) -> bool:
+    return bool(value) and value.lower() in {"active", "approved"}
+
+
+def _ensure_email_verified_before_approval(user: User) -> None:
+    if user.role != UserRole.ADMIN and not user.email_verified_at:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User has not verified their email yet. Approval is only possible after email verification."
+        )
+
+
 class UserListResponse(BaseModel):
     id: uuid.UUID
     email: str
@@ -42,6 +54,11 @@ class UserListResponse(BaseModel):
     phone_number: Optional[str] = None
     avatar_url: Optional[str] = None
     email_verified_at: Optional[datetime] = None
+    education_level: Optional[str] = None
+    grade_level: Optional[str] = None
+    class_level: Optional[str] = None
+    department: Optional[str] = None
+    curriculum_type: Optional[str] = None
     
     class Config:
         from_attributes = True
@@ -93,6 +110,8 @@ async def list_all_users(
     
     if user_status:
         stmt = stmt.filter(User.status == user_status)
+    else:
+        stmt = stmt.filter(User.status != UserStatus.UNVERIFIED)
     
     if is_active is not None:
         stmt = stmt.filter(User.is_active == is_active)
@@ -115,8 +134,29 @@ async def list_all_users(
     users = result.scalars().all()
     
     # Resolve avatar URLs for each user
+    student_user_ids = [user.id for user in users if user.role == UserRole.STUDENT]
+    profile_map = {}
+    if student_user_ids:
+        profile_result = await db.execute(
+            select(StudentProfile).filter(StudentProfile.user_id.in_(student_user_ids))
+        )
+        profile_map = {profile.user_id: profile for profile in profile_result.scalars().all()}
+
     for user in users:
         user.avatar_url = storage_service.resolve_url(user.avatar_url)
+        profile = profile_map.get(user.id)
+        if profile:
+            class_level = (
+                profile.current_grade_level
+                or profile.grade_level
+                or profile.education_level
+                or profile.education_category
+            )
+            user.education_level = profile.education_level
+            user.grade_level = profile.current_grade_level or profile.grade_level
+            user.class_level = class_level
+            user.department = profile.department
+            user.curriculum_type = profile.curriculum_type
     
     return users
 
@@ -286,6 +326,8 @@ async def update_user(
     
     if update_data.status is not None:
         new_status = update_data.status.lower()
+        if _is_approval_status(new_status):
+            _ensure_email_verified_before_approval(user)
         if new_status == "approved":
             user.status = UserStatus.ACTIVE
         else:
@@ -302,7 +344,7 @@ async def update_user(
         user.is_active = update_data.is_active
     
     # If activating/approving, set is_active to True automatically if not explicitly provided
-    if update_data.status == "approved" or update_data.status == "active":
+    if _is_approval_status(update_data.status):
         if update_data.is_active is None:
             user.is_active = True
         
@@ -449,12 +491,8 @@ async def approve_user(
         
     if user.status == UserStatus.ACTIVE:
         return {"success": True, "detail": "User is already active", "user_id": str(user.id)}
-        
-    if user.status == UserStatus.UNVERIFIED:
-        raise HTTPException(
-            status_code=400, 
-            detail="User has not verified their email yet. Approval is only possible after email verification."
-        )
+
+    _ensure_email_verified_before_approval(user)
     
     # Transition to ACTIVE
     user.status = UserStatus.ACTIVE

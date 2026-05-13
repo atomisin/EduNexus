@@ -243,6 +243,12 @@ class UpdateSessionRequest(BaseModel):
     ai_config: Optional[AIConfigModel] = None
 
 
+class EndSessionRequest(BaseModel):
+    """Optional teacher note captured when ending a live class."""
+
+    continuity_notes: Optional[str] = None
+
+
 class SessionResponse(BaseModel):
     """Response model for session operations"""
 

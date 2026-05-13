@@ -462,6 +462,12 @@ export const adminAPI = {
       body: JSON.stringify(data),
     }),
 
+  // Approve user after email verification
+  approveUser: (userId: string) =>
+    fetchWithAuth(`/admin/users/${userId}/approve`, {
+      method: 'POST',
+    }),
+
   // Delete user
   deleteUser: (userId: string, reason?: string) =>
     fetchWithAuth(`/admin/users/${userId}?reason=${encodeURIComponent(reason || '')}`, {
@@ -680,9 +686,18 @@ export const sessionAPI = {
   }),
 
   // End session
-  end: (sessionId: string) => fetchWithAuth(`/sessions/${sessionId}/end`, {
+  end: (sessionId: string, continuity_notes?: string) => fetchWithAuth(`/sessions/${sessionId}/end`, {
     method: 'POST',
+    body: JSON.stringify({ continuity_notes }),
   }),
+
+  getLastHistory: (subjectId: string, studentIds: string[]) => {
+    const params = new URLSearchParams({
+      subject_id: subjectId,
+      student_ids: studentIds.join(','),
+    });
+    return fetchWithAuth(`/sessions/last-history?${params.toString()}`);
+  },
 
   // Pause session
   pause: (sessionId: string) => fetchWithAuth(`/sessions/${sessionId}/pause`, {
@@ -1322,6 +1337,7 @@ export const notificationsAPI = {
   getAll: (limit = 20) => fetchWithAuth(`/notifications/?limit=${limit}`),
   markAsRead: (id: string) => fetchWithAuth(`/notifications/${id}/read`, { method: 'POST' }),
   markAllAsRead: () => fetchWithAuth('/notifications/read-all', { method: 'POST' }),
+  delete: (id: string) => fetchWithAuth(`/notifications/${id}`, { method: 'DELETE' }),
 };
 
 export const messageAPI = {

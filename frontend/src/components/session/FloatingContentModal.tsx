@@ -9,11 +9,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { CheckCircle2, Send, FileText, Zap, X } from "lucide-react";
-import ReactMarkdown from "react-markdown";
 import MathText from "@/components/MathText";
-import { normalizeAcademicTextForDisplay } from "@/utils/academicText";
+import AcademicMarkdown from "@/components/AcademicMarkdown";
 
 interface FloatingContentModalProps {
   content: any;
@@ -46,9 +44,40 @@ export const FloatingContentModal: React.FC<FloatingContentModalProps> = ({
 
   if (!content) return null;
 
+  const toDisplayText = (value: any): string => {
+    if (value == null) return "";
+    if (typeof value === "string") return value;
+    if (typeof value === "number" || typeof value === "boolean") return String(value);
+    if (Array.isArray(value)) {
+      return value.map((item) => toDisplayText(item)).filter(Boolean).join("\n");
+    }
+    if (typeof value === "object") {
+      if (value.content) return toDisplayText(value.content);
+      const sections: string[] = [];
+      if (value.title) sections.push(`# ${toDisplayText(value.title)}`);
+      if (value.outline) {
+        sections.push(`## Lesson outline\n${toDisplayText(value.outline).split("\n").filter(Boolean).map((line) => `- ${line.replace(/^[-*]\s*/, "")}`).join("\n")}`);
+      }
+      if (value.assignment) sections.push(`## Take-home assignment\n${toDisplayText(value.assignment)}`);
+      if (value.instructions) sections.push(`## Student instructions\n${toDisplayText(value.instructions)}`);
+      if (Array.isArray(value.tasks) && value.tasks.length > 0) {
+        sections.push(`## Tasks\n${value.tasks.map((task: any, index: number) => `${index + 1}. ${toDisplayText(task)}`).join("\n")}`);
+      }
+      if (sections.length) return sections.join("\n\n");
+      return Object.entries(value)
+        .map(([key, item]) => {
+          const text = toDisplayText(item);
+          return text ? `**${key.replace(/_/g, " ")}:** ${text}` : "";
+        })
+        .filter(Boolean)
+        .join("\n");
+    }
+    return String(value);
+  };
+
   return (
     <Dialog open={true} onOpenChange={onClose}>
-      <DialogContent className="max-h-[92dvh] max-w-[calc(100vw-1rem)] flex flex-col p-0 overflow-hidden border-0 shadow-2xl bg-white dark:bg-slate-900 rounded-lg sm:max-w-2xl sm:rounded-3xl">
+      <DialogContent className="h-[calc(100dvh-2rem)] max-h-[92dvh] max-w-[calc(100vw-1rem)] min-h-0 flex flex-col p-0 overflow-hidden border-0 shadow-2xl bg-white dark:bg-slate-900 rounded-lg sm:max-w-2xl sm:rounded-3xl">
         <DialogHeader className="p-4 pb-2 sm:p-6 sm:pb-2">
           <div className="flex min-w-0 items-center justify-between gap-2">
             <div className={`min-w-0 px-3 py-1 rounded-full text-[10px] sm:text-xs font-bold uppercase tracking-wider sm:tracking-widest flex items-center gap-1.5 ${
@@ -71,7 +100,7 @@ export const FloatingContentModal: React.FC<FloatingContentModalProps> = ({
           </DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 px-4 pb-4 mt-2 sm:px-6 sm:pb-6">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-4 mt-2 sm:px-6 sm:pb-6">
           {contentType === "pop_quiz" ? (
             result ? (
               <div className="space-y-6 py-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -170,21 +199,14 @@ export const FloatingContentModal: React.FC<FloatingContentModalProps> = ({
           ) : (
             <div className="space-y-6 py-4 animate-in fade-in duration-500">
               <div className="p-4 sm:p-8 bg-slate-50 dark:bg-slate-800/50 rounded-2xl sm:rounded-3xl border-2 border-slate-100 dark:border-slate-800">
-                <div className="min-w-0 max-w-full break-words [overflow-wrap:anywhere] prose dark:prose-invert prose-sm sm:prose-lg prose-headings:font-black prose-headings:text-primary prose-strong:text-foreground prose-p:font-medium prose-p:max-w-full">
-                  <ReactMarkdown
-                    components={{
-                      p: ({ children }: any) => <p><MathText>{String(children ?? '')}</MathText></p>,
-                      li: ({ children }: any) => <li><MathText>{String(children ?? '')}</MathText></li>,
-                    }}
-                  >
-                    {normalizeAcademicTextForDisplay(String(content.content || content || ''))}
-                  </ReactMarkdown>
-                </div>
+                <AcademicMarkdown className="min-w-0 max-w-full break-words [overflow-wrap:anywhere] sm:prose-lg prose-headings:font-black prose-strong:text-foreground prose-p:font-medium prose-p:max-w-full">
+                  {toDisplayText(content.content ?? content)}
+                </AcademicMarkdown>
               </div>
               <Button onClick={onClose} className="w-full h-14 rounded-2xl text-lg font-bold shadow-xl">Got it, thanks!</Button>
             </div>
           )}
-        </ScrollArea>
+        </div>
       </DialogContent>
     </Dialog>
   );

@@ -266,7 +266,7 @@ export const VirtualBackgroundControl = ({
       <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden">
         <div className="flex items-center justify-between p-4 border-b border-slate-700">
           <div className="flex items-center gap-2">
-            <Camera className="w-5 h-5 text-indigo-400" />
+            <Camera className="w-5 h-5 text-primary" />
             <h3 className="font-semibold text-white">Virtual Background</h3>
           </div>
           <Button variant="ghost" size="icon" onClick={onClose} className="text-slate-400 hover:text-white">
@@ -321,7 +321,7 @@ export const VirtualBackgroundControl = ({
                             setCustomImageUrl('');
                           }}
                           className={`relative aspect-video rounded-lg overflow-hidden border-2 transition-all ${selectedPreset === preset.id
-                            ? 'border-indigo-500 ring-2 ring-indigo-500/30'
+                            ? 'border-primary ring-2 ring-primary/30'
                             : 'border-slate-700 hover:border-slate-600'
                             }`}
                         >
@@ -331,7 +331,7 @@ export const VirtualBackgroundControl = ({
                             className="w-full h-full object-cover"
                           />
                           {selectedPreset === preset.id && (
-                            <div className="absolute inset-0 bg-indigo-500/30 flex items-center justify-center">
+                            <div className="absolute inset-0 bg-primary/30 flex items-center justify-center">
                               <Check className="w-4 h-4 text-white" />
                             </div>
                           )}
@@ -379,7 +379,7 @@ export const VirtualBackgroundControl = ({
                 <Button
                   onClick={applyBackground}
                   disabled={isProcessing || (backgroundType === 'image' && !selectedPreset && !customImageUrl)}
-                  className="flex-1 bg-indigo-600 hover:bg-indigo-700"
+                  className="flex-1 bg-primary hover:bg-primary/90"
                 >
                   {isProcessing ? (
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />

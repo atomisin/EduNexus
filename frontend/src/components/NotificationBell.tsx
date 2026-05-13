@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Bell, Check, Clock } from 'lucide-react';
+import { Bell, Check, Clock, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
     DropdownMenu,
@@ -12,7 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { notificationsAPI, sessionAPI } from '@/services/api';
 import { toast } from 'sonner';
-import ReactMarkdown from 'react-markdown';
+import AcademicMarkdown from '@/components/AcademicMarkdown';
 
 interface Notification {
     id: string;
@@ -45,7 +45,11 @@ export const NotificationBell = () => {
     useEffect(() => {
         loadNotifications();
         const interval = setInterval(loadNotifications, 180000);
-        return () => clearInterval(interval);
+        window.addEventListener('edunexus:notifications-refresh', loadNotifications);
+        return () => {
+            clearInterval(interval);
+            window.removeEventListener('edunexus:notifications-refresh', loadNotifications);
+        };
     }, []);
 
     const handleMarkAsRead = async (id: string) => {
@@ -64,6 +68,17 @@ export const NotificationBell = () => {
             toast.success('All marked as read');
         } catch (error) {
             toast.error('Failed to mark all as read');
+        }
+    };
+
+    const handleDelete = async (event: React.MouseEvent, id: string) => {
+        event.stopPropagation();
+        try {
+            await notificationsAPI.delete(id);
+            loadNotifications();
+            toast.success('Deleted');
+        } catch (error) {
+            toast.error('Could not delete notification');
         }
     };
 
@@ -91,6 +106,10 @@ export const NotificationBell = () => {
     const assignmentContent = typeof sharedContent?.assignment === 'string'
         ? sharedContent.assignment
         : sharedContent?.assignment?.instructions || sharedContent?.assignment?.title;
+
+    const assignmentTasks = Array.isArray(sharedContent?.assignment?.tasks)
+        ? sharedContent.assignment.tasks
+        : [];
 
     return (
         <DropdownMenu>
@@ -134,7 +153,7 @@ export const NotificationBell = () => {
                                 className={`cursor-pointer p-4 border-b last:border-0 dark:border-slate-800 transition-colors hover:bg-slate-50 dark:hover:bg-slate-900 ${n.is_read ? 'bg-transparent' : 'bg-teal-50/30 dark:bg-teal-900/10'}`}
                             >
                                 <div className="flex justify-between items-start mb-1">
-                                    <h5 className={`text-sm font-semibold ${n.is_read ? 'text-slate-600 dark:text-slate-300' : 'text-indigo-900 dark:text-teal-100'}`}>
+                                    <h5 className={`text-sm font-semibold ${n.is_read ? 'text-slate-600 dark:text-slate-300' : 'text-primary dark:text-teal-100'}`}>
                                         {n.title}
                                     </h5>
                                     {!n.is_read && (
@@ -149,6 +168,13 @@ export const NotificationBell = () => {
                                             <Check className="w-3.5 h-3.5" />
                                         </button>
                                     )}
+                                    <button
+                                        onClick={(event) => handleDelete(event, n.id)}
+                                        className="text-slate-400 hover:text-red-600 p-0.5 rounded-full hover:bg-red-50"
+                                        title="Delete notification"
+                                    >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
                                 </div>
                                 <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mb-2">
                                     {n.message}
@@ -176,16 +202,23 @@ export const NotificationBell = () => {
                             {sharedContent?.subject || 'Live session'}{sharedContent?.topic ? ` - ${sharedContent.topic}` : ''}
                         </DialogDescription>
                     </DialogHeader>
-                    <div className="prose prose-sm max-w-none dark:prose-invert">
+                    <div className="space-y-5">
                         {noteContent ? (
-                            <ReactMarkdown>{noteContent}</ReactMarkdown>
+                            <AcademicMarkdown>{noteContent}</AcademicMarkdown>
                         ) : (
-                            <p>No shared note is available yet.</p>
+                            <p className="text-sm text-muted-foreground">No shared note is available yet.</p>
                         )}
-                        {!noteContent && assignmentContent && (
+                        {assignmentContent && (
                             <>
-                                <h2>Take-home assignment</h2>
-                                <ReactMarkdown>{assignmentContent}</ReactMarkdown>
+                                <h2 className="text-base font-semibold text-primary">Take-home assignment</h2>
+                                <AcademicMarkdown>{assignmentContent}</AcademicMarkdown>
+                                {assignmentTasks.length > 0 && (
+                                    <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+                                        {assignmentTasks.map((task: string, index: number) => (
+                                            <li key={index}>{task}</li>
+                                        ))}
+                                    </ul>
+                                )}
                             </>
                         )}
                     </div>

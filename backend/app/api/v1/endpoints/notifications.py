@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update
+from sqlalchemy import select, update, delete
 from typing import List
 import uuid
 import logging
@@ -76,4 +76,28 @@ async def mark_all_read(
     
     await db.commit()
     
+    return {"success": True}
+
+
+@router.delete("/{notification_id}")
+async def delete_notification(
+    notification_id: str,
+    db: AsyncSession = Depends(get_async_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Delete a notification for the current user."""
+    try:
+        notification_uuid = uuid.UUID(notification_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid notification ID format")
+
+    result = await db.execute(
+        delete(Notification).filter(
+            Notification.id == notification_uuid,
+            Notification.user_id == current_user.id,
+        )
+    )
+    if result.rowcount == 0:
+        raise HTTPException(status_code=404, detail="Notification not found")
+    await db.commit()
     return {"success": True}

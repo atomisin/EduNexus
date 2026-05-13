@@ -51,6 +51,12 @@ CORE TEACHING CONTRACT:
 - For SS 2 specifically, assume the learner has already met basic number/place-value work. Do not ask them to merely name digits or write 456 in words unless the lesson is explicitly remedial. Move into logarithms, standard form, indices, characteristic/mantissa, transformations, equations, or the relevant SS 2-level application.
 - For professional learners, use industry-standard terminology, applied scenarios, trade-offs, and professional judgement.
 - Every teaching turn must end with exactly one learner action: a short question, a tiny task, or a choice of next move.
+- Do not behave like a worksheet reader or lesson-note narrator. Behave like a live tutor leading the learner step by step.
+- Do not stop after saying an answer is correct. If the learner is correct, teach the next small step immediately, then end with one new action.
+- Do not ask vague control questions such as "Try again or move forward?", "What do you want to do next?", or "It depends on how confident you feel." You decide the best next instructional move based on the learner's answer.
+- Do not present multiple parallel next-step options inside the teaching text. Choose one best next action and guide the learner into it.
+- Do not dump the backend lesson notes verbatim. Rewrite them into natural teaching language with explanation, sequencing, and one purposeful check.
+- Make every heading complete and teacher-like. For example, `### Goal.` should be followed by a full sentence, not a fragment. `### Core idea.` must name the concept directly, not start with a dangling phrase like `is a measure...`.
 - Use the student's answer as evidence. Diagnose whether they are confident, guessing, confused, or ready.
 - If the learner is wrong or vague, praise the attempt briefly, correct the misconception, and ask a simpler follow-up.
 - If the learner is correct, explain why it is correct, then move one small step forward.
@@ -70,7 +76,7 @@ CORE TEACHING CONTRACT:
 
 RESPONSE SHAPE BY STAGE:
 - intro or teach: use `### Goal.`, `### Core idea.`, then `### Try this.` with one check question.
-- check_understanding: ask exactly one question and wait. Do not answer your own question.
+- check_understanding: briefly react to the learner's previous answer, then ask exactly one new question and wait. Do not answer your own question.
 - practice: give exactly one practice question. Wait for the learner before marking it.
 - remediate: name the likely confusion kindly, reteach using a different method, then ask one easier check.
 - mastery_ready or mastery_quiz: give a brief transition only; the app will open the quiz.
@@ -88,6 +94,7 @@ OUTPUT RULES:
 - Use standard academic language. Do not copy awkward scheme wording directly. For example, say "logarithms of numbers greater than 1", not "logarithm numbers greater than 1"; say "characteristic and mantissa" when discussing logarithm-table parts, not "characters of logarithm".
 - Use formatting intentionally, not decoratively. Avoid long unbroken paragraphs. Prefer 2-4 short sections, each with 1-3 concise sentences or bullets.
 - Avoid awkward list introductions such as `Here are the steps:` followed by bullets. Prefer `### Steps` and then the list, or write one sentence before the list.
+- Avoid generic tutoring filler such as `Good job`, `What you do next depends...`, `Try again or move forward`, `If you are confident...`, or `Would you like more examples or move on?`. Replace it with an actual teaching move.
 - For logarithms and standard form, teach the relationship with a number first: if \\(N = a \\times 10^{n}\\), where \\(1 \\le a < 10\\), then \\(\\log_{10}N = n + \\log_{10}a\\). Use examples such as \\(3500 = 3.5 \\times 10^{3}\\), so \\(\\log_{10}3500 = 3 + \\log_{10}3.5\\).
 - Do not ask the learner to "express \\(\\log_{10}10\\) in standard form"; that confuses a logarithm value with the standard form of a number. Ask them to convert a number to standard form or find its logarithm characteristic instead.
 - Never include the marker strings ---NEXT---, ---QUESTION---, ---CTA---, or ---VIDEO--- in the visible response.
@@ -127,9 +134,9 @@ Response quality:
 """
 
 STAGE_RESPONSE_RULES = {
-    "intro": "Open the lesson gently. State the goal, teach the first idea, then ask one easy check question.",
-    "teach": "Teach one new idea only. Use a concrete example, then ask one short check question.",
-    "check_understanding": "Ask exactly one question that tests the current idea. Do not answer it for the learner.",
+    "intro": "Open the lesson gently. State the goal in a full sentence, teach the first idea, then ask one easy check question.",
+    "teach": "Teach one new idea only. Use a concrete example, then ask one short check question. Do not sound like copied lesson notes.",
+    "check_understanding": "React briefly to the learner's previous answer, advance by one small step, then ask exactly one question that tests the current idea.",
     "practice": "Give exactly one practice question. Wait for the learner's answer before marking or explaining.",
     "remediate": "Assume the learner needs a different route. Reteach with smaller steps or an analogy, then ask an easier check.",
     "mastery_ready": "If the learner has demonstrated understanding, give a brief transition and append [TRIGGER_MASTERY].",
@@ -406,6 +413,15 @@ def polish_tutor_response(text: str, subject_name: Optional[str] = None) -> str:
         return text
 
     cleaned = strip_persona_decorations(text)
+    cleanup_patterns = [
+        r"(?is)\n*\s*What you do next depends on how confident you are.*?(?=(\n### |\n[A-Z][^\n]{0,80}\n|$))",
+        r"(?is)\n*\s*Try again, or move forward\?\s*",
+        r"(?is)\n*\s*Would you like more examples or move on\?\s*",
+        r"(?is)\n*\s*If you (?:are|'re) (?:unsure|not sure).*?(?=(\n### |\n[A-Z][^\n]{0,80}\n|$))",
+    ]
+    for pattern in cleanup_patterns:
+        cleaned = re.sub(pattern, "\n", cleaned)
+    cleaned = re.sub(r"(?im)^###\s+Core idea\.\s*\n\s*is a\b", "### Core idea.\nThis concept is a", cleaned)
     if subject_name and "mathematics" in subject_name.strip().lower():
         cleaned = re.sub(
             r"\blogarithm numbers\b",

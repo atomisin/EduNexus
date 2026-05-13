@@ -30,6 +30,29 @@ def _clean_text(value: Any, fallback: str = "") -> str:
     return text or fallback
 
 
+def _normalize_lesson_goal(value: Any, fallback: str = "") -> str:
+    text = _clean_text(value, fallback)
+    if not text:
+        return fallback
+
+    text = re.sub(
+        r"^As a [^,]+,\s*I want to\s+",
+        "",
+        text,
+        flags=re.IGNORECASE,
+    )
+    text = re.sub(
+        r"^I want to\s+",
+        "",
+        text,
+        flags=re.IGNORECASE,
+    )
+    text = text[:1].upper() + text[1:] if text else text
+    if text and not text.endswith("."):
+        text += "."
+    return text
+
+
 def _as_text_list(value: Any, fallback: Optional[List[str]] = None, limit: int = 8) -> List[str]:
     fallback = fallback or []
     if isinstance(value, str):
@@ -123,7 +146,7 @@ def normalize_lesson_plan(raw: Any, subject: Subject, topic: Topic, education_le
         raw = {}
 
     return {
-        "lesson_goal": _clean_text(raw.get("lesson_goal"), fallback["lesson_goal"]),
+        "lesson_goal": _normalize_lesson_goal(raw.get("lesson_goal"), fallback["lesson_goal"]),
         "scope_boundaries": _as_text_list(raw.get("scope_boundaries"), fallback["scope_boundaries"], 8),
         "prerequisites": _as_text_list(raw.get("prerequisites"), fallback["prerequisites"], 8),
         "teaching_sequence": _normalize_teaching_sequence(raw.get("teaching_sequence")),

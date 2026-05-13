@@ -60,6 +60,19 @@ const getAITutorErrorMessage = (err: any) => {
     : "I couldn't complete that response right now. Please try again in a moment.";
 };
 
+const isTransientTutorError = (err: any) => {
+  const raw = typeof err?.message === 'string' ? err.message.toLowerCase() : '';
+  return (
+    raw.includes('ai_service_unavailable') ||
+    raw.includes('temporarily unavailable') ||
+    raw.includes('service unavailable') ||
+    raw.includes('taking too long') ||
+    raw.includes('waking up') ||
+    raw.includes('failed to fetch') ||
+    raw.includes('unable to connect')
+  );
+};
+
 const getChatStorageKey = (subjectId?: string, topicId?: string, topicName?: string, subtopicName?: string) => {
   return `edunexus_chat_${subjectId || 'default'}::${topicId || topicName || 'general'}::${topicName || 'general'}::${subtopicName || 'intro'}`;
 };
@@ -315,15 +328,37 @@ export const useAITutor = (profile?: any, getFullName?: () => string) => {
         subject_id: currentSubject?.id || null,
       };
 
-      const response = await aiAPI.chat(
-        [...safeHistory, { role: 'user', content }],
-        'teaching',
-        undefined,
-        0.6,
-        currentSubject?.name || undefined,
-        topicContext || undefined,
-        lessonContext
-      );
+      const requestPayload = [
+        ...safeHistory,
+        { role: 'user' as const, content }
+      ];
+      let response;
+      try {
+        response = await aiAPI.chat(
+          requestPayload,
+          'teaching',
+          undefined,
+          0.6,
+          currentSubject?.name || undefined,
+          topicContext || undefined,
+          lessonContext
+        );
+      } catch (firstErr: any) {
+        const isFirstTurn = userTurnCount <= 1;
+        if (!isFirstTurn || !isTransientTutorError(firstErr)) {
+          throw firstErr;
+        }
+        await new Promise(resolve => setTimeout(resolve, 1200));
+        response = await aiAPI.chat(
+          requestPayload,
+          'teaching',
+          undefined,
+          0.6,
+          currentSubject?.name || undefined,
+          topicContext || undefined,
+          lessonContext
+        );
+      }
 
       const aiContent = typeof response?.response === 'string' ? response.response : '';
       if (!aiContent.trim()) {

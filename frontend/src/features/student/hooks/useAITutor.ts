@@ -27,6 +27,36 @@ const cleanTutorResponse = (content: string) => {
     .trim();
 };
 
+const getAITutorErrorMessage = (err: any) => {
+  const raw = typeof err?.message === 'string' ? err.message.trim() : '';
+  if (!raw) {
+    return "I couldn't complete that response right now. Please try again in a moment.";
+  }
+
+  const lower = raw.toLowerCase();
+  if (lower.includes('taking too long') || lower.includes('waking up')) {
+    return 'The AI tutor is taking longer than usual to respond. Please try again in a moment.';
+  }
+  if (lower.includes('unable to connect') || lower.includes('failed to fetch') || lower.includes('network')) {
+    return 'I lost the connection to the tutor service for a moment. Please try your last question again.';
+  }
+  if (lower.includes('brain power')) {
+    return raw;
+  }
+  if (lower.includes('session expired') || lower.includes('unauthorized') || lower.includes('log in again')) {
+    return 'Your session expired while the tutor was replying. Please sign in again and continue.';
+  }
+  if (lower.includes('http 5') || lower.includes('internal server error') || lower.includes('service unavailable')) {
+    return 'The tutor service hit a temporary issue. Please try again in a moment.';
+  }
+  if (lower.includes('http 4') || lower.includes('bad request')) {
+    return raw;
+  }
+  return raw.length <= 180
+    ? raw
+    : "I couldn't complete that response right now. Please try again in a moment.";
+};
+
 const getChatStorageKey = (subjectId?: string, topicId?: string, topicName?: string, subtopicName?: string) => {
   return `edunexus_chat_${subjectId || 'default'}::${topicId || topicName || 'general'}::${topicName || 'general'}::${subtopicName || 'intro'}`;
 };
@@ -292,7 +322,10 @@ export const useAITutor = (profile?: any, getFullName?: () => string) => {
         lessonContext
       );
 
-      const aiContent = response.response || '';
+      const aiContent = typeof response?.response === 'string' ? response.response : '';
+      if (!aiContent.trim()) {
+        throw new Error('The tutor returned an empty response.');
+      }
       // Detect UI markers
       const hasNext = aiContent.includes('---NEXT---');
       const hasQuestion = aiContent.includes('---QUESTION---');
@@ -334,12 +367,16 @@ export const useAITutor = (profile?: any, getFullName?: () => string) => {
         fetchVideoSuggestions(currentTopic?.name || content, currentSubject);
       }
     } catch (err: any) {
-      console.error('[AI Tutor] chat request failed:', err);
+      console.error('[AI Tutor] chat request failed:', {
+        message: err?.message,
+        requestId: err?.requestId,
+        status: err?.status,
+        detail: err?.detail,
+        error: err,
+      });
       setMessagesAndRef(prev => [...prev, {
         role: 'ai',
-        content: err?.message?.includes('taking too long')
-          ? "The AI tutor is taking longer than usual to respond. Please try again in a moment."
-          : "I couldn't complete that response. Please try your last question again."
+        content: getAITutorErrorMessage(err)
       }]);
       setAiState({ status: 'idle' });
       isChattingRef.current = false;

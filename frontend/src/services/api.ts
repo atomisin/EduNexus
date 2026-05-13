@@ -30,6 +30,18 @@ let _warmUpPromise: Promise<boolean> | null = null;
 let _refreshPromise: Promise<boolean> | null = null;
 const LOGOUT_IN_PROGRESS_KEY = 'edunexus_logout_in_progress';
 
+type ApiError = Error & {
+  status?: number;
+  requestId?: string;
+  detail?: unknown;
+};
+
+function createApiError(message: string, extras: Partial<ApiError> = {}): ApiError {
+  const error = new Error(message) as ApiError;
+  Object.assign(error, extras);
+  return error;
+}
+
 export function markLogoutInProgress() {
   if (typeof window !== 'undefined') {
     sessionStorage.setItem(LOGOUT_IN_PROGRESS_KEY, '1');
@@ -127,11 +139,27 @@ export async function fetchWithAuth(endpoint: string, options: RequestInit & { s
       if (response.status === 401 && !silentAuth && !isAuthFlowEndpoint && !isLogoutInProgress()) {
         window.dispatchEvent(new Event('auth:unauthorized'));
       }
-      const error = await response.json().catch(() => ({ detail: 'An error occurred' }));
-      throw new Error(error.detail || `HTTP ${response.status}: ${response.statusText}`);
+      const requestId = response.headers.get('X-Request-ID') || undefined;
+      const errorPayload = await response.json().catch(() => ({ detail: 'An error occurred' }));
+      const rawDetail = errorPayload?.detail;
+      const detail = typeof rawDetail === 'string'
+        ? rawDetail
+        : typeof rawDetail === 'object' && rawDetail !== null
+          ? JSON.stringify(rawDetail)
+          : `HTTP ${response.status}: ${response.statusText}`;
+      throw createApiError(detail, {
+        status: response.status,
+        requestId,
+        detail: rawDetail,
+      });
     }
 
-    return response.json();
+    const data = await response.json();
+    const requestId = response.headers.get('X-Request-ID') || undefined;
+    if (requestId && data && typeof data === 'object' && !Array.isArray(data) && !('request_id' in data)) {
+      return { ...data, request_id: requestId };
+    }
+    return data;
   } catch (err: any) {
     // Timeout aborts surface as AbortError
     if (err.name === 'AbortError') {
@@ -140,7 +168,7 @@ export async function fetchWithAuth(endpoint: string, options: RequestInit & { s
       window.dispatchEvent(new CustomEvent('api:fetch_failed', {
         detail: { url: targetUrl, error: timeoutMsg }
       }));
-      throw new Error(timeoutMsg);
+      throw createApiError(timeoutMsg);
     }
     // Distinguish between API errors and Network/CORS errors
     if (err.name === 'TypeError' || err.message?.includes('Failed to fetch')) {
@@ -150,7 +178,7 @@ export async function fetchWithAuth(endpoint: string, options: RequestInit & { s
       window.dispatchEvent(new CustomEvent('api:fetch_failed', { 
         detail: { url: targetUrl, error: errorMsg } 
       }));
-      throw new Error(errorMsg);
+      throw createApiError(errorMsg);
     }
     throw err;
   }

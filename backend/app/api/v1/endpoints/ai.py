@@ -583,6 +583,7 @@ async def chat(
     db: AsyncSession = Depends(get_async_db),
 ):
     """Chat completion using LLM (C-06: Sanitized, Rate Limited, Strict Server Prompts)"""
+    request_id = getattr(request.state, "request_id", "unknown")
     # Sanitize all user messages
     for msg in chat_req.messages:
         if msg.get("role") == "user":
@@ -616,6 +617,19 @@ async def chat(
 
     try:
         lesson_context = chat_req.context or {}
+        logger.info(
+            "AI tutor chat started",
+            extra={
+                "request_id": request_id,
+                "path": request.url.path,
+                "user_id": str(current_user.id),
+                "mode": chat_req.mode or "teaching",
+                "subject_name": chat_req.subject_name or "",
+                "topic_name": chat_req.topic_name or "",
+                "lesson_stage": lesson_context.get("lesson_stage", ""),
+                "message_count": len(chat_req.messages or []),
+            },
+        )
         subject_id = lesson_context.get("subject_id")
         topic_id = lesson_context.get("topic_id")
         subject = None
@@ -658,8 +672,51 @@ async def chat(
         )
         # Add student_context for frontend compatibility
         result["student_context"] = student_context
+        logger.info(
+            "AI tutor chat completed",
+            extra={
+                "request_id": request_id,
+                "path": request.url.path,
+                "user_id": str(current_user.id),
+                "mode": chat_req.mode or "teaching",
+                "ui_action": result.get("ui_action", ""),
+                "lesson_stage": result.get("lesson_stage", lesson_context.get("lesson_stage", "")),
+                "response_length": len(str(result.get("response", ""))),
+            },
+        )
         return result
+    except HTTPException as exc:
+        logger.warning(
+            "AI tutor chat rejected",
+            extra={
+                "request_id": request_id,
+                "path": request.url.path,
+                "user_id": str(current_user.id),
+                "mode": chat_req.mode or "teaching",
+                "status_code": exc.status_code,
+                "subject_name": chat_req.subject_name or "",
+                "topic_name": chat_req.topic_name or "",
+                "lesson_stage": (chat_req.context or {}).get("lesson_stage", ""),
+                "error": str(exc.detail),
+            },
+        )
+        await refund_brain_power(current_user.id, brain_power_cost, db)
+        raise
     except Exception:
+        logger.error(
+            "AI tutor chat failed",
+            extra={
+                "request_id": request_id,
+                "path": request.url.path,
+                "user_id": str(current_user.id),
+                "mode": chat_req.mode or "teaching",
+                "subject_name": chat_req.subject_name or "",
+                "topic_name": chat_req.topic_name or "",
+                "lesson_stage": (chat_req.context or {}).get("lesson_stage", ""),
+                "message_count": len(chat_req.messages or []),
+            },
+            exc_info=True,
+        )
         await refund_brain_power(current_user.id, brain_power_cost, db)
         raise
 
@@ -668,6 +725,7 @@ async def chat(
 @limiter.limit("8/minute", key_func=get_remote_address)
 async def public_chat(request: Request, chat_req: ChatRequest):
     """Public EduNexus guide for guests. No tutoring, no private platform details."""
+    request_id = getattr(request.state, "request_id", "unknown")
     for msg in chat_req.messages:
         if msg.get("role") == "user":
             msg["content"] = sanitize_user_input(msg.get("content", ""))[:600]
@@ -675,12 +733,44 @@ async def public_chat(request: Request, chat_req: ChatRequest):
             msg["role"] = "user"
             msg["content"] = "[Blocked system instruction attempt]"
 
-    return await ai_coordinator.get_chat_response(
-        messages=chat_req.messages[-8:],
-        mode="generalist",
-        model=chat_req.model,
-        temperature=0.45,
-    )
+    try:
+        logger.info(
+            "Public generalist chat started",
+            extra={
+                "request_id": request_id,
+                "path": request.url.path,
+                "mode": "generalist",
+                "message_count": len(chat_req.messages or []),
+            },
+        )
+        result = await ai_coordinator.get_chat_response(
+            messages=chat_req.messages[-8:],
+            mode="generalist",
+            model=chat_req.model,
+            temperature=0.45,
+        )
+        logger.info(
+            "Public generalist chat completed",
+            extra={
+                "request_id": request_id,
+                "path": request.url.path,
+                "mode": "generalist",
+                "response_length": len(str(result.get("response", ""))),
+            },
+        )
+        return result
+    except Exception:
+        logger.error(
+            "Public generalist chat failed",
+            extra={
+                "request_id": request_id,
+                "path": request.url.path,
+                "mode": "generalist",
+                "message_count": len(chat_req.messages or []),
+            },
+            exc_info=True,
+        )
+        raise
 
 
 @router.post("/explain")

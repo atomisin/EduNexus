@@ -459,9 +459,9 @@ export const AIChatSection = ({
             <div className="flex items-center justify-between w-full gap-2">
               <div className="min-w-0 flex items-center gap-2 sm:gap-3">
                 <Avatar className="w-8 h-8 sm:w-12 sm:h-12 border-2 border-teal-100 dark:border-teal-900 shadow-none">
-                  <AvatarImage src={avatarUrl || ''} />
-                  <AvatarFallback className="bg-teal-50 text-teal-600">
-                    <Brain className="w-5 h-5 sm:w-6 sm:h-6" />
+                  <AvatarImage src={`/avatars/ai_tutor_${tutorGender}.png`} className="object-cover" />
+                  <AvatarFallback className="bg-teal-50 text-teal-700 text-xs font-bold">
+                    AI
                   </AvatarFallback>
                 </Avatar>
                 <div className="min-w-0 max-w-[4.8rem] min-[360px]:max-w-[6rem] sm:max-w-none flex flex-col">

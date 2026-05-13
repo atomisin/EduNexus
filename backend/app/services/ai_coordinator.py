@@ -57,6 +57,7 @@ CORE TEACHING CONTRACT:
 - Do not present multiple parallel next-step options inside the teaching text. Choose one best next action and guide the learner into it.
 - Do not dump the backend lesson notes verbatim. Rewrite them into natural teaching language with explanation, sequencing, and one purposeful check.
 - Make every heading complete and teacher-like. For example, `### Goal.` should be followed by a full sentence, not a fragment. `### Core idea.` must name the concept directly, not start with a dangling phrase like `is a measure...`.
+- When teaching components, parts, types, stages, languages, tools, organs, accounts, or categories, always name each item before explaining its function. Use the pattern `- **Name:** what it is or what it does.` Never list bare functions such as `Used to define...` without first stating the component name.
 - Use the student's answer as evidence. Diagnose whether they are confident, guessing, confused, or ready.
 - If the learner is wrong or vague, praise the attempt briefly, correct the misconception, and ask a simpler follow-up.
 - If the learner is correct, first say clearly that the answer is correct, explain why it is correct in one or two sentences, then move one small step forward.
@@ -71,7 +72,7 @@ CORE TEACHING CONTRACT:
   - Use `ALL CAPS` only for short labels such as IMPORTANT, NOTE, or CHECK, never for whole sentences.
   - Use bullet points for steps, properties, examples, or comparisons.
   - Use numbered lists only for ordered solving steps.
-  - When a heading introduces bullets or numbered steps, do not leave a standalone colon before the list. Use a clean heading such as `### Key points`, then the list on the next line.
+  - When a heading introduces bullets or numbered steps, do not leave a standalone colon before the list. Use a clean heading such as `### Key points.`, then the list on the next line.
   - Use ++underlined text++ for one essential term per response when emphasis is useful.
   - Write normal teaching sentences in sentence case.
 
@@ -94,7 +95,8 @@ OUTPUT RULES:
 - Put mathematical, scientific, accounting, and technical expressions in LaTeX delimiters: inline as \\( ... \\), display as \\[ ... \\]. Use \\times, subscripts, superscripts, units, and professional symbols, e.g. \\(1 \\times 10^{2}\\), \\(H_{2}O\\), \\(CO_{2}\\), \\(m/s^{2}\\), \\(Assets = Liabilities + Equity\\).
 - Use standard academic language. Do not copy awkward scheme wording directly. For example, say "logarithms of numbers greater than 1", not "logarithm numbers greater than 1"; say "characteristic and mantissa" when discussing logarithm-table parts, not "characters of logarithm".
 - Use formatting intentionally, not decoratively. Avoid long unbroken paragraphs. Prefer 2-4 short sections, each with 1-3 concise sentences or bullets.
-- Avoid awkward list introductions such as `Here are the steps:` followed by bullets. Prefer `### Steps` and then the list, or write one sentence before the list.
+- Avoid awkward list introductions such as `Here are the steps:` followed by bullets. Prefer `### Steps.` and then the list, or write one sentence before the list.
+- In any component list, every bullet must begin with the component name or label, not with its use. Good example: `- **DDL (Data Definition Language):** defines the structure of the database.` Bad example: `- Used to define the structure of the database.`
 - Avoid generic tutoring filler such as `Good job`, `What you do next depends...`, `Try again or move forward`, `If you are confident...`, or `Would you like more examples or move on?`. Replace it with an actual teaching move.
 - For logarithms and standard form, teach the relationship with a number first: if \\(N = a \\times 10^{n}\\), where \\(1 \\le a < 10\\), then \\(\\log_{10}N = n + \\log_{10}a\\). Use examples such as \\(3500 = 3.5 \\times 10^{3}\\), so \\(\\log_{10}3500 = 3 + \\log_{10}3.5\\).
 - Do not ask the learner to "express \\(\\log_{10}10\\) in standard form"; that confuses a logarithm value with the standard form of a number. Ask them to convert a number to standard form or find its logarithm characteristic instead.
@@ -146,10 +148,24 @@ STAGE_RESPONSE_RULES = {
 }
 
 
-def _compact_plan_items(items: Any, limit: int = 5) -> str:
+def _shorten_prompt_text(value: Any, max_chars: int = 140) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    text = " ".join(text.split())
+    if len(text) <= max_chars:
+        return text
+    return text[: max_chars - 3].rstrip() + "..."
+
+
+def _compact_plan_items(items: Any, limit: int = 4, max_chars: int = 110) -> str:
     if not isinstance(items, list):
         return "Not specified."
-    cleaned = [str(item).strip() for item in items if str(item or "").strip()]
+    cleaned = [
+        _shorten_prompt_text(item, max_chars=max_chars)
+        for item in items
+        if _shorten_prompt_text(item, max_chars=max_chars)
+    ]
     if not cleaned:
         return "Not specified."
     if len(cleaned) > limit:
@@ -181,7 +197,7 @@ def _find_plan_step(plan: Dict[str, Any], plan_stage: str) -> Dict[str, str]:
             if str(item.get("stage") or "").strip().lower() == plan_stage:
                 return {
                     "stage": plan_stage,
-                    "objective": str(item.get("objective") or "").strip(),
+                    "objective": _shorten_prompt_text(item.get("objective"), max_chars=160),
                 }
     return {"stage": plan_stage, "objective": "Teach the current lesson step without drifting."}
 
@@ -202,7 +218,7 @@ def build_lesson_control_prompt(lesson_context: Optional[Dict[str, Any]]) -> str
         f"\n- Required behavior now: {stage_rule}"
     )
     if active_subtopic:
-        prompt += f"\n- Active focus area: {active_subtopic}"
+        prompt += f"\n- Active focus area: {_shorten_prompt_text(active_subtopic, max_chars=120)}"
 
     lesson_plan = lesson_context.get("lesson_teaching_plan") or {}
     if isinstance(lesson_plan, dict) and lesson_plan:
@@ -210,14 +226,14 @@ def build_lesson_control_prompt(lesson_context: Optional[Dict[str, Any]]) -> str
         plan_step = _find_plan_step(lesson_plan, plan_stage)
         prompt += (
             "\n\nLESSON TEACHING PLAN:"
-            f"\n- Lesson goal: {lesson_plan.get('lesson_goal') or 'Not specified.'}"
+            f"\n- Lesson goal: {_shorten_prompt_text(lesson_plan.get('lesson_goal') or 'Not specified.', max_chars=180)}"
             f"\n- Current plan step: {plan_step.get('stage')} - {plan_step.get('objective') or 'Teach the current step clearly.'}"
             f"\n- Scope boundaries: {_compact_plan_items(lesson_plan.get('scope_boundaries'))}"
-            f"\n- Prerequisites to activate when needed: {_compact_plan_items(lesson_plan.get('prerequisites'), 4)}"
-            f"\n- Likely misconceptions: {_compact_plan_items(lesson_plan.get('misconceptions'), 4)}"
-            f"\n- Allowed examples: {_compact_plan_items(lesson_plan.get('allowed_examples'), 4)}"
-            f"\n- Forbidden drift: {_compact_plan_items(lesson_plan.get('forbidden_drift'), 4)}"
-            f"\n- Mastery evidence: {_compact_plan_items(lesson_plan.get('mastery_criteria'), 4)}"
+            f"\n- Prerequisites to activate when needed: {_compact_plan_items(lesson_plan.get('prerequisites'), 3)}"
+            f"\n- Likely misconceptions: {_compact_plan_items(lesson_plan.get('misconceptions'), 3)}"
+            f"\n- Allowed examples: {_compact_plan_items(lesson_plan.get('allowed_examples'), 3)}"
+            f"\n- Forbidden drift: {_compact_plan_items(lesson_plan.get('forbidden_drift'), 3)}"
+            f"\n- Mastery evidence: {_compact_plan_items(lesson_plan.get('mastery_criteria'), 3)}"
             "\nPLAN RULE: Teach only inside this plan. Do not advance to the next lesson, adjacent range, or broader chapter unless the platform changes the active lesson."
             "\nPLAN RULE: If the learner is bored or moving quickly, increase challenge inside the allowed examples and mastery criteria; do not skip the lesson structure."
             "\nPLAN RULE: If the learner struggles, use prerequisites and misconceptions to remediate before continuing."
@@ -225,9 +241,13 @@ def build_lesson_control_prompt(lesson_context: Optional[Dict[str, Any]]) -> str
     revision_context = lesson_context.get("revision_context") or {}
     if revision_context.get("is_revision"):
         source_topics = revision_context.get("source_topics") or []
-        topic_names = [item.get("name") for item in source_topics if item.get("name")]
-        if len(topic_names) > 40:
-            topic_names = topic_names[:40] + [f"...and {len(source_topics) - 40} more previous-class topics"]
+        topic_names = [
+            _shorten_prompt_text(item.get("name"), max_chars=70)
+            for item in source_topics
+            if item.get("name")
+        ]
+        if len(topic_names) > 10:
+            topic_names = topic_names[:10] + [f"...and {len(source_topics) - 10} more previous-class topics"]
         focus = revision_context.get("revision_focus") or []
         prompt += (
             "\n\nREVISION LESSON CONTEXT:"
@@ -237,7 +257,7 @@ def build_lesson_control_prompt(lesson_context: Optional[Dict[str, Any]]) -> str
             f"\n  {', '.join(topic_names) if topic_names else 'No previous-class topic list available.'}"
         )
         if focus:
-            prompt += f"\n- Current revision focus from the scheme: {', '.join(focus)}"
+            prompt += f"\n- Current revision focus from the scheme: {', '.join(_shorten_prompt_text(item, max_chars=70) for item in focus if _shorten_prompt_text(item, max_chars=70))}"
         prompt += (
             "\nRULE: Do not assume the learner remembers the previous class. Ask one diagnostic or review question before moving forward."
             "\nRULE: If the learner struggles, revise the relevant previous-class idea first, then reconnect it to the current lesson."
@@ -474,7 +494,72 @@ def polish_tutor_response(text: str, subject_name: Optional[str] = None) -> str:
         "",
         cleaned,
     )
+    cleaned = _normalize_heading_periods(cleaned)
     return cleaned.strip()
+
+
+def _normalize_heading_periods(text: str) -> str:
+    lines = text.splitlines()
+    normalized: List[str] = []
+
+    for index, line in enumerate(lines):
+        stripped = line.strip()
+        if not stripped:
+            normalized.append(line)
+            continue
+
+        if stripped.endswith((".", "!", "?", ":")):
+            normalized.append(line)
+            continue
+
+        markdown_match = re.match(r"^(#{1,6}\s+)(.+?)\s*$", line)
+        if markdown_match:
+            heading_text = markdown_match.group(2).strip()
+            if heading_text and not heading_text.endswith((".", "!", "?", ":")):
+                normalized.append(f"{markdown_match.group(1)}{heading_text}.")
+            else:
+                normalized.append(line)
+            continue
+
+        if _looks_like_plain_heading(lines, index):
+            normalized.append(f"{line.rstrip()}.")
+            continue
+
+        normalized.append(line)
+
+    return "\n".join(normalized)
+
+
+def _looks_like_plain_heading(lines: List[str], index: int) -> bool:
+    stripped = lines[index].strip()
+    if not stripped or len(stripped) > 70:
+        return False
+    if stripped.startswith(("-", "*", ">", "`")):
+        return False
+    if re.match(r"^\d+[.)]\s+", stripped):
+        return False
+    if stripped.lower().startswith(("http://", "https://")):
+        return False
+    if not re.search(r"[A-Za-z]", stripped):
+        return False
+    if not stripped[0].isupper():
+        return False
+    if len(stripped.split()) > 8:
+        return False
+
+    next_nonempty = ""
+    for later in lines[index + 1 :]:
+        candidate = later.strip()
+        if candidate:
+            next_nonempty = candidate
+            break
+    if not next_nonempty:
+        return False
+    if re.match(r"^(#{1,6}\s+|[-*]\s+|\d+[.)]\s+)", next_nonempty):
+        return True
+    if next_nonempty and next_nonempty[0].isupper():
+        return False
+    return True
 
 
 class ExplanationType(str, Enum):
@@ -1252,11 +1337,11 @@ CONVERSION STYLE:
             if persona.use_tts:
                 max_tokens = 80  # Creche/Nursery/KG
             elif persona.name in ("Bello", "Zara"):
-                max_tokens = 300  # Primary 1-6
+                max_tokens = 220  # Primary 1-6
             elif persona.name == "Coach Rex":
-                max_tokens = 450  # JSS 1-3
+                max_tokens = 320  # JSS 1-3
             else:
-                max_tokens = 650  # SS/Professional
+                max_tokens = 420  # SS/Professional
 
             if needs_intervention:
                 system_prompt += """
@@ -1276,10 +1361,15 @@ If you have fully taught ALL the required concepts for the current topic or the 
 If the learner says the lesson is boring, repetitive, too easy, or asks for a test too early, do not trigger mastery immediately. Increase challenge inside the current lesson with one stronger practice task or a faster checkpoint first.
 """
 
+        if mode == "generalist":
+            chat_model = model
+        else:
+            chat_model = model or self.llm.primary_model
+
         # 5. Call LLM
         response = await self.llm.chat(
             messages=messages,
-            model=model,
+            model=chat_model,
             temperature=temperature,
             system_prompt=system_prompt,
             max_tokens=max_tokens,

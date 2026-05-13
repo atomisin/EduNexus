@@ -35,6 +35,80 @@ class LLMService:
         self._failure_count = 0
         self._circuit_open_until: Optional[datetime] = None
 
+    def _normalize_model_name(self, model: Optional[str]) -> Optional[str]:
+        if not model:
+            return None
+        if "/" not in model and len(model) < 60:
+            if model == "llama-3.1-8b-instant":
+                return self.fast_model
+            if model == "llama-3.1-70b-versatile":
+                return self.primary_model
+        return model
+
+    def _model_provider_available(self, model: Optional[str]) -> bool:
+        normalized = self._normalize_model_name(model)
+        if not normalized:
+            return False
+        lowered = normalized.lower()
+        if lowered.startswith("openai/") or lowered.startswith("gpt-"):
+            return bool(settings.OPENAI_API_KEY)
+        if lowered.startswith("groq/"):
+            return bool(settings.GROQ_API_KEY)
+        return True
+
+    def _candidate_models(self, preferred_model: Optional[str] = None) -> List[str]:
+        candidates: List[str] = []
+        for model_name in [
+            preferred_model,
+            self.fast_model,
+            self.primary_model,
+            self.fallback_model,
+        ]:
+            normalized = self._normalize_model_name(model_name)
+            if not normalized:
+                continue
+            if normalized in candidates:
+                continue
+            if not self._model_provider_available(normalized):
+                logger.info("Skipping unavailable fallback model %s because its provider is not configured.", normalized)
+                continue
+            candidates.append(normalized)
+        return candidates
+
+    async def _acompletion_with_fallbacks(
+        self,
+        kwargs: Dict[str, Any],
+        preferred_model: Optional[str],
+        log_label: str,
+    ):
+        import litellm
+
+        candidates = self._candidate_models(preferred_model)
+        if not candidates:
+            logger.error("No configured LLM providers are available for %s.", log_label)
+            raise HTTPException(status_code=503, detail="AI_SERVICE_UNAVAILABLE")
+
+        last_exception: Optional[Exception] = None
+        for index, candidate in enumerate(candidates):
+            attempt_kwargs = dict(kwargs)
+            attempt_kwargs["model"] = candidate
+            try:
+                response = await litellm.acompletion(**attempt_kwargs)
+                if index > 0:
+                    logger.info("%s succeeded with fallback model %s", log_label, candidate)
+                self._record_success()
+                return candidate, response
+            except Exception as exc:
+                last_exception = exc
+                if index == 0:
+                    logger.warning("Primary model %s %s failed: %s. Trying fallback.", candidate, log_label, exc)
+                    self._record_failure()
+                else:
+                    logger.warning("Fallback model %s %s failed: %s", candidate, log_label, exc)
+
+        logger.error("All configured LLM models failed for %s. Last error: %s", log_label, last_exception)
+        raise HTTPException(status_code=503, detail="AI_SERVICE_UNAVAILABLE")
+
     def _is_circuit_open(self) -> bool:
         """Check if circuit is currently open (failing)"""
         if self._circuit_open_until:
@@ -176,11 +250,7 @@ class LLMService:
             raise HTTPException(status_code=503, detail="AI_SERVICE_UNAVAILABLE")
 
         try:
-            use_model = model or self.fast_model
-            if use_model and ("/" not in use_model and len(use_model) < 60):
-                # Map old bare models to groq/ prefix if needed
-                if use_model == "llama-3.1-8b-instant":
-                    use_model = self.fast_model
+            use_model = self._normalize_model_name(model or self.fast_model)
             
             sys_prompt = system_prompt or "You are EduNexus, an AI educational assistant for Nigerian students. Be helpful, clear, and culturally sensitive."
             messages = self._prepare_messages(
@@ -189,7 +259,6 @@ class LLMService:
             )
 
             kwargs = {
-                "model": use_model,
                 "messages": messages,
                 "temperature": temperature,
                 "max_tokens": max_tokens,
@@ -198,56 +267,29 @@ class LLMService:
             if format == "json_object":
                 kwargs["response_format"] = {"type": "json_object"}
 
-            try:
-                import litellm
-                response = await litellm.acompletion(**kwargs)
-                self._record_success()
-                
-                if hasattr(response, 'usage') and response.usage:
-                    usage = response.usage
-                    cost_micros = self.calculate_cost_microdollars(
-                        model=use_model,
-                        prompt_tokens=getattr(usage, 'prompt_tokens', 0),
-                        completion_tokens=getattr(usage, 'completion_tokens', 0)
-                    )
-                    self._log_usage(
-                        model=use_model,
-                        prompt_tokens=getattr(usage, 'prompt_tokens', 0),
-                        completion_tokens=getattr(usage, 'completion_tokens', 0),
-                        total_tokens=getattr(usage, 'total_tokens', 0),
-                        cost_microdollars=cost_micros,
-                        user_id=user_id
-                    )
-                
-                return response.choices[0].message.content or ""
-            except Exception as primary_e:
-                logger.warning(f"Primary model {use_model} failed: {primary_e}. Trying fallback.")
-                self._record_failure()
-                
-                # Try fallback
-                kwargs["model"] = self.fallback_model
-                try:
-                    import litellm
-                    fallback_res = await litellm.acompletion(**kwargs)
-                    if hasattr(fallback_res, 'usage') and fallback_res.usage:
-                        usage = fallback_res.usage
-                        cost_micros = self.calculate_cost_microdollars(
-                            model=self.fallback_model,
-                            prompt_tokens=getattr(usage, 'prompt_tokens', 0),
-                            completion_tokens=getattr(usage, 'completion_tokens', 0),
-                        )
-                        self._log_usage(
-                            model=self.fallback_model,
-                            prompt_tokens=getattr(usage, 'prompt_tokens', 0),
-                            completion_tokens=getattr(usage, 'completion_tokens', 0),
-                            total_tokens=getattr(usage, 'total_tokens', 0),
-                            cost_microdollars=cost_micros,
-                            user_id=user_id,
-                        )
-                    return fallback_res.choices[0].message.content or ""
-                except Exception as fallback_e:
-                    logger.error(f"Fallback model also failed: {fallback_e}")
-                    raise HTTPException(status_code=503, detail="AI_SERVICE_UNAVAILABLE")
+            used_model, response = await self._acompletion_with_fallbacks(
+                kwargs=kwargs,
+                preferred_model=use_model,
+                log_label="generate",
+            )
+            
+            if hasattr(response, 'usage') and response.usage:
+                usage = response.usage
+                cost_micros = self.calculate_cost_microdollars(
+                    model=used_model,
+                    prompt_tokens=getattr(usage, 'prompt_tokens', 0),
+                    completion_tokens=getattr(usage, 'completion_tokens', 0)
+                )
+                self._log_usage(
+                    model=used_model,
+                    prompt_tokens=getattr(usage, 'prompt_tokens', 0),
+                    completion_tokens=getattr(usage, 'completion_tokens', 0),
+                    total_tokens=getattr(usage, 'total_tokens', 0),
+                    cost_microdollars=cost_micros,
+                    user_id=user_id
+                )
+            
+            return response.choices[0].message.content or ""
 
         except HTTPException:
             raise
@@ -319,10 +361,7 @@ For detailed content on **{concept}**, I recommend:
             raise HTTPException(status_code=503, detail="AI_SERVICE_UNAVAILABLE")
 
         try:
-            use_model = model or self.fast_model
-            if use_model and ("/" not in use_model and len(use_model) < 60):
-                if use_model == "llama-3.1-8b-instant":
-                    use_model = self.fast_model
+            use_model = self._normalize_model_name(model or self.fast_model)
 
             # Summarize if needed
             summarized_messages = await self.maybe_summarize_history(messages)
@@ -334,62 +373,35 @@ For detailed content on **{concept}**, I recommend:
             )
 
             kwargs = {
-                "model": use_model,
                 "messages": full_messages,
                 "temperature": temperature,
                 "max_tokens": max_tokens,
                 "timeout": self.timeout,
             }
 
-            try:
-                import litellm
-                response = await litellm.acompletion(**kwargs)
-                self._record_success()
-                
-                if hasattr(response, 'usage') and response.usage:
-                    usage = response.usage
-                    cost_micros = self.calculate_cost_microdollars(
-                        model=use_model,
-                        prompt_tokens=getattr(usage, 'prompt_tokens', 0),
-                        completion_tokens=getattr(usage, 'completion_tokens', 0)
-                    )
-                    self._log_usage(
-                        model=use_model,
-                        prompt_tokens=getattr(usage, 'prompt_tokens', 0),
-                        completion_tokens=getattr(usage, 'completion_tokens', 0),
-                        total_tokens=getattr(usage, 'total_tokens', 0),
-                        cost_microdollars=cost_micros,
-                        user_id=user_id
-                    )
-                
-                return response.choices[0].message.content or ""
-            except Exception as primary_e:
-                logger.warning(f"Primary model {use_model} chat failed: {primary_e}. Trying fallback.")
-                self._record_failure()
-                
-                kwargs["model"] = self.fallback_model
-                try:
-                    import litellm
-                    fallback_res = await litellm.acompletion(**kwargs)
-                    if hasattr(fallback_res, 'usage') and fallback_res.usage:
-                        usage = fallback_res.usage
-                        cost_micros = self.calculate_cost_microdollars(
-                            model=self.fallback_model,
-                            prompt_tokens=getattr(usage, 'prompt_tokens', 0),
-                            completion_tokens=getattr(usage, 'completion_tokens', 0),
-                        )
-                        self._log_usage(
-                            model=self.fallback_model,
-                            prompt_tokens=getattr(usage, 'prompt_tokens', 0),
-                            completion_tokens=getattr(usage, 'completion_tokens', 0),
-                            total_tokens=getattr(usage, 'total_tokens', 0),
-                            cost_microdollars=cost_micros,
-                            user_id=user_id,
-                        )
-                    return fallback_res.choices[0].message.content or ""
-                except Exception as fallback_e:
-                    logger.error(f"Fallback model chat also failed: {fallback_e}")
-                    raise HTTPException(status_code=503, detail="AI_SERVICE_UNAVAILABLE")
+            used_model, response = await self._acompletion_with_fallbacks(
+                kwargs=kwargs,
+                preferred_model=use_model,
+                log_label="chat",
+            )
+            
+            if hasattr(response, 'usage') and response.usage:
+                usage = response.usage
+                cost_micros = self.calculate_cost_microdollars(
+                    model=used_model,
+                    prompt_tokens=getattr(usage, 'prompt_tokens', 0),
+                    completion_tokens=getattr(usage, 'completion_tokens', 0)
+                )
+                self._log_usage(
+                    model=used_model,
+                    prompt_tokens=getattr(usage, 'prompt_tokens', 0),
+                    completion_tokens=getattr(usage, 'completion_tokens', 0),
+                    total_tokens=getattr(usage, 'total_tokens', 0),
+                    cost_microdollars=cost_micros,
+                    user_id=user_id
+                )
+            
+            return response.choices[0].message.content or ""
 
         except HTTPException:
             raise

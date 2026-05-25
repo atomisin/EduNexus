@@ -35,8 +35,17 @@ export const StudentHeader: React.FC<StudentHeaderProps> = ({
   return (
     <header className="bg-background border-b border-border px-2 sm:px-4 md:px-5 h-14 sm:h-16 flex items-center justify-between shrink-0 gap-1.5 sm:gap-3 overflow-visible">
       <div className="min-w-0 flex items-center gap-1.5 sm:gap-3 flex-1">
-        <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(!sidebarOpen)} className="w-8 h-8 shrink-0">
-          <Menu className="w-4 h-4" />
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => setSidebarOpen(!sidebarOpen)}
+          className="w-8 h-8 shrink-0"
+          aria-label={sidebarOpen ? 'Close navigation menu' : 'Open navigation menu'}
+          aria-expanded={sidebarOpen}
+          aria-controls="student-sidebar-navigation"
+          title={sidebarOpen ? 'Close navigation menu' : 'Open navigation menu'}
+        >
+          <Menu className="w-4 h-4" aria-hidden="true" />
         </Button>
         <div className="min-w-0 flex-1 max-w-[48vw] min-[390px]:max-w-[54vw] sm:max-w-[56vw] md:max-w-none overflow-hidden">
           <h1 className="text-sm min-[380px]:text-[15px] md:text-lg font-semibold truncate leading-tight">
@@ -57,7 +66,12 @@ export const StudentHeader: React.FC<StudentHeaderProps> = ({
         <ThemeToggle />
         <div className="relative">
           <button
+            type="button"
             onClick={() => setShowUserMenu(!showUserMenu)}
+            aria-label="Open account menu"
+            aria-haspopup="menu"
+            aria-expanded={showUserMenu}
+            title="Account menu"
             className="relative w-8 h-8 sm:w-9 sm:h-9 rounded-full overflow-hidden border border-border hover:border-primary transition-colors"
           >
             <Avatar className="w-full h-full">
@@ -72,8 +86,10 @@ export const StudentHeader: React.FC<StudentHeaderProps> = ({
                 className="fixed inset-0 z-10"
                 onClick={() => setShowUserMenu(false)}
               />
-              <div className="absolute right-0 top-11 z-20 w-48 rounded-lg border border-border bg-background shadow-lg py-1">
+              <div className="absolute right-0 top-11 z-20 w-48 rounded-lg border border-border bg-background shadow-lg py-1" role="menu">
                 <button
+                  type="button"
+                  role="menuitem"
                   onClick={() => {
                     setActiveView('profile');
                     setShowUserMenu(false);
@@ -84,6 +100,8 @@ export const StudentHeader: React.FC<StudentHeaderProps> = ({
                   My Profile
                 </button>
                 <button
+                  type="button"
+                  role="menuitem"
                   onClick={() => {
                     setActiveView('messages');
                     setShowUserMenu(false);
@@ -95,6 +113,8 @@ export const StudentHeader: React.FC<StudentHeaderProps> = ({
                 </button>
                 <div className="border-t border-border my-1" />
                 <button
+                  type="button"
+                  role="menuitem"
                   onClick={onLogout}
                   className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-destructive hover:bg-destructive/10 transition-colors"
                 >

@@ -204,10 +204,10 @@ def _build_youtube_search_fallbacks(
     if not candidates:
         candidates = [
             {
-                "creator": "YouTube search guide",
-                "recommended_query_terms": [_video_search_phrase(primary_topic, subject_text)],
-                "community_evidence_count": 0,
-                "community_evidence_summary": "Search-focused fallback used because direct video results were unavailable.",
+            "creator": "YouTube search guide",
+            "recommended_query_terms": [_video_search_phrase(primary_topic, subject_text)],
+            "community_evidence_count": 0,
+            "community_evidence_summary": "Last-resort search guide used only when no playable video result could be fetched.",
             }
         ]
 
@@ -263,6 +263,7 @@ def _build_youtube_search_fallbacks(
                 "learner_feedback": None,
                 "audio_language": "en-search",
                 "is_search_fallback": True,
+                "needs_refresh": True,
                 "search_query": search_query,
             }
         )

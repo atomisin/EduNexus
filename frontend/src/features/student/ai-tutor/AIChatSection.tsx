@@ -657,9 +657,9 @@ export const AIChatSection = ({
     const isActiveRecommendation = !video?.is_search_fallback && String(activeVideo) === String(video?.id);
     const isLoadingRecommendation = !video?.is_search_fallback && String(loadingVideoId) === String(video?.id);
     const recommendationLabel = isPrimaryRecommendation
-      ? 'Best next help'
+      ? (video?.is_search_fallback ? 'Search fallback' : 'Best next help')
       : video?.is_search_fallback
-        ? 'Backup search path'
+        ? 'Search fallback'
         : 'More options';
     const recommendationTone = isPrimaryRecommendation
       ? 'border-primary/20 bg-primary/10 text-primary'

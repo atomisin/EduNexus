@@ -504,6 +504,7 @@ export const useAITutor = (profile?: any, getFullName?: () => string, enabled = 
   const videoRequestSeq = useRef(0);
   const videoSuggestionCacheRef = useRef<Map<string, any[]>>(new Map());
   const videoSuggestionInflightRef = useRef<Map<string, Promise<any>>>(new Map());
+  const fallbackVideoRefreshKeysRef = useRef<Set<string>>(new Set());
   const [aiState, setAiState] = useState<AIState>({ status: 'idle' });
   const isChattingRef = useRef<boolean>(false);
   const [currentTopic, setCurrentTopic] = useState<any>(null);
@@ -782,6 +783,45 @@ export const useAITutor = (profile?: any, getFullName?: () => string, enabled = 
       videoSuggestionInflightRef.current.delete(cacheKey);
     }
   }, [currentSubject, enabled, profile, selectedVideo?.id]);
+
+  useEffect(() => {
+    const hasOnlySearchGuides = suggestedVideos.length > 0 && suggestedVideos.every((video: any) => video?.is_search_fallback);
+    const topicLabel = canonicalTopicName(undefined, currentTopic?.name || activeSubtopic || '');
+    if (!enabled || !hasOnlySearchGuides || !topicLabel) {
+      return;
+    }
+
+    const refreshKey = JSON.stringify({
+      version: VIDEO_RECOMMENDATION_CACHE_VERSION,
+      topic: topicLabel.toLowerCase(),
+      subject: (currentSubject?.name || '').toLowerCase(),
+      educationLevel: (profile?.education_level || '').toLowerCase(),
+    });
+    if (fallbackVideoRefreshKeysRef.current.has(refreshKey)) {
+      return;
+    }
+    fallbackVideoRefreshKeysRef.current.add(refreshKey);
+
+    const timer = window.setTimeout(() => {
+      void fetchVideoSuggestions(topicLabel, currentSubject, videoSupportState || {
+        trigger: 'prefetch',
+        topic: topicLabel,
+        reason: 'EduNexus is refreshing these recommendations to find playable videos for this lesson.',
+        autoOpen: false,
+      });
+    }, 250);
+
+    return () => window.clearTimeout(timer);
+  }, [
+    activeSubtopic,
+    currentSubject,
+    currentTopic?.name,
+    enabled,
+    fetchVideoSuggestions,
+    profile?.education_level,
+    suggestedVideos,
+    videoSupportState,
+  ]);
 
   const primeRecoveryVideos = useCallback(async () => {
     const topicLabel = canonicalTopicName(undefined, currentTopic?.name || activeSubtopic || '');

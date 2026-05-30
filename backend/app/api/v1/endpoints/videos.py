@@ -1,4 +1,5 @@
 import json
+import logging
 import uuid
 from typing import Any, Dict, Optional
 
@@ -13,6 +14,7 @@ from app.models.user import User
 from app.services.video_service import search_educational_videos
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 _VIDEO_TABLES_READY = False
 
@@ -171,7 +173,26 @@ async def _attach_platform_evidence(
 ) -> list[dict]:
     enriched = []
     for video in videos:
-        evidence = await _platform_evidence(db, str(video.get("id") or ""), topic_name, user_id)
+        try:
+            evidence = await _platform_evidence(db, str(video.get("id") or ""), topic_name, user_id)
+        except Exception as exc:
+            logger.warning("Video evidence unavailable; returning recommendation without evidence: %s", exc)
+            try:
+                await db.rollback()
+            except Exception:
+                logger.debug("Could not roll back failed video evidence lookup", exc_info=True)
+            evidence = {
+                "platform_evidence": {
+                    "impressions": 0,
+                    "clicks": 0,
+                    "watch_starts": 0,
+                    "watch_60s": 0,
+                    "watch_completions": 0,
+                    "likes": 0,
+                    "dislikes": 0,
+                },
+                "learner_feedback": None,
+            }
         enriched.append({**video, **evidence})
     return enriched
 
@@ -179,30 +200,40 @@ async def _attach_platform_evidence(
 async def _update_creator_evidence_from_feedback(db: AsyncSession, payload: VideoFeedbackRequest, delta: int) -> None:
     if delta == 0 or not payload.channel_title:
         return
-    await db.execute(
-        text(
-            """
-            UPDATE video_creator_profiles
-            SET
-                community_evidence_count = GREATEST(0, COALESCE(community_evidence_count, 0) + :delta),
-                community_evidence_summary = COALESCE(
-                    NULLIF(community_evidence_summary, ''),
-                    'Learner feedback supports this creator for academic video recommendations.'
-                ),
-                updated_at = CURRENT_TIMESTAMP
-            WHERE is_active = TRUE
-              AND (
-                lower(creator_name) = lower(:channel_title)
-                OR EXISTS (
-                    SELECT 1
-                    FROM jsonb_array_elements_text(channel_aliases) AS alias
-                    WHERE lower(alias) = lower(:channel_title)
-                )
-              )
-            """
-        ),
-        {"channel_title": payload.channel_title, "delta": delta},
-    )
+    try:
+        table_check = await db.execute(text("SELECT to_regclass('public.video_creator_profiles')"))
+        if table_check.scalar_one_or_none() is None:
+            return
+        await db.execute(
+            text(
+                """
+                UPDATE video_creator_profiles
+                SET
+                    community_evidence_count = GREATEST(0, COALESCE(community_evidence_count, 0) + :delta),
+                    community_evidence_summary = COALESCE(
+                        NULLIF(community_evidence_summary, ''),
+                        'Learner feedback supports this creator for academic video recommendations.'
+                    ),
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE is_active = TRUE
+                  AND (
+                    lower(creator_name) = lower(:channel_title)
+                    OR EXISTS (
+                        SELECT 1
+                        FROM jsonb_array_elements_text(channel_aliases) AS alias
+                        WHERE lower(alias) = lower(:channel_title)
+                    )
+                  )
+                """
+            ),
+            {"channel_title": payload.channel_title, "delta": delta},
+        )
+    except Exception as exc:
+        logger.warning("Could not update creator evidence from video feedback: %s", exc)
+        try:
+            await db.rollback()
+        except Exception:
+            logger.debug("Could not roll back failed creator evidence update", exc_info=True)
 
 
 @router.get("/recommendations")

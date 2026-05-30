@@ -43,6 +43,9 @@ async def _load_creator_profiles(db: Optional[AsyncSession]) -> List[Dict[str, A
     if db is None:
         return []
     try:
+        table_check = await db.execute(text("SELECT to_regclass('public.video_creator_profiles')"))
+        if table_check.scalar_one_or_none() is None:
+            return []
         result = await db.execute(
             text(
                 """
@@ -62,6 +65,10 @@ async def _load_creator_profiles(db: Optional[AsyncSession]) -> List[Dict[str, A
         )
     except Exception as exc:
         logger.warning("Could not load video creator evidence profiles: %s", exc)
+        try:
+            await db.rollback()
+        except Exception:
+            logger.debug("Could not roll back failed creator profile lookup", exc_info=True)
         return []
 
     profiles: List[Dict[str, Any]] = []

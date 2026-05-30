@@ -144,6 +144,49 @@ def _expand_search_queries(base_query: str, topic: str, subject: Optional[str], 
     return deduped[:3]
 
 
+def _clean_video_topic_text(topic: str) -> str:
+    text_value = (topic or "").strip()
+    text_value = re.sub(r"(?i)\be\s*\.?\s*g\s*\.?", "for example", text_value)
+    replacements = {
+        "enviroment": "environment",
+        "Enviroment": "Environment",
+    }
+    for wrong, right in replacements.items():
+        text_value = text_value.replace(wrong, right)
+    text_value = re.sub(r"\s+", " ", text_value)
+    text_value = re.sub(r"\s*:\s*", ": ", text_value)
+    text_value = re.sub(r"\s*,\s*", ", ", text_value)
+    text_value = re.sub(r"\s*\.\s*", ". ", text_value)
+    text_value = re.sub(r"\s+", " ", text_value).strip(" .,:;-")
+
+    intro_match = re.match(r"(?i)^introduction\s+to\s+[^:]{2,90}:\s*(.+)$", text_value)
+    if intro_match:
+        text_value = intro_match.group(1).strip()
+
+    return text_value or "the lesson topic"
+
+
+def _video_search_phrase(topic: str, subject: Optional[str]) -> str:
+    topic_text = _clean_video_topic_text(topic)
+    topic_text = re.split(r"(?i)\b(?:e\.\s*g\.?|for example|such as)\b", topic_text, maxsplit=1)[0]
+    topic_text = re.sub(r"(?i)\betc\.?$", "", topic_text).strip(" .,:;-")
+    subject_text = (subject or "").strip()
+
+    if subject_text and _normalize_name(subject_text) not in _normalize_name(topic_text):
+        return f"{subject_text} {topic_text} explained"
+    return f"{topic_text} explained"
+
+
+def _video_fallback_title(topic: str, creator: str) -> str:
+    topic_text = _clean_video_topic_text(topic)
+    topic_text = re.split(r"(?i)\b(?:e\.\s*g\.?|for example|such as)\b", topic_text, maxsplit=1)[0]
+    topic_text = re.sub(r"(?i)\betc\.?$", "", topic_text).strip(" .,:;-")
+    topic_text = topic_text[:1].lower() + topic_text[1:] if topic_text else "this lesson"
+    if creator != "YouTube search guide":
+        return f"Find a clear video on {topic_text} with {creator}"
+    return f"Find a clear video on {topic_text}"
+
+
 def _build_youtube_search_fallbacks(
     topic: str,
     subject: Optional[str],
@@ -151,14 +194,14 @@ def _build_youtube_search_fallbacks(
     matched_profiles: List[Dict[str, Any]],
     limit: int,
 ) -> List[Dict[str, Any]]:
-    primary_topic = topic.strip() or "the lesson topic"
+    primary_topic = _clean_video_topic_text(topic)
     subject_text = subject or "this subject"
     candidates = matched_profiles[: max(1, limit)]
     if not candidates:
         candidates = [
             {
-                "creator": "Trusted topic search",
-                "recommended_query_terms": [f"{subject_text} {primary_topic} explained"],
+                "creator": "YouTube search guide",
+                "recommended_query_terms": [_video_search_phrase(primary_topic, subject_text)],
                 "community_evidence_count": 0,
                 "community_evidence_summary": "Search-focused fallback used because direct video results were unavailable.",
             }
@@ -166,19 +209,19 @@ def _build_youtube_search_fallbacks(
 
     fallbacks: List[Dict[str, Any]] = []
     for index, profile in enumerate(candidates):
-        creator = profile.get("creator") or "Trusted topic search"
-        query_term = (profile.get("recommended_query_terms") or [None])[0] or f"{subject_text} {primary_topic} explained"
-        if creator != "Trusted topic search":
-            search_query = f"{subject or ''} {primary_topic} {creator}".strip()
-            title = f"{primary_topic.title()} with {creator}"
+        creator = profile.get("creator") or "YouTube search guide"
+        query_term = (profile.get("recommended_query_terms") or [None])[0] or _video_search_phrase(primary_topic, subject_text)
+        if creator != "YouTube search guide":
+            search_query = f"{_video_search_phrase(primary_topic, subject_text)} {creator}".strip()
+            title = _video_fallback_title(primary_topic, creator)
         else:
             search_query = query_term
-            title = f"Search YouTube for {primary_topic.title()}"
+            title = _video_fallback_title(primary_topic, creator)
 
         why = [
-            "Direct videos were unavailable, so EduNexus prepared the best search path instead",
+            "EduNexus prepared a focused YouTube search path for this lesson",
             f"Community evidence points toward {creator} for this kind of topic"
-            if creator != "Trusted topic search"
+            if creator != "YouTube search guide"
             else "This search is shaped from the lesson topic and subject context",
         ]
         if level:

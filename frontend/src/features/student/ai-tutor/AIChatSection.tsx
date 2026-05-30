@@ -799,7 +799,7 @@ export const AIChatSection = ({
           </div>
           {video?.is_search_fallback ? (
             <p className="mt-2 text-[11px] text-muted-foreground">
-              We could not fetch a direct video right now, so EduNexus prepared the best search path instead.
+              Opens a focused YouTube search path for this lesson.
             </p>
           ) : null}
         </div>

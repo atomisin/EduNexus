@@ -1308,6 +1308,7 @@ export const studentAPI = {
     const query = new URLSearchParams({
       topic: params.topic,
       limit: String(params.limit ?? 6),
+      recommendation_version: 'real-video-results-v2',
       ...(params.subject && { subject: params.subject }),
       ...(params.educationLevel && { level: params.educationLevel }),
     });

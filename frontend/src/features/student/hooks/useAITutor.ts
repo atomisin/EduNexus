@@ -24,6 +24,8 @@ export interface VideoSupportState {
   autoOpen: boolean;
 }
 
+const VIDEO_RECOMMENDATION_CACHE_VERSION = 'real-video-results-v2';
+
 const cleanTutorResponse = (content: string) => {
   return content
     .replace(/---NEXT---/g, '')
@@ -714,13 +716,15 @@ export const useAITutor = (profile?: any, getFullName?: () => string, enabled = 
       topic: supportState.topic || topicLabel,
     } : null;
     const cacheKey = JSON.stringify({
+      version: VIDEO_RECOMMENDATION_CACHE_VERSION,
       topic: topicLabel.toLowerCase(),
       subject: (subjectForRequest?.name || '').toLowerCase(),
       educationLevel: (profile?.education_level || '').toLowerCase(),
       limit: 6,
     });
     const cachedVideos = videoSuggestionCacheRef.current.get(cacheKey);
-    if (cachedVideos) {
+    const cachedHasOnlySearchGuides = Array.isArray(cachedVideos) && cachedVideos.length > 0 && cachedVideos.every((video: any) => video?.is_search_fallback);
+    if (cachedVideos && !cachedHasOnlySearchGuides) {
       if (resolvedSupportState) {
         setVideoSupportState(resolvedSupportState);
       }
@@ -761,6 +765,9 @@ export const useAITutor = (profile?: any, getFullName?: () => string, enabled = 
         setVideoSupportState(resolvedSupportState);
       }
       videoSuggestionCacheRef.current.set(cacheKey, videos);
+      if (videos.length > 0 && videos.every((video: any) => video?.is_search_fallback)) {
+        videoSuggestionCacheRef.current.delete(cacheKey);
+      }
       setSuggestedVideos(videos);
     } catch (e) {
       if (requestId !== videoRequestSeq.current) {

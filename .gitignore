@@ -70,6 +70,7 @@ frontend/.vercel/
 everything-claude-code/
 AGENTS.md
 HANDOFF.md
+docs/
 
 # Local-only backend scratch files
 backend/HANDOFF.md

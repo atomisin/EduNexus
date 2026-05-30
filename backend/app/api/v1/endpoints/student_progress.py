@@ -34,6 +34,7 @@ from app.services.revision_context import (
     get_revision_context,
     is_revision_topic,
 )
+from app.services.gamification import mark_student_learning_activity
 from app.utils.topic_filters import filter_learning_topics
 
 router = APIRouter()
@@ -336,6 +337,21 @@ async def record_quiz_score(
             from sqlalchemy.orm.attributes import flag_modified
 
             flag_modified(profile, "subject_proficiency")
+            mark_student_learning_activity(profile)
+
+    activity = StudentActivityLog(
+        student_id=current_user.id,
+        subject_id=uuid.UUID(data.subject_id),
+        activity_type="quiz",
+        activity_name=f"Quiz: {data.topic or 'Subject practice'}",
+        score=score_percentage,
+        extra_data={
+            "topic": data.topic,
+            "score": data.score,
+            "total_possible": data.total_possible,
+        },
+    )
+    db.add(activity)
 
     await db.commit()
 
@@ -1715,8 +1731,27 @@ async def complete_topic(
 
     # Check if topic existed (helper returns None if topic not found)
     res_topic = await db.execute(select(Topic).filter(Topic.id == topic_uuid))
-    if not res_topic.scalars().first():
+    topic = res_topic.scalars().first()
+    if not topic:
         raise HTTPException(status_code=404, detail="Topic not found")
+
+    res_profile = await db.execute(
+        select(StudentProfile).filter(StudentProfile.user_id == current_user.id)
+    )
+    profile = res_profile.scalars().first()
+    if profile:
+        mark_student_learning_activity(profile)
+    db.add(
+        StudentActivityLog(
+            student_id=current_user.id,
+            subject_id=topic.subject_id,
+            topic_id=topic.id,
+            activity_type="lesson",
+            activity_name=f"Completed lesson: {topic.name}",
+            score=100,
+            extra_data={"next_topic_unlocked": str(next_topic_id) if next_topic_id else None},
+        )
+    )
 
     await db.commit()
     return {

@@ -12,7 +12,7 @@ from app.db.database import get_async_db
 from app.api.v1.endpoints.auth import get_current_user
 from app.models.user import User
 from app.models.student import StudentProfile
-from app.models.student_progress import StudentSubjectProgress
+from app.models.student_progress import StudentActivityLog, StudentSubjectProgress
 from app.models.subject import Subject, Topic
 from app.models.junction_tables import StudentTopicProgress
 from app.services.llm_service import llm_service
@@ -25,6 +25,7 @@ from app.core.config import settings
 from app.services.ai_coordinator import ai_coordinator
 from app.services.revision_context import get_revision_context, get_subject_and_topic
 from app.services.lesson_plan_service import get_or_create_lesson_teaching_plan
+from app.services.gamification import mark_student_learning_activity
 from app.services.academic_agent_service import (
     ASSESSMENT_VALIDATOR_AGENT,
     review_structured_academic_output,
@@ -1296,6 +1297,27 @@ async def chat(
                 "response_length": len(str(result.get("response", ""))),
             },
         )
+        try:
+            activity = StudentActivityLog(
+                student_id=current_user.id,
+                activity_type="ai_chat",
+                activity_name=f"AI Tutor: {chat_req.topic_name or (topic.name if topic else 'Learning turn')}",
+                subject_id=subject.id if subject else None,
+                topic_id=topic.id if topic else None,
+                extra_data={
+                    "subject": chat_req.subject_name,
+                    "topic": chat_req.topic_name,
+                    "lesson_stage": result.get("lesson_stage", lesson_context.get("lesson_stage", "")),
+                    "ui_action": result.get("ui_action"),
+                },
+            )
+            db.add(activity)
+            if student_profile:
+                mark_student_learning_activity(student_profile)
+            await db.commit()
+        except Exception:
+            logger.warning("Could not record AI tutor learning activity for streak.", exc_info=True)
+            await db.rollback()
         return result
     except HTTPException as exc:
         logger.warning(
@@ -1986,9 +2008,6 @@ async def evaluate_mastery_test(
             next_topic_id = await complete_topic_progression(db, current_user.id, request.topic_id)
             evaluation["next_topic_unlocked"] = str(next_topic_id) if next_topic_id else None
 
-        # Log activity
-        from app.models.student_progress import StudentActivityLog
-
         activity = StudentActivityLog(
             student_id=current_user.id,
             activity_type="mastery_test",
@@ -2004,6 +2023,7 @@ async def evaluate_mastery_test(
             },
         )
         db.add(activity)
+        mark_student_learning_activity(student_profile)
         await db.commit()
 
     return evaluation

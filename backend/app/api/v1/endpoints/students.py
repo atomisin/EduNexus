@@ -23,6 +23,7 @@ from app.models.junction_tables import StudentTopicProgress
 from app.services.storage_service import storage_service
 from app.services.brain_power import brain_power_budget_summary, ensure_daily_brain_power
 from app.services.curriculum_service import curriculum_service
+from app.services.gamification import sync_student_streak_from_activity_logs
 from app.utils.topic_filters import filter_learning_topics
 
 router = APIRouter()
@@ -167,6 +168,10 @@ async def get_student_profile(
         await db.refresh(profile)
 
     if ensure_daily_brain_power(profile):
+        await db.commit()
+        await db.refresh(profile)
+
+    if await sync_student_streak_from_activity_logs(db, profile):
         await db.commit()
         await db.refresh(profile)
 

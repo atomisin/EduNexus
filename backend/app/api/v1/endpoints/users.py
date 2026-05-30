@@ -46,7 +46,7 @@ class UserUpdate(BaseModel):
     years_of_experience: Optional[int] = None
 
 
-from app.services.gamification import update_student_streak
+from app.services.gamification import sync_student_streak_from_activity_logs
 
 
 @router.get("/me")
@@ -63,7 +63,7 @@ async def get_current_user_info(
         student_profile = current_user.student_profile
         
         if student_profile:
-            streak_updated = update_student_streak(db, student_profile)
+            streak_updated = await sync_student_streak_from_activity_logs(db, student_profile)
             if streak_updated:
                 await db.commit()
 

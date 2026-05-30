@@ -3,9 +3,10 @@ from typing import List, Dict, Any, Optional
 import logging
 import re
 import json
+import html
 from datetime import datetime, timezone
 import math
-from urllib.parse import quote_plus
+from urllib.parse import parse_qs, quote_plus, unquote, urlparse
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,6 +20,7 @@ YOUTUBE_API_KEY = settings.YOUTUBE_API_KEY
 YOUTUBE_SEARCH_URL = "https://www.googleapis.com/youtube/v3/search"
 YOUTUBE_VIDEOS_URL = "https://www.googleapis.com/youtube/v3/videos"
 YOUTUBE_WEB_SEARCH_URL = "https://www.youtube.com/results"
+DUCKDUCKGO_HTML_SEARCH_URL = "https://duckduckgo.com/html/"
 YOUTUBE_MAX_VIDEO_DETAILS_IDS = 50
 
 
@@ -481,6 +483,53 @@ def _web_duration_score(duration_sec: int, level: Optional[str]) -> float:
     return _calculate_duration_score(duration_sec, level) or 0.25
 
 
+def _video_card(
+    *,
+    video_id: str,
+    title: str,
+    channel_title: str,
+    description: str = "",
+    thumbnail: str = "",
+    duration_sec: int = 0,
+    duration_text: str = "Video lesson",
+    views: int = 0,
+    published_at: Optional[str] = None,
+    score: float = 1.0,
+    why_recommended: Optional[List[str]] = None,
+    community_evidence: Optional[Dict[str, Any]] = None,
+    source: str = "youtube_web_search",
+) -> Dict[str, Any]:
+    thumbnail_url = thumbnail or f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
+    return {
+        "id": video_id,
+        "title": title,
+        "thumbnail": thumbnail_url,
+        "channel": channel_title,
+        "channel_title": channel_title,
+        "description": description[:220],
+        "views": views,
+        "published_at": published_at,
+        "duration": duration_sec,
+        "duration_text": duration_text,
+        "score": score,
+        "url": f"https://www.youtube.com/watch?v={video_id}",
+        "why_recommended": (why_recommended or ["Found from a live online search for this lesson"])[:3],
+        "community_evidence": community_evidence,
+        "platform_evidence": {
+            "impressions": 0,
+            "clicks": 0,
+            "watch_starts": 0,
+            "watch_60s": 0,
+            "watch_completions": 0,
+            "likes": 0,
+            "dislikes": 0,
+        },
+        "learner_feedback": None,
+        "is_search_fallback": False,
+        "source": source,
+    }
+
+
 def _iter_video_renderers(value: Any) -> List[Dict[str, Any]]:
     renderers: List[Dict[str, Any]] = []
     if isinstance(value, dict):
@@ -600,38 +649,154 @@ async def _search_youtube_web_videos(
                 why_recommended.append("Title matches the lesson topic")
 
                 ranked_videos.append(
-                    {
-                        "id": video_id,
-                        "title": title,
-                        "thumbnail": thumbnail,
-                        "channel": channel_title,
-                        "channel_title": channel_title,
-                        "description": _extract_text(renderer.get("descriptionSnippet"))[:220],
-                        "views": views,
-                        "published_at": _extract_text(renderer.get("publishedTimeText")) or None,
-                        "duration": duration_sec,
-                        "duration_text": duration_text,
-                        "score": score,
-                        "url": f"https://www.youtube.com/watch?v={video_id}",
-                        "why_recommended": why_recommended[:3],
-                        "community_evidence": community_evidence,
-                        "platform_evidence": {
-                            "impressions": 0,
-                            "clicks": 0,
-                            "watch_starts": 0,
-                            "watch_60s": 0,
-                            "watch_completions": 0,
-                            "likes": 0,
-                            "dislikes": 0,
-                        },
-                        "learner_feedback": None,
-                        "is_search_fallback": False,
-                        "source": "youtube_web_search",
-                    }
+                    _video_card(
+                        video_id=video_id,
+                        title=title,
+                        thumbnail=thumbnail,
+                        channel_title=channel_title,
+                        description=_extract_text(renderer.get("descriptionSnippet")),
+                        views=views,
+                        published_at=_extract_text(renderer.get("publishedTimeText")) or None,
+                        duration_sec=duration_sec,
+                        duration_text=duration_text,
+                        score=score,
+                        why_recommended=why_recommended,
+                        community_evidence=community_evidence,
+                        source="youtube_web_search",
+                    )
                 )
                 if len(ranked_videos) >= limit * 4:
                     break
             if len(ranked_videos) >= limit * 2:
+                break
+
+    ranked_videos.sort(key=lambda item: item["score"], reverse=True)
+    return ranked_videos[:limit]
+
+
+def _extract_youtube_video_id(url: str) -> Optional[str]:
+    parsed = urlparse(url)
+    host = parsed.netloc.lower()
+    if "duckduckgo.com" in host:
+        target = parse_qs(parsed.query).get("uddg", [None])[0]
+        if target:
+            return _extract_youtube_video_id(unquote(target))
+    if "youtu.be" in host:
+        candidate = parsed.path.strip("/").split("/")[0]
+        return candidate if re.fullmatch(r"[\w-]{11}", candidate or "") else None
+    if "youtube.com" in host:
+        if parsed.path == "/watch":
+            candidate = parse_qs(parsed.query).get("v", [None])[0]
+            return candidate if re.fullmatch(r"[\w-]{11}", candidate or "") else None
+        shorts_match = re.search(r"/shorts/([\w-]{11})", parsed.path)
+        if shorts_match:
+            return shorts_match.group(1)
+    return None
+
+
+def _clean_search_result_title(title: str) -> str:
+    title_value = html.unescape(re.sub(r"<[^>]+>", " ", title or ""))
+    title_value = re.sub(r"\s+", " ", title_value).strip()
+    title_value = re.sub(r"\s*-\s*YouTube$", "", title_value, flags=re.IGNORECASE).strip()
+    return title_value
+
+
+async def _enrich_video_from_oembed(client: httpx.AsyncClient, video_id: str, fallback_title: str) -> Dict[str, str]:
+    title = fallback_title
+    channel_title = "YouTube"
+    try:
+        response = await client.get(
+            "https://www.youtube.com/oembed",
+            params={"url": f"https://www.youtube.com/watch?v={video_id}", "format": "json"},
+            timeout=8.0,
+        )
+        if response.status_code == 200:
+            data = response.json()
+            title = str(data.get("title") or title).strip() or title
+            channel_title = str(data.get("author_name") or channel_title).strip() or channel_title
+    except Exception:
+        logger.debug("Could not enrich YouTube video %s through oEmbed", video_id, exc_info=True)
+    return {"title": title, "channel_title": channel_title}
+
+
+async def _search_youtube_indexed_videos(
+    search_queries: List[str],
+    topic: str,
+    subject: Optional[str],
+    level: Optional[str],
+    matched_profiles: List[Dict[str, Any]],
+    limit: int,
+) -> List[Dict[str, Any]]:
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+        ),
+        "Accept-Language": "en-US,en;q=0.9",
+    }
+    topic_for_relevance = _video_search_phrase(topic, subject).replace(" explained", "")
+    ranked_videos: List[Dict[str, Any]] = []
+    seen_video_ids = set()
+
+    async with httpx.AsyncClient(timeout=12.0, follow_redirects=True, headers=headers) as client:
+        for search_query in search_queries[:3]:
+            index_query = f"site:youtube.com/watch {search_query}"
+            response = await client.get(DUCKDUCKGO_HTML_SEARCH_URL, params={"q": index_query})
+            response.raise_for_status()
+            anchors = re.findall(
+                r'<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>(.*?)</a>',
+                response.text,
+                flags=re.IGNORECASE | re.DOTALL,
+            )
+            if not anchors:
+                anchors = re.findall(
+                    r'<a[^>]+href="([^"]*(?:youtube\.com/watch|youtu\.be/)[^"]+)"[^>]*>(.*?)</a>',
+                    response.text,
+                    flags=re.IGNORECASE | re.DOTALL,
+                )
+
+            for href, raw_title in anchors:
+                video_id = _extract_youtube_video_id(html.unescape(href))
+                if not video_id or video_id in seen_video_ids:
+                    continue
+                seen_video_ids.add(video_id)
+
+                title = _clean_search_result_title(raw_title)
+                enriched = await _enrich_video_from_oembed(client, video_id, title)
+                title = enriched["title"]
+                if not title or _is_mixed_language(title) or not _title_is_relevant(title, topic_for_relevance):
+                    continue
+
+                channel_title = enriched["channel_title"]
+                matched_profile = _creator_profile_match(channel_title, matched_profiles)
+                score = 1.0 + max(0, len(search_queries) - search_queries.index(search_query)) * 0.2
+                why_recommended = ["Found from a live web search for YouTube lessons"]
+                community_evidence = None
+                if matched_profile:
+                    score += 1.8 + min(1.2, matched_profile["community_evidence_count"] * 0.12)
+                    why_recommended.append("Trusted creator evidence matched this topic")
+                    community_evidence = {
+                        "creator": matched_profile["creator"],
+                        "community_evidence_count": matched_profile["community_evidence_count"],
+                        "community_evidence_summary": matched_profile["community_evidence_summary"],
+                    }
+                why_recommended.append("Title matches the lesson topic")
+
+                ranked_videos.append(
+                    _video_card(
+                        video_id=video_id,
+                        title=title,
+                        channel_title=channel_title,
+                        duration_text="Video lesson",
+                        score=score,
+                        why_recommended=why_recommended,
+                        community_evidence=community_evidence,
+                        source="youtube_index_search",
+                    )
+                )
+                if len(ranked_videos) >= limit * 2:
+                    break
+            if len(ranked_videos) >= limit:
                 break
 
     ranked_videos.sort(key=lambda item: item["score"], reverse=True)
@@ -667,6 +832,13 @@ async def search_educational_videos(
                 return web_results
         except Exception as exc:
             logger.warning("Direct YouTube web search fallback failed: %s", exc)
+        try:
+            indexed_results = await _search_youtube_indexed_videos(web_search_queries, query, subject, level, matched_profiles, limit)
+            if indexed_results:
+                logger.info("Returning %s indexed YouTube recommendations for topic '%s'.", len(indexed_results), query)
+                return indexed_results
+        except Exception as exc:
+            logger.warning("Indexed YouTube search fallback failed: %s", exc)
         return _build_youtube_search_fallbacks(query, subject, level, matched_profiles, limit)
     
     try:

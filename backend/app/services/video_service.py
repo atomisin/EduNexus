@@ -25,7 +25,8 @@ YOUTUBE_MAX_VIDEO_DETAILS_IDS = 50
 
 
 def _normalize_name(value: str) -> str:
-    return re.sub(r"[^a-z0-9]+", " ", (value or "").lower()).strip()
+    text = (value or "").lower().replace("neighbour", "neighbor")
+    return re.sub(r"[^a-z0-9]+", " ", text).strip()
 
 
 def _json_list(value: Any) -> List[str]:
@@ -312,8 +313,8 @@ def _title_is_relevant(title: str, topic: str) -> bool:
     appear in the video title.
     """
     # Normalize
-    title_lower = title.lower()
-    topic_lower = topic.lower()
+    title_lower = _normalize_name(title)
+    topic_lower = _normalize_name(topic)
     title_words = set(re.split(r'\W+', title_lower))
 
     # Extract meaningful words (3+ chars, skip common stopwords)
@@ -344,7 +345,7 @@ def _title_is_relevant(title: str, topic: str) -> bool:
     
     # More permissive threshold:
     # If 2+ specific keywords match, it's likely relevant enough for broad topics
-    if len(topic_words) > 6:
+    if len(topic_words) >= 3:
         return matches >= 2 
     return matches >= 1
 
@@ -484,6 +485,53 @@ def _web_duration_score(duration_sec: int, level: Optional[str]) -> float:
     return _calculate_duration_score(duration_sec, level) or 0.25
 
 
+def _instructional_fit_score(
+    *,
+    title: str,
+    channel_title: str = "",
+    subject: Optional[str] = None,
+    level: Optional[str] = None,
+) -> float:
+    text = _normalize_name(f"{title} {channel_title}")
+    subject_words = [
+        word for word in re.split(r"\W+", _normalize_name(subject or ""))
+        if len(word) >= 4
+    ]
+    level_text = _normalize_name(level or "")
+    score = 0.0
+
+    instructional_markers = (
+        "lesson",
+        "class",
+        "grade",
+        "primary",
+        "basic",
+        "school",
+        "education",
+        "learn",
+        "tutorial",
+        "introduction",
+        "explained",
+    )
+    score += sum(0.55 for marker in instructional_markers if marker in text)
+
+    if subject_words:
+        subject_overlap = sum(1 for word in subject_words if word in text or (word.endswith("s") and word[:-1] in text))
+        score += min(2.4, subject_overlap * 0.8)
+
+    if any(marker in level_text for marker in ("pre", "creche", "primary")):
+        primary_markers = ("primary", "basic", "class", "grade", "kids", "children")
+        score += sum(0.75 for marker in primary_markers if marker in text)
+    elif any(marker in level_text for marker in ("jss", "junior", "ss", "senior", "secondary")):
+        secondary_markers = ("jss", "ss", "secondary", "waec", "neco", "jamb", "class", "grade")
+        score += sum(0.65 for marker in secondary_markers if marker in text)
+    elif any(marker in level_text for marker in ("professional", "adult", "career")):
+        professional_markers = ("professional", "engineering", "analytics", "case study", "project", "advanced")
+        score += sum(0.55 for marker in professional_markers if marker in text)
+
+    return min(score, 5.0)
+
+
 def _video_card(
     *,
     video_id: str,
@@ -597,7 +645,7 @@ async def _search_youtube_web_videos(
     }
     ranked_videos: List[Dict[str, Any]] = []
     seen_video_ids = set()
-    topic_for_relevance = _video_search_phrase(topic, subject).replace(" explained", "")
+    topic_for_relevance = _clean_video_topic_text(topic)
 
     async with httpx.AsyncClient(timeout=12.0, follow_redirects=True, headers=headers) as client:
         for search_query in search_queries[:3]:
@@ -634,7 +682,23 @@ async def _search_youtube_web_videos(
                         thumbnail = f"https:{thumbnail}"
 
                 matched_profile = _creator_profile_match(channel_title, matched_profiles)
-                score = math.log10(views + 1) * 0.75 + duration_score
+                topic_words = [
+                    word for word in re.split(r"\W+", _normalize_name(topic_for_relevance))
+                    if len(word) >= 4
+                ]
+                title_words = set(re.split(r"\W+", _normalize_name(title)))
+                topic_overlap = sum(1 for word in topic_words if word in title_words or (word.endswith("s") and word[:-1] in title_words))
+                score = (
+                    math.log10(views + 1) * 0.45
+                    + duration_score
+                    + (topic_overlap * 2.0)
+                    + _instructional_fit_score(
+                        title=title,
+                        channel_title=channel_title,
+                        subject=subject,
+                        level=level,
+                    )
+                )
                 why_recommended = ["Found from a live YouTube search for this lesson"]
                 community_evidence = None
                 if matched_profile:
@@ -735,7 +799,7 @@ async def _search_youtube_indexed_videos(
         ),
         "Accept-Language": "en-US,en;q=0.9",
     }
-    topic_for_relevance = _video_search_phrase(topic, subject).replace(" explained", "")
+    topic_for_relevance = _clean_video_topic_text(topic)
     ranked_videos: List[Dict[str, Any]] = []
     seen_video_ids = set()
 
@@ -770,7 +834,23 @@ async def _search_youtube_indexed_videos(
 
                 channel_title = enriched["channel_title"]
                 matched_profile = _creator_profile_match(channel_title, matched_profiles)
-                score = 1.0 + max(0, len(search_queries) - search_queries.index(search_query)) * 0.2
+                topic_words = [
+                    word for word in re.split(r"\W+", _normalize_name(topic_for_relevance))
+                    if len(word) >= 4
+                ]
+                title_words = set(re.split(r"\W+", _normalize_name(title)))
+                topic_overlap = sum(1 for word in topic_words if word in title_words or (word.endswith("s") and word[:-1] in title_words))
+                score = (
+                    1.0
+                    + (topic_overlap * 2.0)
+                    + max(0, len(search_queries) - search_queries.index(search_query)) * 0.2
+                    + _instructional_fit_score(
+                        title=title,
+                        channel_title=channel_title,
+                        subject=subject,
+                        level=level,
+                    )
+                )
                 why_recommended = ["Found from a live web search for YouTube lessons"]
                 community_evidence = None
                 if matched_profile:
@@ -804,6 +884,32 @@ async def _search_youtube_indexed_videos(
     return ranked_videos[:limit]
 
 
+async def _search_live_youtube_fallback(
+    query: str,
+    subject: Optional[str],
+    level: Optional[str],
+    matched_profiles: List[Dict[str, Any]],
+    limit: int,
+) -> List[Dict[str, Any]]:
+    web_search_q = _video_search_phrase(query, subject)
+    web_search_queries = _expand_search_queries(web_search_q, _clean_video_topic_text(query), subject, matched_profiles)
+    try:
+        web_results = await _search_youtube_web_videos(web_search_queries, query, subject, level, matched_profiles, limit)
+        if web_results:
+            logger.info("Returning %s direct YouTube web-search recommendations for topic '%s'.", len(web_results), query)
+            return web_results
+    except Exception as exc:
+        logger.warning("Direct YouTube web search fallback failed: %s", exc)
+    try:
+        indexed_results = await _search_youtube_indexed_videos(web_search_queries, query, subject, level, matched_profiles, limit)
+        if indexed_results:
+            logger.info("Returning %s indexed YouTube recommendations for topic '%s'.", len(indexed_results), query)
+            return indexed_results
+    except Exception as exc:
+        logger.warning("Indexed YouTube search fallback failed: %s", exc)
+    return _build_youtube_search_fallbacks(query, subject, level, matched_profiles, limit)
+
+
 async def search_educational_videos(
     query: str, 
     limit: int = 5, 
@@ -824,23 +930,7 @@ async def search_educational_videos(
 
     if not YOUTUBE_API_KEY:
         logger.info("YouTube API key missing; using direct YouTube web search fallback.")
-        web_search_q = _video_search_phrase(query, subject)
-        web_search_queries = _expand_search_queries(web_search_q, _clean_video_topic_text(query), subject, matched_profiles)
-        try:
-            web_results = await _search_youtube_web_videos(web_search_queries, query, subject, level, matched_profiles, limit)
-            if web_results:
-                logger.info("Returning %s direct YouTube web-search recommendations for topic '%s'.", len(web_results), query)
-                return web_results
-        except Exception as exc:
-            logger.warning("Direct YouTube web search fallback failed: %s", exc)
-        try:
-            indexed_results = await _search_youtube_indexed_videos(web_search_queries, query, subject, level, matched_profiles, limit)
-            if indexed_results:
-                logger.info("Returning %s indexed YouTube recommendations for topic '%s'.", len(indexed_results), query)
-                return indexed_results
-        except Exception as exc:
-            logger.warning("Indexed YouTube search fallback failed: %s", exc)
-        return _build_youtube_search_fallbacks(query, subject, level, matched_profiles, limit)
+        return await _search_live_youtube_fallback(query, subject, level, matched_profiles, limit)
     
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
@@ -869,7 +959,8 @@ async def search_educational_videos(
                         items.append(item)
 
             if not items:
-                return _build_youtube_search_fallbacks(query, subject, level, matched_profiles, limit)
+                logger.info("YouTube API returned no search items for topic '%s'; trying live fallback.", query)
+                return await _search_live_youtube_fallback(query, subject, level, matched_profiles, limit)
 
             video_ids = [item["id"]["videoId"] for item in items[:YOUTUBE_MAX_VIDEO_DETAILS_IDS]]
             
@@ -944,6 +1035,12 @@ async def search_educational_videos(
                 # 3. Final Ranking: 80% Popularity ("Impact"), 20% Recency
                 # This ensures old "Gold" videos with millions of views win over new small ones
                 final_score = (pop_score * 0.8) + (recency_score * 2.0 * 0.2)
+                final_score += _instructional_fit_score(
+                    title=title,
+                    channel_title=snippet.get("channelTitle", ""),
+                    subject=subject,
+                    level=level,
+                )
                 matched_profile = _creator_profile_match(snippet.get("channelTitle", ""), matched_profiles)
                 why_recommended = []
                 community_evidence = None
@@ -991,10 +1088,18 @@ async def search_educational_videos(
             ranked_videos.sort(key=lambda x: x["score"], reverse=True)
             result = ranked_videos[:limit]
             if not result:
-                return _build_youtube_search_fallbacks(query, subject, level, matched_profiles, limit)
+                logger.info(
+                    "YouTube API results for topic '%s' were filtered out (%s initial, %s lang, %s relevance, %s duration); trying live fallback.",
+                    query,
+                    initial_count,
+                    filtered_language,
+                    filtered_relevance,
+                    filtered_duration,
+                )
+                return await _search_live_youtube_fallback(query, subject, level, matched_profiles, limit)
             logger.info(f"Returning {len(result)} impactful English videos for topic '{query}'. (Filtered from {initial_count} results: {filtered_language} lang, {filtered_relevance} relevance, {filtered_duration} duration)")
             return result
 
     except Exception as e:
         logger.error(f"Smart YouTube search failed: {str(e)}")
-        return _build_youtube_search_fallbacks(query, subject, level, matched_profiles, limit)
+        return await _search_live_youtube_fallback(query, subject, level, matched_profiles, limit)

@@ -700,7 +700,8 @@ export const useAITutor = (profile?: any, getFullName?: () => string, enabled = 
     subjectOverride?: Subject | null,
     supportState?: VideoSupportState | null,
   ) => {
-    const topicLabel = canonicalTopicName(undefined, topic) || topic?.trim();
+    const rawTopicLabel = cleanTopicLabel(topic);
+    const topicLabel = rawTopicLabel || canonicalTopicName(undefined, topic) || topic?.trim();
     if (!enabled) {
       return;
     }
@@ -786,7 +787,8 @@ export const useAITutor = (profile?: any, getFullName?: () => string, enabled = 
 
   useEffect(() => {
     const hasOnlySearchGuides = suggestedVideos.length > 0 && suggestedVideos.every((video: any) => video?.is_search_fallback);
-    const topicLabel = canonicalTopicName(undefined, currentTopic?.name || activeSubtopic || '');
+    const sourceTopic = currentTopic?.name || activeSubtopic || '';
+    const topicLabel = cleanTopicLabel(sourceTopic) || canonicalTopicName(undefined, sourceTopic) || '';
     if (!enabled || !hasOnlySearchGuides || !topicLabel) {
       return;
     }
@@ -824,7 +826,8 @@ export const useAITutor = (profile?: any, getFullName?: () => string, enabled = 
   ]);
 
   const primeRecoveryVideos = useCallback(async () => {
-    const topicLabel = canonicalTopicName(undefined, currentTopic?.name || activeSubtopic || '');
+    const sourceTopic = currentTopic?.name || activeSubtopic || '';
+    const topicLabel = cleanTopicLabel(sourceTopic) || canonicalTopicName(undefined, sourceTopic) || '';
     if (!topicLabel) return;
     if (suggestedVideos.length > 0) return;
     await fetchVideoSuggestions(topicLabel, currentSubject, {

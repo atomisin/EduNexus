@@ -52,6 +52,13 @@ def is_warmup_revision_topic_name(name: str) -> bool:
     )
     if key in {"REVISION", "GENERAL REVISION", "READINESS TEST", "REDINESS TEST"}:
         return True
+    if re.match(
+        r"^(?:WELCOME\s+TEST(?:AND)?|READINESS\s+TEST(?:AND)?|REDINESS\s+TEST(?:AND)?|RESUMPTION\s+TEST(?:AND)?)?\s*(?:AND\s+)?REVIEW\s+OF\s+(?:PRIMARY|BASIC|JSS|SSS?|CLASS|GRADE)\s+\d+\s+WORK\b",
+        key,
+    ):
+        return True
+    if re.match(r"^(?:AND\s+)?REVIEW\s+OF\s+(?:PRIMARY|BASIC|JSS|SSS?|CLASS|GRADE)\s+\d+\s+WORK\b", key):
+        return True
     if key.startswith(warmup_words):
         return True
     return bool(re.match(r"^(REVISION|READINESS|REDINESS|RESUMPTION|RESUMOTION)\b.*\b(TEST|WORK|TERM|LESSON)\b", key))

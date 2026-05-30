@@ -8,6 +8,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.subject import Subject, Topic
 from app.models.subject_outline import SubjectOutline
+from app.services.academic_agent_service import (
+    CURRICULUM_VALIDATOR_AGENT,
+    LESSON_PLANNER_AGENT,
+    review_structured_academic_output,
+)
 from app.services.llm_service import llm_service
 
 logger = logging.getLogger(__name__)
@@ -15,12 +20,12 @@ logger = logging.getLogger(__name__)
 LESSON_PLAN_CACHE_PREFIX = "lesson_plan::"
 
 TEACHING_SEQUENCE = [
-    ("intro", "Set the lesson goal, activate relevant prior knowledge, and ask one entry check."),
-    ("concept", "Teach the central concept inside the lesson boundary."),
-    ("worked_example", "Model one representative example with clear steps."),
-    ("guided_practice", "Let the learner try a supported task and give feedback."),
-    ("independent_practice", "Give a slightly harder task without leading the answer."),
-    ("mastery_check", "Confirm the learner can apply the lesson skill independently."),
+    ("intro", "Set the lesson goal, activate relevant prior knowledge, model the first usable idea, and ask one entry check."),
+    ("concept", "Teach the central concept, method, or decision logic inside the lesson boundary."),
+    ("worked_example", "Model one representative example, scenario, calculation, interpretation, or procedure with clear steps."),
+    ("guided_practice", "Let the learner try a supported task that produces observable work and give feedback."),
+    ("independent_practice", "Give a slightly harder task that requires applying the method without leading the answer."),
+    ("mastery_check", "Confirm the learner can apply, explain, and quality-check the lesson skill independently."),
 ]
 
 
@@ -65,18 +70,41 @@ def _as_text_list(value: Any, fallback: Optional[List[str]] = None, limit: int =
     return cleaned[:limit] or fallback[:limit]
 
 
+def _scope_constraints_from_topic(topic_name: str, topic_description: str = "") -> List[str]:
+    """Derive generic lesson-boundary constraints from curriculum wording."""
+    text_value = _clean_text(f"{topic_name} {topic_description}")
+    lowered = text_value.lower()
+    constraints: List[str] = []
+    if re.search(r"\b(up to|within|not more than|no more than|less than|from .+ to)\b", lowered):
+        constraints.append(
+            "Respect every range or upper/lower bound stated in the topic. Examples, practice, and checks must stay inside that stated scope."
+        )
+    if re.search(r"\b(introduction|introductory|basic|simple|elementary)\b", lowered):
+        constraints.append(
+            "Keep the first teaching route at the stated introductory/basic level, then increase rigor through application within the same scope."
+        )
+    if re.search(r"\b(first term|second term|third term|revision|resumption)\b", lowered):
+        constraints.append(
+            "Treat term and revision wording as sequencing context. Do not jump to later-term or next-class material unless the topic explicitly requires revision."
+        )
+    return constraints
+
+
 def _fallback_lesson_plan(subject: Subject, topic: Topic, education_level: str) -> Dict[str, Any]:
     topic_name = _clean_text(topic.name, "this lesson")
     subject_name = _clean_text(subject.name, "the subject")
     description = _clean_text(topic.description)
+    derived_constraints = _scope_constraints_from_topic(topic_name, description)
     outcomes = _as_text_list(getattr(topic, "learning_outcomes", None), limit=5)
     objectives = _as_text_list(getattr(subject, "learning_objectives", None), limit=5)
+    is_professional = _clean_text(education_level).lower() == "professional"
 
     plan = {
         "lesson_goal": outcomes[0] if outcomes else f"Understand and apply {topic_name} in {subject_name}.",
         "scope_boundaries": [
             f"Stay within {topic_name}.",
             "Use the topic description and learning outcomes as the lesson boundary.",
+            *derived_constraints,
             "Do not move into the next listed lesson unless the platform unlocks it.",
         ],
         "prerequisites": objectives[:3] or [
@@ -95,6 +123,7 @@ def _fallback_lesson_plan(subject: Subject, topic: Topic, education_level: str) 
         "allowed_examples": [
             f"Examples directly involving {topic_name}.",
             "Class-level examples that match the learner's education level.",
+            "Examples that obey any stated range, unit, chapter, class, topic, or professional context boundary.",
             "Everyday Nigerian contexts only when they clarify the current lesson skill.",
         ],
         "forbidden_drift": [
@@ -106,10 +135,26 @@ def _fallback_lesson_plan(subject: Subject, topic: Topic, education_level: str) 
             "The learner can explain the core idea in their own words.",
             "The learner can solve or answer a representative task without being led.",
             "The learner can correct a common mistake from this lesson.",
+            "The learner can state a quick check that proves their method, answer, or output is acceptable.",
         ],
     }
     if description:
         plan["scope_boundaries"].insert(1, description[:350])
+    if is_professional:
+        plan["allowed_examples"].extend(
+            [
+                f"A realistic workplace scenario that requires applying {topic_name}.",
+                "A small professional deliverable such as a brief, checklist, plan, review note, calculation, or decision record.",
+                "A quality check that considers constraints, risk, standards, stakeholders, or trade-offs.",
+            ]
+        )
+        plan["mastery_criteria"].extend(
+            [
+                "The learner can apply the lesson idea to a realistic work scenario.",
+                "The learner can produce a small professional artifact or decision with a clear quality check.",
+                "The learner can explain a trade-off, constraint, risk, or stakeholder impact relevant to the task.",
+            ]
+        )
     return plan
 
 
@@ -171,6 +216,8 @@ async def _generate_lesson_plan(
     prompt = f"""
 Create a structured Lesson Teaching Plan for EduNexus AI Tutor.
 
+Role: {LESSON_PLANNER_AGENT}
+
 This plan is NOT shown directly to learners. It controls how the tutor teaches without drifting.
 
 Subject: {subject.name}
@@ -189,8 +236,11 @@ intro, concept, worked_example, guided_practice, independent_practice, mastery_c
 
 Rules:
 - The plan must be class-level appropriate and subject-specific.
+- The plan must convert the topic title into actual teachable concepts, methods, representations, and tasks. Do not create placeholder terms such as "Use" or "Check" as if they are subject vocabulary.
+- If the topic title or description contains a scope boundary such as "up to", "within", a named maximum/minimum, a term, a unit, a class level, a case, or a professional context, that boundary must appear in scope_boundaries and forbidden_drift.
 - It must support rigorous subjects such as mathematics, physics, chemistry, biology, accounting, and professional courses.
 - For technical subjects, include real tasks/calculations/analysis expectations where appropriate.
+- For professional courses, keep the plan work-ready without hardcoding a single job or tool: include a realistic scenario, practical deliverable, constraints/trade-offs, quality checks, and observable professional judgement inside the existing keys.
 - Keep scope_boundaries and forbidden_drift strict enough to prevent moving to the next lesson.
 - allowed_examples must be examples the tutor may use inside this exact lesson only.
 - mastery_criteria must be observable evidence, not vague praise.
@@ -202,7 +252,33 @@ Rules:
         format="json_object",
         user_id=user_id,
     )
-    return normalize_lesson_plan(response, subject, topic, education_level)
+    plan = normalize_lesson_plan(response, subject, topic, education_level)
+    review = await review_structured_academic_output(
+        agent_name=CURRICULUM_VALIDATOR_AGENT,
+        output_kind="lesson teaching plan",
+        output=plan,
+        context={
+            "subject": subject.name,
+            "education_level": education_level,
+            "topic": topic_name,
+            "topic_description": topic_description or "",
+            "learning_outcomes": outcomes,
+            "subject_objectives": subject_objectives,
+        },
+        review_focus=[
+            "curriculum and topic boundary alignment",
+            "class-level difficulty",
+            "stage progression",
+            "misconception coverage",
+            "observable mastery evidence",
+            "professional work-readiness without hardcoding" if education_level.lower() == "professional" else "age-appropriate academic rigor",
+        ],
+        user_id=user_id,
+    )
+    revised = review.get("revised_output")
+    if isinstance(revised, dict):
+        return normalize_lesson_plan(revised, subject, topic, education_level)
+    return plan
 
 
 async def get_or_create_lesson_teaching_plan(

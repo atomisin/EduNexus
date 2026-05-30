@@ -12,10 +12,16 @@ export const ProtectedRoute = ({
 }: ProtectedRouteProps) => {
   const { user, isLoading } = useAuth()
   
-  if (isLoading) {
+  if (isLoading && !user) {
     return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      <div className="flex h-screen items-center justify-center bg-subtle px-6">
+        <div className="flex max-w-sm flex-col items-center gap-3 text-center">
+          <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-primary" />
+          <p className="text-sm font-medium text-foreground">Restoring your learning workspace</p>
+          <p className="text-xs leading-5 text-muted-foreground">
+            EduNexus is reconnecting to your session so your dashboard can open cleanly.
+          </p>
+        </div>
       </div>
     )
   }

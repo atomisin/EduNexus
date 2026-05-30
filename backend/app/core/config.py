@@ -31,16 +31,17 @@ class Settings(BaseSettings):
     EMBEDDING_MODEL: str = "nomic-embed-text"
 
     # LiteLLM Configuration
-    LLM_PRIMARY_MODEL: str = "groq/llama-3.1-70b-versatile"
+    LLM_PRIMARY_MODEL: str = "groq/meta-llama/llama-4-scout-17b-16e-instruct"
     LLM_FAST_MODEL: str = "groq/llama-3.1-8b-instant"
     OPENAI_API_KEY: str = ""
     LLM_FALLBACK_MODEL: str = "gpt-4o-mini"
     LLM_MAX_RETRIES: int = 2
     LLM_TIMEOUT_SECONDS: int = 30
+    ALLOW_BEARER_AUTH: bool = False
     
     # Legacy Groq Configuration (Kept for compatibility)
     GROQ_API_KEY: Optional[str] = None
-    GROQ_MODEL: str = "llama-3.1-8b-instant"
+    GROQ_MODEL: str = "meta-llama/llama-4-scout-17b-16e-instruct"
 
     # Weaviate removed
 

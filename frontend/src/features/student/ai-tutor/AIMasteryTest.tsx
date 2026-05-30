@@ -52,6 +52,8 @@ export const AIMasteryTest: React.FC<AIMasteryTestProps> = ({ topic, topicId, su
                 const response = await aiAPI.generateMasteryTest({
                     topic: subtopic || topic,
                     subject,
+                    subject_id: subjectId,
+                    topic_id: topicId,
                     chat_history: chatHistory
                 });
                 if (response.questions && response.questions.length > 0) {
@@ -111,8 +113,8 @@ export const AIMasteryTest: React.FC<AIMasteryTestProps> = ({ topic, topicId, su
         try {
             const result = await aiAPI.evaluateMasteryTest({
                 topic,
-                topicId,
-                subjectId,
+                topic_id: topicId,
+                subject_id: subjectId,
                 subtopic: subtopic || undefined,
                 results: finalAnswers
             });
@@ -125,6 +127,30 @@ export const AIMasteryTest: React.FC<AIMasteryTestProps> = ({ topic, topicId, su
         } finally {
             setSubmitting(false);
         }
+    };
+
+    const buildReviewPayload = () => {
+        if (!evaluation) return evaluation;
+        const detailedResults = Array.isArray(evaluation?.detailed_results) ? evaluation.detailed_results : [];
+        const reviewQuestions = detailedResults
+            .filter((item: any) => !item?.is_correct)
+            .map((item: any) => {
+                const question = questions.find(q => q.id === item.question_id);
+                return {
+                    question_id: item.question_id,
+                    prompt: question?.text || '',
+                    correct_option: item.correct_option,
+                    correct_answer: question?.options?.[item.correct_option] || item.correct_option,
+                    explanation: question?.explanation || '',
+                };
+            })
+            .filter((item: any) => item.prompt);
+
+        return {
+            ...evaluation,
+            missed_count: reviewQuestions.length,
+            review_questions: reviewQuestions,
+        };
     };
 
     if (loading) {
@@ -272,7 +298,7 @@ export const AIMasteryTest: React.FC<AIMasteryTestProps> = ({ topic, topicId, su
                         <CardFooter className="bg-slate-50 p-4 sm:p-6 border-t border-slate-100">
                             {isPassed ? (
                                 <Button
-                                    onClick={() => onComplete(evaluation)}
+                                    onClick={() => onComplete(buildReviewPayload())}
                                     className="w-full h-12 text-base sm:text-lg font-bold rounded-lg text-white bg-teal-600 hover:bg-teal-700"
                                 >
                                     Continue to Next Topic
@@ -290,10 +316,10 @@ export const AIMasteryTest: React.FC<AIMasteryTestProps> = ({ topic, topicId, su
                                     </Button>
                                     <Button
                                         type="button"
-                                        onClick={() => onComplete(evaluation)}
+                                        onClick={() => onComplete(buildReviewPayload())}
                                         className="h-12 rounded-lg font-bold text-white bg-amber-600 hover:bg-amber-700"
                                     >
-                                        Back to Tutor
+                                        Review Missed Concepts
                                         <ArrowRight className="ml-2 w-5 h-5" />
                                     </Button>
                                 </div>

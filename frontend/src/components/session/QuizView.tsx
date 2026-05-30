@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -10,10 +10,13 @@ import { toast } from 'sonner';
 
 interface Question {
     id: number | string;
-    question: string;
+    question?: string;
+    text?: string;
+    prompt?: string;
     options: string[];
-    correct_answer: string;
-    explanation: string;
+    correct_answer?: string;
+    correct_index?: number;
+    explanation?: string;
 }
 
 interface Quiz {
@@ -35,6 +38,14 @@ interface QuizViewProps {
     timeLimitMinutes?: number;
 }
 
+const normalizeCorrectAnswer = (question: Question) => {
+    if (question.correct_answer) return question.correct_answer;
+    if (typeof question.correct_index === 'number' && Number.isFinite(question.correct_index)) {
+        return String.fromCharCode(65 + question.correct_index);
+    }
+    return '';
+};
+
 export const QuizView = ({ quiz, onComplete, isLoading, results, timeLimitMinutes = 5 }: QuizViewProps) => {
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
     const [answers, setAnswers] = useState<Record<string, string>>({});
@@ -44,7 +55,15 @@ export const QuizView = ({ quiz, onComplete, isLoading, results, timeLimitMinute
     const [streak, setStreak] = useState(0);
     const [maxStreak, setMaxStreak] = useState(0);
 
-    const questions = quiz.questions || [];
+    const questions = useMemo(() => (
+        (quiz.questions || []).map((question, index) => ({
+            ...question,
+            id: question.id ?? index + 1,
+            question: question.question || question.text || question.prompt || '',
+            correct_answer: normalizeCorrectAnswer(question),
+            explanation: question.explanation || '',
+        }))
+    ), [quiz.questions]);
     const currentQuestion = questions[currentQuestionIndex];
     const progress = ((currentQuestionIndex + 1) / questions.length) * 100;
 
@@ -222,7 +241,7 @@ export const QuizView = ({ quiz, onComplete, isLoading, results, timeLimitMinute
                                     <XCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
                                 )}
                                 <div className="min-w-0">
-                                    <p className="break-words font-medium text-sm mb-1">{questions[i]?.question}</p>
+                                    <p className="break-words font-medium text-sm mb-1">{questions[i]?.question || questions[i]?.text || questions[i]?.prompt}</p>
                                     <div className="flex flex-wrap gap-2 text-xs">
                                         <span className="text-slate-500">Your answer: <span className={res.is_correct ? 'text-emerald-600 font-bold' : 'text-red-600 font-bold'}>{res.student_answer}</span></span>
                                         {!res.is_correct && (

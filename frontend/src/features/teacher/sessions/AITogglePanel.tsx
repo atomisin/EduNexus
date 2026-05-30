@@ -11,17 +11,17 @@ interface AITogglePanelProps {
 
 export const AITogglePanel = ({ config, onChange }: AITogglePanelProps) => {
   return (
-    <Card className="border border-border bg-subtle backdrop-blur-sm shadow-sm">
+    <Card className="border border-border bg-background shadow-none">
       <CardHeader className="pb-3">
         <CardTitle className="text-sm flex items-center gap-2 text-foreground">
           <Brain className="w-4 h-4 text-primary" />
-          AI Configuration
+          Teaching support
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-teal-600" />
+            <Sparkles className="w-4 h-4 text-primary" />
             <span className="text-sm font-medium">LLM Explanations</span>
           </div>
           <Switch
@@ -32,7 +32,7 @@ export const AITogglePanel = ({ config, onChange }: AITogglePanelProps) => {
 
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Volume2 className="w-4 h-4 text-emerald-600" />
+            <Volume2 className="w-4 h-4 text-primary" />
             <span className="text-sm font-medium">Text-to-Speech</span>
           </div>
           <Switch
@@ -52,11 +52,11 @@ export const AITogglePanel = ({ config, onChange }: AITogglePanelProps) => {
           />
         </div>
 
-        <Separator className="bg-teal-200/50" />
+        <Separator className="bg-border" />
 
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-sm text-slate-600 dark:text-slate-400">Auto-Generate Explanations</span>
+            <span className="text-sm text-muted-foreground">Auto-Generate Explanations</span>
             <Switch
               checked={config.autoExplain}
               onCheckedChange={(v) => onChange({ ...config, autoExplain: v })}
@@ -65,7 +65,7 @@ export const AITogglePanel = ({ config, onChange }: AITogglePanelProps) => {
           </div>
 
           <div className="flex items-center justify-between">
-            <span className="text-sm text-slate-600 dark:text-slate-400">Suggest YouTube Videos</span>
+            <span className="text-sm text-muted-foreground">Suggest YouTube Videos</span>
             <Switch
               checked={config.suggestVideos}
               onCheckedChange={(v) => onChange({ ...config, suggestVideos: v })}
@@ -74,7 +74,7 @@ export const AITogglePanel = ({ config, onChange }: AITogglePanelProps) => {
           </div>
 
           <div className="flex items-center justify-between">
-            <span className="text-sm text-slate-600 dark:text-slate-400">Auto-Generate Assignments</span>
+            <span className="text-sm text-muted-foreground">Auto-Generate Assignments</span>
             <Switch
               checked={config.generateAssignments}
               onCheckedChange={(v) => onChange({ ...config, generateAssignments: v })}

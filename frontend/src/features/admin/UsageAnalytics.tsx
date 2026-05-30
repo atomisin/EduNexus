@@ -5,6 +5,7 @@ import {
 } from 'recharts';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
 import { adminAPI } from '@/services/api';
 import { Loader2, TrendingUp, DollarSign, Cpu, Users, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
@@ -137,7 +138,7 @@ export const UsageAnalytics: React.FC = () => {
     return (
       <div className="flex flex-col items-center justify-center py-20 gap-4">
         <Loader2 className="w-10 h-10 animate-spin text-primary" />
-        <p className="text-slate-500 animate-pulse">Analyzing token reservoirs...</p>
+        <p className="animate-pulse text-muted-foreground">Reviewing AI usage signals...</p>
       </div>
     );
   }
@@ -152,12 +153,12 @@ export const UsageAnalytics: React.FC = () => {
       <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
           <h2 className="text-2xl font-semibold tracking-tight">AI Resource Analytics</h2>
-          <p className="text-muted-foreground text-sm">Monitor LLM token consumption and estimated costs across models and users.</p>
+          <p className="text-sm text-muted-foreground">Track LLM consumption, cost, and who is driving the heaviest AI workload across the platform.</p>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-sm text-slate-500">Timeframe:</span>
+          <span className="text-sm text-muted-foreground">Timeframe:</span>
           <Select value={days} onValueChange={setDays}>
-            <SelectTrigger className="w-[140px]">
+            <SelectTrigger className="w-[140px] rounded-lg border-border bg-background">
               <SelectValue placeholder="Select range" />
             </SelectTrigger>
             <SelectContent>
@@ -169,10 +170,35 @@ export const UsageAnalytics: React.FC = () => {
         </div>
       </div>
 
-      {/* Stats Overview */}
+      <Card className="rounded-lg border border-border bg-background shadow-none">
+        <CardContent className="grid gap-4 p-4 sm:grid-cols-[1.2fr_1fr]">
+          <div className="space-y-2">
+            <Badge variant="outline" className="rounded-full border-primary/25 bg-primary/5 px-3 py-1 text-primary">
+              Usage brief
+            </Badge>
+            <div className="space-y-1.5">
+              <h3 className="text-lg font-semibold text-foreground">Watch cost pressure before it surprises you</h3>
+              <p className="text-sm leading-6 text-muted-foreground">
+                Use this view to spot rising model demand, heavy user activity, and whether one provider or team habit is pushing cost faster than expected.
+              </p>
+            </div>
+          </div>
+          <div className="grid gap-2 rounded-lg border border-border bg-subtle p-3 text-sm">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Total requests</p>
+              <p className="mt-1 text-lg font-semibold text-foreground">{data.summary.total_requests.toLocaleString()}</p>
+            </div>
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Tracked models</p>
+              <p className="mt-1 text-lg font-semibold text-foreground">{data.by_model.length}</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="rounded-lg border-border shadow-none overflow-hidden relative group">
-          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
+        <Card className="relative overflow-hidden rounded-lg border-border bg-background shadow-none group">
+          <div className="absolute top-0 right-0 p-4 opacity-10 transition-transform group-hover:scale-110">
             <TrendingUp className="w-12 h-12 text-primary" />
           </div>
           <CardHeader className="pb-2">
@@ -182,12 +208,12 @@ export const UsageAnalytics: React.FC = () => {
             <CardTitle className="text-3xl font-bold">{data.summary.total_tokens.toLocaleString()}</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-xs text-slate-500">Across {data.summary.total_requests} AI interactions</p>
+            <p className="text-xs text-muted-foreground">Across {data.summary.total_requests.toLocaleString()} AI interactions</p>
           </CardContent>
         </Card>
 
-        <Card className="rounded-lg border-border shadow-none overflow-hidden relative group">
-          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
+        <Card className="relative overflow-hidden rounded-lg border-border bg-background shadow-none group">
+          <div className="absolute top-0 right-0 p-4 opacity-10 transition-transform group-hover:scale-110">
             <DollarSign className="w-12 h-12 text-amber-500" />
           </div>
           <CardHeader className="pb-2">
@@ -197,29 +223,29 @@ export const UsageAnalytics: React.FC = () => {
             <CardTitle className="text-3xl font-bold">${data.summary.total_cost.toFixed(4)}</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-xs text-slate-500">Calculated based on model rates</p>
+            <p className="text-xs text-muted-foreground">Calculated from the current model-rate estimate</p>
           </CardContent>
         </Card>
 
-        <Card className="rounded-lg border-border shadow-none overflow-hidden relative group">
-          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
-            <Users className="w-12 h-12 text-green-500" />
+        <Card className="relative overflow-hidden rounded-lg border-border bg-background shadow-none group">
+          <div className="absolute top-0 right-0 p-4 opacity-10 transition-transform group-hover:scale-110">
+            <Users className="w-12 h-12 text-primary" />
           </div>
           <CardHeader className="pb-2">
-            <CardDescription className="flex items-center gap-2 text-green-600">
+            <CardDescription className="flex items-center gap-2 text-primary">
               <Users className="w-4 h-4" /> Active AI Users
             </CardDescription>
             <CardTitle className="text-3xl font-bold">{data.top_users.length}</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-xs text-slate-500">Unique contributors this period</p>
+            <p className="text-xs text-muted-foreground">Unique contributors in this time window</p>
           </CardContent>
         </Card>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Daily Trend Chart */}
-        <Card className="rounded-lg border-border shadow-none">
+        <Card className="rounded-lg border-border bg-background shadow-none">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <TrendingUp className="w-5 h-5 text-primary" />
@@ -251,7 +277,7 @@ export const UsageAnalytics: React.FC = () => {
                   tickFormatter={(val) => `$${val}`}
                 />
                 <Tooltip 
-                  contentStyle={{ backgroundColor: '#1e293b', border: 'none', color: '#fff', borderRadius: '8px' }}
+                  contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', color: 'hsl(var(--foreground))', borderRadius: '8px' }}
                   itemStyle={{ color: 'hsl(var(--primary))' }}
                 />
                 <Area type="monotone" dataKey="cost" stroke="hsl(var(--primary))" fillOpacity={1} fill="url(#colorCost)" name="Cost (USD)" />
@@ -261,7 +287,7 @@ export const UsageAnalytics: React.FC = () => {
         </Card>
 
         {/* Tokens Trend Chart */}
-        <Card className="rounded-lg border-border shadow-none">
+        <Card className="rounded-lg border-border bg-background shadow-none">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Cpu className="w-5 h-5 text-amber-500" />
@@ -287,7 +313,7 @@ export const UsageAnalytics: React.FC = () => {
                   tickFormatter={(val) => val >= 1000 ? `${(val/1000).toFixed(0)}k` : val}
                 />
                 <Tooltip 
-                  contentStyle={{ backgroundColor: '#1e293b', border: 'none', color: '#fff', borderRadius: '8px' }}
+                  contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', color: 'hsl(var(--foreground))', borderRadius: '8px' }}
                   itemStyle={{ color: '#f59e0b' }}
                 />
                 <Bar dataKey="tokens" fill="#f59e0b" radius={[4, 4, 0, 0]} name="Tokens" />
@@ -299,7 +325,7 @@ export const UsageAnalytics: React.FC = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Usage by Model */}
-        <Card className="lg:col-span-1 rounded-lg border-border shadow-none">
+        <Card className="lg:col-span-1 rounded-lg border-border bg-background shadow-none">
           <CardHeader>
             <CardTitle>Model Distribution</CardTitle>
             <CardDescription>Share of tokens by LLM model</CardDescription>
@@ -315,9 +341,7 @@ export const UsageAnalytics: React.FC = () => {
                   tick={{ fontSize: 10 }} 
                   width={100}
                 />
-                <Tooltip 
-                  contentStyle={{ backgroundColor: '#1e293b', border: 'none', color: '#fff', borderRadius: '8px' }}
-                />
+                <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', color: 'hsl(var(--foreground))', borderRadius: '8px' }} />
                 <Bar dataKey="total_tokens" name="Tokens" radius={[0, 4, 4, 0]}>
                   {data.by_model.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
@@ -329,7 +353,7 @@ export const UsageAnalytics: React.FC = () => {
         </Card>
 
         {/* Top Users Table */}
-        <Card className="lg:col-span-2 rounded-lg border-border shadow-none">
+        <Card className="lg:col-span-2 rounded-lg border-border bg-background shadow-none">
           <CardHeader>
             <CardTitle>Top AI Consumers</CardTitle>
             <CardDescription>Users with highest token attribution</CardDescription>
@@ -359,7 +383,7 @@ export const UsageAnalytics: React.FC = () => {
                       <td className="p-2 align-middle text-right">
                         <div className="flex items-center justify-end gap-2">
                           <span className="text-xs">{totalTokens > 0 ? ((u.token_count / totalTokens) * 100).toFixed(1) : '0.0'}%</span>
-                          <div className="w-16 bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                          <div className="h-1.5 w-16 overflow-hidden rounded-full bg-muted">
                             <div 
                               className="bg-primary h-full" 
                               style={{ width: `${totalTokens > 0 ? (u.token_count / totalTokens) * 100 : 0}%` }}
@@ -371,7 +395,7 @@ export const UsageAnalytics: React.FC = () => {
                   ))}
                   {data.top_users.length === 0 && (
                     <tr>
-                      <td colSpan={4} className="p-8 text-center text-slate-500">
+                      <td colSpan={4} className="p-8 text-center text-muted-foreground">
                         No user-attributed usage found for this period.
                       </td>
                     </tr>

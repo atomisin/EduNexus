@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,17 +8,19 @@ import { AlertCircle, CheckCircle2, ChevronLeft, Eye, EyeOff, Loader2, Mail } fr
 import { authAPI, warmUpServer } from '@/services/api';
 import VerificationSuccess from './VerificationSuccess';
 
-const COLD_START_MESSAGE = 'Please wait...';
+const COLD_START_MESSAGE = 'The learning workspace is waking up. Please give it a few moments.';
 
 interface LoginFormProps {
   onSuccess?: () => void;
   onRegisterClick?: () => void;
+  onBackClick?: () => void;
 }
 
-export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, onRegisterClick }) => {
+export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, onRegisterClick, onBackClick }) => {
   const { login, error, isLoading, verificationEmail } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [submitting, setSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [serverWaking, setServerWaking] = useState(false);
   const [serverReady, setServerReady] = useState(false);
@@ -53,7 +55,10 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, onRegisterClick
 
   // Reset waking state when loading finishes
   useEffect(() => {
-    if (!isLoading) setServerWaking(false);
+    if (!isLoading) {
+      setServerWaking(false);
+      setSubmitting(false);
+    }
   }, [isLoading]);
 
   useEffect(() => {
@@ -65,11 +70,16 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, onRegisterClick
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const success = await login(email, password);
-    if (success) {
-      onSuccess?.();
-    } else if (verificationEmail || error?.toLowerCase().includes('verify your email')) {
-      setShowVerification(true);
+    setSubmitting(true);
+    try {
+      const success = await login(email, password);
+      if (success) {
+        onSuccess?.();
+      } else if (verificationEmail || error?.toLowerCase().includes('verify your email')) {
+        setShowVerification(true);
+      }
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -110,35 +120,35 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, onRegisterClick
 
   // Determine the button label
   const getButtonLabel = () => {
-    if (!isLoading) return 'Sign In';
+    if (!submitting) return 'Sign In';
     if (serverWaking) return COLD_START_MESSAGE;
     return 'Signing in...';
   };
 
   return (
-    <Card className="w-full max-w-md border border-slate-200 shadow-none bg-white dark:bg-slate-950 overflow-hidden rounded-lg">
+    <Card className="w-full max-w-md overflow-hidden rounded-lg border border-border bg-background shadow-none">
       <div className="h-1.5 bg-primary" />
       <CardHeader className="text-center pt-8 relative">
         {onRegisterClick && (
           <button 
             type="button" 
-            onClick={() => window.location.href = '/'}
-            className="absolute left-4 top-10 p-2 text-slate-400 hover:text-slate-600 transition-colors"
+            onClick={() => onBackClick?.()}
+            className="absolute left-4 top-10 p-2 text-muted-foreground transition-colors hover:text-foreground"
           >
             <ChevronLeft className="w-6 h-6" />
           </button>
         )}
-        <div className="mx-auto mb-6">
-          <img src="/edunexus-logo.png" alt="EduNexus" className="h-24 w-auto mx-auto" />
+        <div className="mx-auto mb-5 sm:mb-6">
+          <img src="/edunexus-logo.png" alt="EduNexus" className="mx-auto h-20 w-auto sm:h-24" />
         </div>
-        <CardTitle className="text-3xl font-bold tracking-tight mb-2 text-slate-900 dark:text-white">
-          {forgotMode ? 'Reset Password' : 'Welcome Back'}
+        <CardTitle className="mb-2 text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+          {forgotMode ? 'Reset Password' : 'Welcome back'}
         </CardTitle>
-        <CardDescription className="text-lg text-slate-500">
-          {forgotMode ? 'Enter your account email and we will send a secure reset link.' : 'Sign in to your EduNexus account'}
+        <CardDescription className="text-base leading-relaxed text-muted-foreground">
+          {forgotMode ? 'Enter your account email and we will send a secure reset link.' : 'Sign in and pick up where you left off.'}
         </CardDescription>
       </CardHeader>
-      <CardContent className="pt-2 pb-10 px-8">
+      <CardContent className="px-6 pb-8 pt-2 sm:px-8 sm:pb-10">
         {forgotMode ? (
           <form onSubmit={handleForgotPassword} className="space-y-6">
             {resetMessage && (
@@ -157,7 +167,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, onRegisterClick
             )}
 
             <div className="space-y-2">
-              <Label htmlFor="resetEmail" className="text-sm font-semibold text-slate-700">Email</Label>
+              <Label htmlFor="resetEmail" className="text-sm font-semibold text-foreground">Email</Label>
               <div className="relative">
                 <Input
                   id="resetEmail"
@@ -166,9 +176,9 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, onRegisterClick
                   value={resetEmail}
                   onChange={(e) => setResetEmail(e.target.value)}
                   required
-                  className="h-14 rounded-lg bg-slate-50/50 border-slate-100 pl-12 focus:border-primary/30 focus:ring-primary/10 text-base"
+                  className="h-13 rounded-lg border-border bg-subtle pl-12 text-base focus-visible:ring-primary/20 sm:h-14"
                 />
-                <Mail className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+                <Mail className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
               </div>
             </div>
 
@@ -202,21 +212,21 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, onRegisterClick
         ) : (
         <form onSubmit={handleSubmit} className="space-y-6">
           {error && (
-            <div className="p-4 rounded-xl bg-red-50 text-red-600 text-sm border border-red-100 animate-in fade-in slide-in-from-top-1">
+            <div className="animate-in fade-in slide-in-from-top-1 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-950/20 dark:text-red-300">
               {typeof error === 'string' 
                 ? error 
                 : (error as any).detail || (error as any).message || 'An error occurred. Please try again.'}
             </div>
           )}
           {serverWaking && !error && (
-            <div className="p-4 rounded-lg bg-amber-50 text-amber-700 text-sm border border-amber-200 animate-in fade-in slide-in-from-top-1 flex items-center gap-2">
+            <div className="animate-in fade-in slide-in-from-top-1 flex items-start gap-2 rounded-lg border border-primary/20 bg-primary/5 p-4 text-sm text-foreground">
               <Loader2 className="h-4 w-4 animate-spin flex-shrink-0" />
               <span>{COLD_START_MESSAGE}</span>
             </div>
           )}
           <div className="space-y-4 pt-2">
             <div className="space-y-2">
-              <Label htmlFor="email" className="text-sm font-semibold text-slate-700">Email</Label>
+              <Label htmlFor="email" className="text-sm font-semibold text-foreground">Email</Label>
               <Input
                 id="email"
                 type="email"
@@ -224,12 +234,12 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, onRegisterClick
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="h-14 rounded-lg bg-slate-50/50 border-slate-100 focus:border-primary/30 focus:ring-primary/10 text-base"
+                className="h-13 rounded-lg border-border bg-subtle text-base focus-visible:ring-primary/20 sm:h-14"
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="password" className="text-sm font-semibold text-slate-700">Password</Label>
+              <Label htmlFor="password" className="text-sm font-semibold text-foreground">Password</Label>
               <div className="relative">
                 <Input
                   id="password"
@@ -238,12 +248,12 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, onRegisterClick
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  className="h-14 rounded-lg bg-slate-50/50 border-slate-100 focus:border-primary/30 focus:ring-primary/10 text-base"
+                  className="h-13 rounded-lg border-border bg-subtle text-base focus-visible:ring-primary/20 sm:h-14"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                 >
                   {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                 </button>
@@ -266,9 +276,9 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, onRegisterClick
           <Button
             type="submit"
             className="w-full min-h-14 h-auto rounded-lg bg-primary hover:bg-primary/90 text-white text-base font-bold shadow-none transition-all active:scale-[0.98] mt-4 px-4 py-3"
-            disabled={isLoading}
+            disabled={submitting}
           >
-            {isLoading ? (
+            {submitting ? (
               <>
                 <Loader2 className="mr-2 h-5 w-5 animate-spin shrink-0" />
                 <span className="leading-snug">{getButtonLabel()}</span>
@@ -279,14 +289,14 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, onRegisterClick
           </Button>
 
           <div className="text-center pt-6">
-            <p className="text-base text-slate-500 dark:text-slate-300">
-              Don't have an account?{' '}
+            <p className="text-base text-muted-foreground">
+              New here?{' '}
               <button
                 type="button"
                 onClick={onRegisterClick}
-                className="font-bold text-primary underline-offset-4 hover:underline dark:text-teal-300 dark:hover:text-teal-200"
+                className="font-bold text-primary underline-offset-4 hover:underline"
               >
-                Create Account
+                Create an account
               </button>
             </p>
           </div>
@@ -296,3 +306,10 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, onRegisterClick
     </Card>
   );
 };
+
+
+
+
+
+
+

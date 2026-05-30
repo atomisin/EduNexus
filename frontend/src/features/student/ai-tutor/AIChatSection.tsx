@@ -1,65 +1,21 @@
-import { Sparkles, Brain, X, Target, CheckCircle2, Lock, Play, RefreshCw, Trophy, Zap, Star, Video, BookMarked, Loader2, Layers, Repeat, FileText, Activity, BookOpen, Clock, Mic, MicOff, Volume2, VolumeX, ArrowRight } from 'lucide-react';
+import { Sparkles, Brain, X, Target, CheckCircle2, Lock, Play, RefreshCw, Trophy, Zap, Star, Video, BookMarked, Loader2, Layers, Repeat, FileText, Activity, BookOpen, Mic, MicOff, Volume2, VolumeX, ArrowRight, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
-import ReactMarkdown from 'react-markdown';
+import { Skeleton } from '@/components/ui/skeleton';
+import AcademicMarkdown from '@/components/AcademicMarkdown';
 import MathText from '@/components/MathText';
-import { normalizeAcademicTextForDisplay } from '@/utils/academicText';
 import { formatTopicName, formatTopicLike } from '@/utils/topicText';
 import { AIMasteryTest } from './AIMasteryTest';
-import { BrainPowerCard } from '@/features/student/learning/BrainPowerCard';
-import type { BrainPowerCardData } from '@/features/student/learning/BrainPowerCard';
-import { useReadingRecommendations } from '@/features/student/hooks/useReadingRecommendations';
 import { useTopicProgress } from '@/features/student/hooks/useTopicProgress';
 import { useTTS } from '@/features/student/hooks/useTTS';
 import { useSpeechRecognition } from '@/features/student/hooks/useSpeechRecognition';
 import { getPersonaName } from '@/features/student/utils/personaUtils';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-
-const renderRichText = (value: string) => {
-  const parts = value.split(/(\+\+[^+]+\+\+)/g);
-  return parts.map((part, index) => {
-    if (part.startsWith('++') && part.endsWith('++')) {
-      return (
-        <span key={`${part}-${index}`} className="underline decoration-primary/70 decoration-2 underline-offset-4 font-semibold">
-          <MathText>{part.slice(2, -2)}</MathText>
-        </span>
-      );
-    }
-    return <MathText key={`${part}-${index}`}>{part}</MathText>;
-  });
-};
-
-const renderMathChildren = (children: React.ReactNode): React.ReactNode =>
-  React.Children.map(children, (child) => {
-    if (typeof child === 'string' || typeof child === 'number') {
-      return renderRichText(String(child));
-    }
-    if (React.isValidElement(child)) {
-      const element = child as React.ReactElement<{ children?: React.ReactNode }>;
-      return React.cloneElement(element, {
-        children: renderMathChildren(element.props.children),
-      });
-    }
-    return child;
-  });
-
-const mathMarkdownComponents = {
-  h1: ({ children }: any) => <h3 className="mb-3 min-w-0 break-words text-lg font-black tracking-normal text-slate-950 [overflow-wrap:anywhere] dark:text-white">{renderMathChildren(children)}</h3>,
-  h2: ({ children }: any) => <h3 className="mb-3 min-w-0 break-words text-lg font-black tracking-normal text-slate-950 [overflow-wrap:anywhere] dark:text-white">{renderMathChildren(children)}</h3>,
-  h3: ({ children }: any) => <h4 className="mb-2 min-w-0 break-words text-base font-black tracking-normal text-slate-900 [overflow-wrap:anywhere] dark:text-slate-100">{renderMathChildren(children)}</h4>,
-  p: ({ children }: any) => <p className="mb-3 min-w-0 break-words [overflow-wrap:anywhere] last:mb-0">{renderMathChildren(children)}</p>,
-  ul: ({ children }: any) => <ul className="my-3 ml-5 min-w-0 list-disc space-y-1.5 marker:text-primary">{children}</ul>,
-  ol: ({ children }: any) => <ol className="my-3 ml-5 min-w-0 list-decimal space-y-1.5 marker:text-primary marker:font-bold">{children}</ol>,
-  li: ({ children }: any) => <li className="min-w-0 break-words pl-1 [overflow-wrap:anywhere]">{renderMathChildren(children)}</li>,
-  strong: ({ children }: any) => <strong className="font-black text-slate-950 dark:text-white">{renderMathChildren(children)}</strong>,
-  em: ({ children }: any) => <em className="italic text-slate-700 dark:text-slate-200">{renderMathChildren(children)}</em>,
-  code: ({ children }: any) => <code className="whitespace-pre-wrap break-words rounded bg-slate-100 px-1.5 py-0.5 text-sm font-semibold text-slate-800 [overflow-wrap:anywhere] dark:bg-slate-900 dark:text-slate-100">{children}</code>,
-  blockquote: ({ children }: any) => <blockquote className="my-3 border-l-4 border-primary/50 pl-4 text-slate-600 dark:text-slate-300">{children}</blockquote>,
-};
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { videoAPI } from '@/services/api';
 
 const PLACEHOLDER_TOPIC_NAMES = new Set(['CLASS', 'SUBJECT', 'TERM', 'TOPIC', 'TOPICS']);
 
@@ -95,6 +51,34 @@ const filterLearningTopics = (topicList: any[]) => {
   return visible;
 };
 
+const getYouTubeEmbedSrc = (videoId: string) => {
+  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  const params = new URLSearchParams({
+    autoplay: '1',
+    mute: '1',
+    playsinline: '1',
+    controls: '1',
+    rel: '0',
+    modestbranding: '1',
+    enablejsapi: '1',
+  });
+  if (origin) params.set('origin', origin);
+  return `https://www.youtube.com/embed/${encodeURIComponent(videoId)}?${params.toString()}`;
+};
+
+const nudgeYouTubePlayback = (iframe: HTMLIFrameElement | null) => {
+  if (!iframe?.contentWindow) return;
+  const sendCommand = (func: 'playVideo') => {
+    iframe.contentWindow?.postMessage(
+      JSON.stringify({ event: 'command', func, args: [] }),
+      'https://www.youtube.com',
+    );
+  };
+  sendCommand('playVideo');
+  window.setTimeout(() => sendCommand('playVideo'), 350);
+  window.setTimeout(() => sendCommand('playVideo'), 900);
+};
+
 const stripTutorDecorations = (content: string) =>
   (content || '')
     .replace(/(^|\n)\s*(?:[\p{Extended_Pictographic}\uFE0F\u200D]\s*)+(?=#{1,6}\s+)/gu, '$1')
@@ -110,7 +94,7 @@ const addSpeechPauseToLearningHeadings = (content: string) =>
   );
 
 const prepareTutorMarkdown = (content: string) =>
-  addSpeechPauseToLearningHeadings(normalizeAcademicTextForDisplay(stripTutorDecorations(content)))
+  addSpeechPauseToLearningHeadings(stripTutorDecorations(content))
     .replace(/(^|\n)#{1,6}\s+(?:[\p{Extended_Pictographic}\uFE0F\u200D]\s*)+/gu, '$1### ')
     .replace(/^(#{1,6}\s+(?:Goal\.?|Core idea\.?|Try this\.?|Example\.?|Practice\.?|Summary\.?|Watch out\.?|Key points\.?|Steps\.?|Step\s+\d+\.?))\s+(.+)$/gim, '$1\n$2');
 
@@ -153,6 +137,12 @@ interface AIChatSectionProps {
   handleSubjectSelect: (subject: any) => Promise<void>;
   handleTopicSelect: (topic: any) => Promise<void>;
   suggestedVideos: any[];
+  videoSupportState?: {
+    trigger: 'prefetch' | 'manual_request' | 'repair_support' | 'brain_power_exhausted' | 'revision_support';
+    topic: string;
+    reason: string;
+    autoOpen: boolean;
+  } | null;
   setSelectedVideo: (video: any) => void;
   setEnergy: (val: any) => void;
   suggestedTopics: any[];
@@ -164,6 +154,7 @@ interface AIChatSectionProps {
   roadmapLoading: boolean;
   scrollAreaRef: React.RefObject<HTMLDivElement | null>;
   onMasteryTestComplete: (evalResult: any) => Promise<void>;
+  startQuiz: (topic?: any, subject?: any) => void;
   getFullName: () => string;
   structuredTopics?: any[];
   isStructuredLoading?: boolean;
@@ -204,6 +195,7 @@ export const AIChatSection = ({
   handleSubjectSelect,
   handleTopicSelect,
   suggestedVideos,
+  videoSupportState = null,
   setSelectedVideo,
   setEnergy,
   suggestedTopics,
@@ -215,6 +207,7 @@ export const AIChatSection = ({
   roadmapLoading,
   scrollAreaRef,
   onMasteryTestComplete,
+  startQuiz,
   getFullName,
   structuredTopics = [],
   isStructuredLoading = false,
@@ -228,12 +221,25 @@ export const AIChatSection = ({
   cancelPlacementCheck = () => {},
   openCurrentUnlockedLesson = async () => {}
 }: AIChatSectionProps) => {
-  const { getTopicProgress } = useTopicProgress();
+  const { getTopicProgress } = useTopicProgress(showAIPanel);
   const { speak, stop, isYoungLearner, isSpeechSupported, isSpeaking } = useTTS(profile?.education_level, tutorGender);
   const [activeVideo, setActiveVideo] = useState<string | null>(null);
+  const [activeVideoLoadKey, setActiveVideoLoadKey] = useState(0);
+  const [loadingVideoId, setLoadingVideoId] = useState<string | null>(null);
+  const [showRecommendedVideos, setShowRecommendedVideos] = useState(false);
+  const [videoFeedbackById, setVideoFeedbackById] = useState<Record<string, 'like' | 'dislike' | null>>({});
   const [placementAnswers, setPlacementAnswers] = useState<Record<string, string>>({});
   const [chatInput, setChatInput] = useState('');
   const [showMobilePath, setShowMobilePath] = useState(false);
+  const latestMessageRef = useRef<HTMLDivElement | null>(null);
+  const loggedVideoImpressionsRef = useRef<Set<string>>(new Set());
+  const activeVideoPlayerRef = useRef<HTMLDivElement | null>(null);
+  const activeVideoFrameRef = useRef<HTMLIFrameElement | null>(null);
+  const activeVideoTrackingRef = useRef<{
+    videoId: string;
+    watch60Timer: ReturnType<typeof setTimeout> | null;
+    completionTimer: ReturnType<typeof setTimeout> | null;
+  } | null>(null);
 
   const appendVoiceTranscript = useCallback((transcript: string) => {
     setChatInput((current) => {
@@ -241,6 +247,18 @@ export const AIChatSection = ({
       return `${prefix ? `${prefix} ` : ''}${transcript}`.trim();
     });
   }, []);
+
+  useEffect(() => {
+    if (!showAIPanel || aiChatMessages.length === 0) return;
+    const frame = window.requestAnimationFrame(() => {
+      latestMessageRef.current?.scrollIntoView({
+        block: 'nearest',
+        inline: 'nearest',
+        behavior: aiLoading ? 'auto' : 'smooth',
+      });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [aiChatMessages.length, aiLoading, showAIPanel]);
 
   const {
     isSpeechRecognitionSupported,
@@ -258,7 +276,10 @@ export const AIChatSection = ({
   const selectedTopicName = formatTopicLike(selectedTopic);
   const isCurrentTopicCompleted = topicsForCurrentSubject.find((st: any) => st.id === selectedTopic?.id)?.status === 'completed';
   const masteryPassed = aiState?.status === 'quiz_completed' && aiState?.result?.passed;
+  const masteryNeedsReview = aiState?.status === 'quiz_completed' && aiState?.result && !aiState?.result?.passed;
   const isLessonCompleted = Boolean(isCurrentTopicCompleted || masteryPassed || lessonController?.stage === 'completed');
+  const inLessonRepairMode = lessonController?.stage === 'remediate' && !masteryNeedsReview && !isLessonCompleted;
+  const repairResolved = lessonController?.lastUiAction === 'repair_resolved' && !inLessonRepairMode && !masteryNeedsReview && !isLessonCompleted;
   const focusTopicLabel = formatTopicName((typeof viewingSubtopic === 'object' ? (viewingSubtopic as any)?.name : viewingSubtopic) || activeSubtopic || selectedTopic?.name || 'this topic');
   const conversationTurns = aiChatMessages.filter((m: any) => m.role === 'user').length;
   const lessonStageLabel = (lessonController?.stage || 'intro').replace(/_/g, ' ');
@@ -274,6 +295,8 @@ export const AIChatSection = ({
     Number(progress?.total_quizzes || 0),
     Number(progressSummary.total_quizzes || 0),
   );
+  const selectedTopicProgress = selectedTopic ? getTopicProgress(selectedTopic.id) : null;
+  const focusProgressPercent = Number(selectedTopicProgress?.progress_pct || 0);
   const pathProgress = topicsForCurrentSubject.length
     ? Math.round((topicsForCurrentSubject.filter((s: any) => s.status === 'completed').length / topicsForCurrentSubject.length) * 100)
     : 0;
@@ -294,6 +317,46 @@ export const AIChatSection = ({
       .slice(currentTopicIndex >= 0 ? currentTopicIndex + 1 : 0)
       .find((topic: any) => topic.status !== 'completed' && topic.status !== 'locked') ||
     topicsForCurrentSubject.find((topic: any) => topic.status === 'unlocked' || topic.status === 'in_progress' || topic.status === 'active');
+  const currentUnlockedLesson =
+    topicsForCurrentSubject.find((topic: any) => topic.status === 'in_progress') ||
+    topicsForCurrentSubject.find((topic: any) => topic.status === 'unlocked') ||
+    topicsForCurrentSubject.find((topic: any) => topic.status === 'active') ||
+    topicsForCurrentSubject.find((topic: any) => topic.status !== 'locked' && topic.status !== 'completed') ||
+    null;
+  const prioritizedTopicIds = useMemo(() => {
+    const ids: string[] = [];
+    const pushId = (topic: any) => {
+      if (!topic?.id) return;
+      const normalized = String(topic.id);
+      if (!ids.includes(normalized)) ids.push(normalized);
+    };
+    pushId(currentUnlockedLesson);
+    pushId(selectedTopic);
+    pushId(nextLessonCandidate);
+    topicsForCurrentSubject
+      .filter((topic: any) => {
+        const status = String(topic.status || '').toLowerCase();
+        return status === 'in_progress' || status === 'unlocked' || status === 'active';
+      })
+      .slice(0, 3)
+      .forEach(pushId);
+    return ids;
+  }, [currentUnlockedLesson, nextLessonCandidate, selectedTopic, topicsForCurrentSubject]);
+  const prioritizedTopics = useMemo(() => (
+    prioritizedTopicIds
+      .map((topicId) => visibleTopics.find((topic: any) => String(topic.id) === topicId))
+      .filter(Boolean)
+      .slice(0, 4)
+  ), [prioritizedTopicIds, visibleTopics]);
+  const groupedVisibleTopics = useMemo(() => {
+    const order: Record<string, number> = { 'First Term': 1, 'Second Term': 2, 'Third Term': 3, 'Other': 4 };
+    return Array.from(new Set(visibleTopics.map((topic: any) => topic.term || 'Other')))
+      .sort((a, b) => (order[String(a)] || 5) - (order[String(b)] || 5))
+      .map((termGroup) => ({
+        termGroup: String(termGroup),
+        topics: visibleTopics.filter((topic: any) => (topic.term || 'Other') === termGroup),
+      }));
+  }, [visibleTopics]);
   const stageGuidance: Record<string, string> = {
     intro: `Start ${focusTopicLabel} with a clear goal, the core idea, and one quick check.`,
     teach: `Continue ${focusTopicLabel} with one focused explanation and a small task.`,
@@ -384,6 +447,365 @@ export const AIChatSection = ({
     }
     return { title: 'Next Badge: Mastery Builder', progress: Math.max(65, pathProgress), note: 'Keep learning to raise your mastery' };
   }, [completedLessons, hasLearningSignals, pathProgress, profile?.badges, profile?.current_streak, quizzesTaken]);
+  const focusSignalItems = [
+    {
+      label: 'Lesson stage',
+      value: lessonStageLabel.replace(/\b\w/g, (char: string) => char.toUpperCase()),
+    },
+    {
+      label: 'Topic progress',
+      value: `${focusProgressPercent}%`,
+    },
+    {
+      label: 'Learning path',
+      value: `${pathProgress}%`,
+    },
+  ];
+  const shouldShowSupportRail = Boolean(
+    selectedSubject
+    || selectedTopic
+    || actionableSuggestedTopics.length > 0
+    || actionableWeaknessAreas.length > 0
+  );
+  const completedLessonLabel = selectedTopic?.name || focusTopicLabel;
+
+  const shouldEncourageVideoReview = videoSupportState?.trigger === 'brain_power_exhausted';
+  const failedMasteryReviewQuestions = Array.isArray(aiState?.result?.review_questions) ? aiState.result.review_questions : [];
+  const videoSupportBadge = useMemo(() => {
+    switch (videoSupportState?.trigger) {
+      case 'repair_support':
+        return 'Repair support';
+      case 'manual_request':
+        return 'Second teaching voice';
+      case 'brain_power_exhausted':
+        return 'Recovery support';
+      case 'revision_support':
+        return 'Revision support';
+      default:
+        return 'Ready when needed';
+    }
+  }, [videoSupportState?.trigger]);
+  const videoSupportMessage = videoSupportState?.reason || (
+    suggestedVideos.length > 0
+      ? 'EduNexus prepared these quietly in case you want a second explanation voice for this lesson.'
+      : ''
+  );
+
+  useEffect(() => {
+    if (videoSupportState?.autoOpen && suggestedVideos.length > 0) {
+      setShowRecommendedVideos(true);
+    }
+  }, [suggestedVideos.length, videoSupportState?.autoOpen]);
+
+  useEffect(() => {
+    if (!selectedTopic) {
+      setShowRecommendedVideos(false);
+    }
+  }, [selectedTopic?.id]);
+
+  useEffect(() => {
+    const feedbackState = suggestedVideos.reduce((acc: Record<string, 'like' | 'dislike' | null>, video: any) => {
+      acc[String(video.id)] = video?.learner_feedback === 'like' || video?.learner_feedback === 'dislike'
+        ? video.learner_feedback
+        : null;
+      return acc;
+    }, {});
+    setVideoFeedbackById(feedbackState);
+  }, [suggestedVideos]);
+
+  const videoContext = useMemo(() => ({
+    topicName: String(selectedTopic?.name || activeSubtopic || focusTopicLabel || '').trim(),
+    subjectName: String(selectedSubject?.name || '').trim() || undefined,
+    source: videoSupportState?.trigger || (shouldEncourageVideoReview ? 'brain_power_exhausted' : 'tutor'),
+  }), [activeSubtopic, focusTopicLabel, selectedSubject?.name, selectedTopic?.name, shouldEncourageVideoReview, videoSupportState?.trigger]);
+
+  const recordVideoEvent = useCallback(async (
+    video: any,
+    eventType: 'impression' | 'click' | 'watch_start' | 'watch_60s' | 'watch_complete',
+    extras?: { watch_seconds?: number; metadata?: Record<string, any> },
+  ) => {
+    if (!video?.id || !videoContext.topicName) return;
+    try {
+      await videoAPI.recordEvent({
+        video_id: String(video.id),
+        topic_name: videoContext.topicName,
+        subject_name: videoContext.subjectName,
+        source: videoContext.source,
+        event_type: eventType,
+        watch_seconds: extras?.watch_seconds || 0,
+        video_title: video.title,
+        channel_title: video.channel_title,
+        metadata: extras?.metadata || {},
+      });
+    } catch (error) {
+      console.error('Video event tracking failed:', error);
+    }
+  }, [videoContext]);
+
+  const openRecommendedVideo = useCallback((video: any) => {
+    setSelectedVideo(video);
+    setEnergy((prev: number) => Math.min(100, prev + 25));
+    if (video?.is_search_fallback) {
+      window.open(video.url, '_blank', 'noopener,noreferrer');
+      setActiveVideo(null);
+      setLoadingVideoId(null);
+    } else {
+      const nextVideoId = String(video.id);
+      setShowRecommendedVideos(true);
+      setLoadingVideoId(nextVideoId);
+      if (String(activeVideo) === nextVideoId) {
+        nudgeYouTubePlayback(activeVideoFrameRef.current);
+      } else {
+        setActiveVideo(nextVideoId);
+        setActiveVideoLoadKey((prev) => prev + 1);
+      }
+    }
+    void recordVideoEvent(video, 'click');
+  }, [activeVideo, recordVideoEvent, setEnergy, setSelectedVideo]);
+
+  const handleVideoFeedback = useCallback(async (video: any, feedback: 'like' | 'dislike') => {
+    if (!video?.id || !videoContext.topicName) return;
+    setVideoFeedbackById((prev) => ({ ...prev, [String(video.id)]: feedback }));
+    try {
+      const response = await videoAPI.setFeedback({
+        video_id: String(video.id),
+        topic_name: videoContext.topicName,
+        subject_name: videoContext.subjectName,
+        feedback,
+        video_title: video.title,
+        channel_title: video.channel_title,
+      });
+
+      const evidence = response?.platform_evidence;
+      if (evidence) {
+        video.platform_evidence = {
+          ...(video.platform_evidence || {}),
+          ...evidence,
+        };
+      }
+      video.learner_feedback = feedback;
+    } catch (error) {
+      console.error('Video feedback failed:', error);
+    }
+  }, [videoContext]);
+
+  useEffect(() => {
+    if (!showRecommendedVideos || !videoContext.topicName || suggestedVideos.length === 0) return;
+    suggestedVideos.forEach((video: any) => {
+      const key = `${videoContext.topicName}::${video.id}`;
+      if (loggedVideoImpressionsRef.current.has(key)) return;
+      loggedVideoImpressionsRef.current.add(key);
+      void recordVideoEvent(video, 'impression');
+    });
+  }, [recordVideoEvent, showRecommendedVideos, suggestedVideos, videoContext.topicName]);
+
+  useEffect(() => {
+    const currentTracking = activeVideoTrackingRef.current;
+    if (currentTracking?.watch60Timer) clearTimeout(currentTracking.watch60Timer);
+    if (currentTracking?.completionTimer) clearTimeout(currentTracking.completionTimer);
+    activeVideoTrackingRef.current = null;
+
+    const activeVideoMeta = suggestedVideos.find((video: any) => String(video.id) === String(activeVideo));
+    if (!activeVideo || !activeVideoMeta || activeVideoMeta?.is_search_fallback) {
+      return;
+    }
+
+    void recordVideoEvent(activeVideoMeta, 'watch_start');
+    const durationSeconds = Number(activeVideoMeta.duration || 0);
+    const completionDelayMs = Math.max(
+      90000,
+      Math.min(durationSeconds > 0 ? durationSeconds * 1000 : 240000, 480000),
+    );
+    const watch60Timer = setTimeout(() => {
+      void recordVideoEvent(activeVideoMeta, 'watch_60s', { watch_seconds: 60 });
+    }, 60000);
+    const completionTimer = setTimeout(() => {
+      void recordVideoEvent(activeVideoMeta, 'watch_complete', {
+        watch_seconds: Math.max(90, Math.round(completionDelayMs / 1000)),
+        metadata: { completion_mode: 'timed_embed_watch' },
+      });
+    }, completionDelayMs);
+
+    activeVideoTrackingRef.current = {
+      videoId: String(activeVideoMeta.id),
+      watch60Timer,
+      completionTimer,
+    };
+
+    return () => {
+      clearTimeout(watch60Timer);
+      clearTimeout(completionTimer);
+    };
+  }, [activeVideo, recordVideoEvent, suggestedVideos]);
+
+  useEffect(() => {
+    if ((!activeVideo && !loadingVideoId) || !showRecommendedVideos) return;
+    const frame = window.requestAnimationFrame(() => {
+      activeVideoPlayerRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [activeVideo, loadingVideoId, showRecommendedVideos]);
+
+  const renderRecommendedVideoCard = useCallback((video: any, compact = false) => {
+    const learnerFeedback = videoFeedbackById[String(video.id)];
+    const evidence = video?.platform_evidence || {};
+    const helpfulCount = Number(evidence.likes || 0);
+    const isPrimaryRecommendation = suggestedVideos.length > 0 && String(suggestedVideos[0]?.id) === String(video?.id);
+    const isActiveRecommendation = !video?.is_search_fallback && String(activeVideo) === String(video?.id);
+    const isLoadingRecommendation = !video?.is_search_fallback && String(loadingVideoId) === String(video?.id);
+    const recommendationLabel = isPrimaryRecommendation
+      ? 'Best next help'
+      : video?.is_search_fallback
+        ? 'Backup search path'
+        : 'More options';
+    const recommendationTone = isPrimaryRecommendation
+      ? 'border-primary/20 bg-primary/10 text-primary'
+        : 'border-slate-200 bg-slate-100/80 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300';
+    const primaryReason = video?.why_recommended?.[0];
+    const secondaryReason = video?.why_recommended?.[1];
+    const videoDetails = (
+      <CardContent className={compact ? 'p-2.5' : 'p-3'}>
+        <div className="flex items-start justify-between gap-2">
+          <div className={`inline-flex items-center rounded-full border px-2 py-1 text-[10px] font-semibold uppercase tracking-wide ${recommendationTone}`}>
+            {recommendationLabel}
+          </div>
+          {!video?.is_search_fallback ? (
+            <div className="shrink-0 rounded-full bg-slate-100 px-2 py-1 text-[10px] font-medium text-slate-500 dark:bg-slate-800 dark:text-slate-300">
+              {video.duration_text || 'Video lesson'}
+            </div>
+          ) : null}
+        </div>
+        <h4 className="mt-2 line-clamp-2 text-sm font-bold leading-5 transition-colors group-hover:text-primary">{video.title}</h4>
+        <p className="mt-1 text-xs text-muted-foreground">{video.channel_title}</p>
+        {primaryReason ? (
+          <p className="mt-2 line-clamp-2 text-[11px] leading-4 text-slate-600 dark:text-slate-300">{primaryReason}</p>
+        ) : null}
+        {secondaryReason ? (
+          <p className="mt-1 line-clamp-1 text-[10px] leading-4 text-muted-foreground">{secondaryReason}</p>
+        ) : null}
+      </CardContent>
+    );
+
+    return (
+      <Card
+        key={video.id}
+        className={`group min-w-0 overflow-hidden rounded-lg transition-all dark:border-slate-800 ${
+          isPrimaryRecommendation
+            ? 'border-primary/25 bg-primary/5 shadow-none hover:border-primary/50'
+            : 'border-slate-100 bg-white shadow-none hover:border-primary/30'
+        }`}
+      >
+        {isActiveRecommendation || isLoadingRecommendation ? (
+          <>
+            <div ref={activeVideoPlayerRef} className="relative aspect-video overflow-hidden bg-black">
+              {isActiveRecommendation && activeVideo ? (
+                <iframe
+                  ref={activeVideoFrameRef}
+                  key={`${activeVideo}-${activeVideoLoadKey}`}
+                  title={`Recommended lesson video: ${video.title}`}
+                  className="absolute inset-0 h-full w-full"
+                  src={getYouTubeEmbedSrc(String(activeVideo))}
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
+                  allowFullScreen
+                  onLoad={(event) => {
+                    setLoadingVideoId((current) => (current === String(video.id) ? null : current));
+                    nudgeYouTubePlayback(event.currentTarget);
+                  }}
+                />
+              ) : (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-white">
+                  <Loader2 className="h-7 w-7 animate-spin" />
+                  <p className="text-sm font-semibold">Loading video...</p>
+                </div>
+              )}
+              <button
+                type="button"
+                className="absolute right-2 top-2 rounded-full bg-black/60 p-2 text-white hover:bg-black/80"
+                onClick={() => {
+                  setActiveVideo(null);
+                  setLoadingVideoId(null);
+                }}
+                aria-label="Close video"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            {videoDetails}
+          </>
+        ) : (
+          <button
+            type="button"
+            className="block w-full text-left"
+            onClick={() => openRecommendedVideo(video)}
+          >
+            <div className="relative aspect-video overflow-hidden">
+              {video.thumbnail ? (
+                <>
+                  <img src={video.thumbnail} alt={video.title} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 transition-opacity group-hover:opacity-100">
+                    <Play className="h-8 w-8 fill-current text-white" />
+                  </div>
+                </>
+              ) : (
+                <div className="flex h-full w-full items-center justify-center bg-muted/50 px-4 text-center">
+                  <div className="space-y-2">
+                    <Video className="mx-auto h-8 w-8 text-primary/70" />
+                    <p className="text-xs font-semibold text-foreground">
+                      {video?.is_search_fallback ? 'Evidence-based YouTube search' : 'Video suggestion'}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+            {videoDetails}
+          </button>
+        )}
+        <div
+          className="cursor-pointer border-t border-border px-3 py-2.5"
+          onClick={() => openRecommendedVideo(video)}
+        >
+          <div className="mb-2 flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+            <span>{isPrimaryRecommendation ? 'Start here first' : (video.duration_text || 'Video lesson')}</span>
+            {helpfulCount > 0 ? <span>{helpfulCount} found this helpful</span> : <span>Rate this for others</span>}
+          </div>
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant={learnerFeedback === 'like' ? 'default' : 'outline'}
+              className="h-8 flex-1 rounded-lg"
+              onClick={(event) => {
+                event.stopPropagation();
+                void handleVideoFeedback(video, 'like');
+              }}
+            >
+              <ThumbsUp className="mr-1.5 h-3.5 w-3.5" /> Helpful
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={learnerFeedback === 'dislike' ? 'default' : 'outline'}
+              className="h-8 flex-1 rounded-lg"
+              onClick={(event) => {
+                event.stopPropagation();
+                void handleVideoFeedback(video, 'dislike');
+              }}
+            >
+              <ThumbsDown className="mr-1.5 h-3.5 w-3.5" /> Not helpful
+            </Button>
+          </div>
+          {video?.is_search_fallback ? (
+            <p className="mt-2 text-[11px] text-muted-foreground">
+              We could not fetch a direct video right now, so EduNexus prepared the best search path instead.
+            </p>
+          ) : null}
+        </div>
+      </Card>
+    );
+  }, [activeVideo, activeVideoLoadKey, handleVideoFeedback, loadingVideoId, openRecommendedVideo, suggestedVideos, videoFeedbackById]);
 
   const submitChatInput = useCallback(async () => {
     const message = chatInput.trim();
@@ -396,6 +818,69 @@ export const AIChatSection = ({
     if (!nextLessonCandidate) return;
     await handleTopicSelect(nextLessonCandidate);
   }, [handleTopicSelect, nextLessonCandidate]);
+
+  const startMasteryRecovery = useCallback(async (mode: 'review' | 'simplify' | 'practice') => {
+    const reviewTargets = failedMasteryReviewQuestions
+      .slice(0, 2)
+      .map((item: any) => item.prompt)
+      .filter(Boolean)
+      .join(' | ');
+
+    if (mode === 'review') {
+      await handleAIContinue(
+        reviewTargets
+          ? `Help me review the missed parts of ${focusTopicLabel}. Focus especially on these questions: ${reviewTargets}. Explain the mistakes clearly, then ask me one short check question.`
+          : `Help me review the missed parts of ${focusTopicLabel}. Explain the weak points clearly, then ask me one short check question.`
+      );
+      return;
+    }
+
+    if (mode === 'simplify') {
+      await handleAIContinue(
+        `I did not pass the mastery check on ${focusTopicLabel}. Please reteach the hardest part in simpler steps with one analogy before asking me an easier question.`
+      );
+      return;
+    }
+
+    await handleAIContinue(
+      reviewTargets
+        ? `Give me one fresh practice question on ${focusTopicLabel} that repairs the ideas behind these missed questions: ${reviewTargets}. Wait for my answer before explaining.`
+        : `Give me one fresh practice question on ${focusTopicLabel} that targets the part I just missed. Wait for my answer before explaining.`
+    );
+  }, [failedMasteryReviewQuestions, focusTopicLabel, handleAIContinue]);
+
+  const startLessonRepair = useCallback(async (mode: 'review' | 'simplify' | 'practice') => {
+    if (mode === 'review') {
+      await handleAIContinue(
+        `Let's repair ${focusTopicLabel}. Show me exactly where my last answer went wrong, correct it clearly, then ask me one short check question on that same step.`
+      );
+      return;
+    }
+
+    if (mode === 'simplify') {
+      await handleAIContinue(
+        `Please reteach the part I just missed in ${focusTopicLabel} using smaller steps and one simple analogy, then ask me an easier question.`
+      );
+      return;
+    }
+
+    await handleAIContinue(
+      `Give me one lighter repair question on ${focusTopicLabel} that checks the same idea I just missed. Wait for my answer before explaining.`
+    );
+  }, [focusTopicLabel, handleAIContinue]);
+
+  const continueAfterRepair = useCallback(async (mode: 'check' | 'practice') => {
+    if (mode === 'check') {
+      await handleAIContinue(
+        `Give me one short confirmation check on ${focusTopicLabel} so I can prove that repaired step is now stable.`
+      );
+      return;
+    }
+
+    await handleAIContinue(
+      `Give me one fresh practice question on ${focusTopicLabel} now that the repaired step is clearer. Wait for my answer before explaining.`
+    );
+  }, [focusTopicLabel, handleAIContinue]);
 
   const displaySubjects = enrolledSubjects.length > 0
     ? subjects.filter(s => enrolledSubjects.some((e: any) => (e.id || e) === s.id))
@@ -856,50 +1341,97 @@ export const AIChatSection = ({
               <ScrollArea ref={scrollAreaRef} className="flex-1 h-full min-h-0 overflow-x-hidden">
                 <div className="mx-auto w-full max-w-6xl min-w-0 overflow-x-hidden px-3 py-4 pb-20 sm:px-4 lg:p-6">
                   {aiChatMessages.length === 0 ? (
-                    <div className="text-center py-20 animate-in fade-in zoom-in duration-700">
-                      <div className="w-28 h-28 bg-primary rounded-lg flex items-center justify-center mx-auto mb-8 shadow-none  transition-transform duration-500 overflow-hidden border-4 border-white dark:border-slate-800">
-                        <img src={`/avatars/ai_tutor_${tutorGender}.png`} alt="AI Tutor" className="w-full h-full object-cover scale-110" />
-                      </div>
-                      <h3 className="text-3xl font-black text-slate-800 dark:text-slate-100 mb-4 tracking-tight">Your AI Learning Partner</h3>
-                      <p className="text-slate-500 dark:text-slate-400 max-w-md mx-auto mb-10 text-lg leading-relaxed">
-                        We'll learn <span className="text-teal-600 font-bold">{focusTopicLabel}</span> in small steps, with examples, quick checks, and help when you get stuck.
-                      </p>
+                    <div className="animate-in fade-in zoom-in duration-700">
+                      <div className="rounded-lg border border-border bg-card p-5 sm:p-6">
+                        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+                          <div className="flex min-w-0 items-start gap-4">
+                            <div className="h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-primary/20 bg-primary/10">
+                              <img src={`/avatars/ai_tutor_${tutorGender}.png`} alt="AI Tutor" className="h-full w-full object-cover scale-105" />
+                            </div>
+                            <div className="min-w-0">
+                              <Badge variant="outline" className="mb-2 rounded-full text-[10px] font-semibold uppercase tracking-wide">
+                                Guided tutoring
+                              </Badge>
+                              <h3 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">
+                                Learn {focusTopicLabel} with a calmer, step-by-step flow
+                              </h3>
+                              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-300">
+                                We will build this lesson in small pieces, check what is clear, and slow down where you need support.
+                              </p>
+                            </div>
+                          </div>
+                          <div className="grid w-full gap-2 sm:grid-cols-3 lg:max-w-sm">
+                            {focusSignalItems.map((item) => (
+                              <div key={item.label} className="rounded-lg border border-border bg-muted/30 px-3 py-3">
+                                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{item.label}</p>
+                                <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">{item.value}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-lg mx-auto">
-                        <Button
-                          variant="outline"
-                          disabled={roadmapLoading}
-                          className="h-auto py-5 px-6 rounded-lg border-slate-200 dark:border-slate-800 hover:border-teal-500 hover:bg-teal-50 dark:hover:bg-teal-950/20 transition-all  shadow-none"
-                          onClick={() => handleAIContinue(`Give me a learning map for ${focusTopicLabel}. Show the goal, the simple idea, and the first thing I should try.`)}
-                        >
-                          <div className="text-left">
-                            <p className="font-black text-teal-600 dark:text-teal-400 uppercase tracking-widest text-[10px] mb-1">Learning Map</p>
-                            <p className="text-sm font-bold text-slate-700 dark:text-slate-300">Show me the path</p>
-                          </div>
-                        </Button>
-                        <Button
-                          variant="outline"
-                          disabled={roadmapLoading}
-                          className="h-auto py-5 px-6 rounded-lg border-slate-200 dark:border-slate-800 hover:border-teal-500 hover:bg-teal-50 dark:hover:bg-teal-950/20 transition-all  shadow-none"
-                          onClick={() => handleAIContinue(`Teach me ${focusTopicLabel} interactively. Explain one idea, ask one check question, then wait for me.`)}
-                        >
-                          <div className="text-left">
-                            <p className="font-black text-teal-600 dark:text-teal-400 uppercase tracking-widest text-[10px] mb-1">Guided Lesson</p>
-                            <p className="text-sm font-bold text-slate-700 dark:text-slate-300">Teach me interactively</p>
-                          </div>
-                        </Button>
+                        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                          <Button
+                            variant="outline"
+                            disabled={roadmapLoading}
+                            className="h-auto rounded-lg border-border px-4 py-4 text-left hover:border-primary/40 hover:bg-muted/40"
+                            onClick={() => handleAIContinue(`Give me a learning map for ${focusTopicLabel}. Show the goal, the simple idea, and the first thing I should try.`)}
+                          >
+                            <div>
+                              <p className="text-[10px] font-semibold uppercase tracking-wide text-primary">Learning map</p>
+                              <p className="mt-1 text-sm font-semibold text-slate-800 dark:text-slate-100">Show me the path</p>
+                            </div>
+                          </Button>
+                          <Button
+                            variant="outline"
+                            disabled={roadmapLoading}
+                            className="h-auto rounded-lg border-border px-4 py-4 text-left hover:border-primary/40 hover:bg-muted/40"
+                            onClick={() => handleAIContinue(`Teach me ${focusTopicLabel} interactively. Explain one idea, ask one check question, then wait for me.`)}
+                          >
+                            <div>
+                              <p className="text-[10px] font-semibold uppercase tracking-wide text-primary">Guided lesson</p>
+                              <p className="mt-1 text-sm font-semibold text-slate-800 dark:text-slate-100">Teach me interactively</p>
+                            </div>
+                          </Button>
+                          <Button
+                            variant="outline"
+                            disabled={roadmapLoading}
+                            className="h-auto rounded-lg border-border px-4 py-4 text-left hover:border-primary/40 hover:bg-muted/40"
+                            onClick={() => handleAIContinue(`Start with an easy example for ${focusTopicLabel}, then ask me one short question.`)}
+                          >
+                            <div>
+                              <p className="text-[10px] font-semibold uppercase tracking-wide text-primary">Easy start</p>
+                              <p className="mt-1 text-sm font-semibold text-slate-800 dark:text-slate-100">Begin with an example</p>
+                            </div>
+                          </Button>
+                          <Button
+                            variant="outline"
+                            disabled={roadmapLoading}
+                            className="h-auto rounded-lg border-border px-4 py-4 text-left hover:border-primary/40 hover:bg-muted/40"
+                            onClick={() => handleAIContinue(`Tell me what students usually get wrong about ${focusTopicLabel}, then teach me the right idea.`)}
+                          >
+                            <div>
+                              <p className="text-[10px] font-semibold uppercase tracking-wide text-primary">Watch-outs</p>
+                              <p className="mt-1 text-sm font-semibold text-slate-800 dark:text-slate-100">Show likely mistakes</p>
+                            </div>
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   ) : (
                     <div className="min-w-0 space-y-8 pb-10">
                       {aiChatMessages.map((msg, idx) => (
-                        <div key={idx} className={`flex w-full min-w-0 ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-4 duration-500`}>
+                        <div
+                          key={idx}
+                          ref={idx === aiChatMessages.length - 1 ? latestMessageRef : null}
+                          className={`flex w-full min-w-0 scroll-mt-24 ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-4 duration-500`}
+                        >
                           <div className={`flex min-w-0 max-w-full gap-2.5 sm:gap-4 ${msg.role === 'user' ? 'ml-auto w-[92%] flex-row-reverse sm:w-[84%] lg:w-[76%]' : 'w-full sm:max-w-[90%] lg:max-w-[80%]'}`}>
                             <Avatar className="w-8 h-8 sm:w-10 sm:h-10 flex-shrink-0 shadow-none border-2 border-white dark:border-slate-800">
                               {msg.role === 'ai' ? (
                                 <AvatarImage src={`/avatars/ai_tutor_${tutorGender}.png`} className="object-cover" />
                               ) : (
-                                <AvatarImage src={avatarUrl || profile?.avatar_url || user.avatar} className="object-cover" />
+                                <AvatarImage src={avatarUrl || user?.avatar_url || profile?.avatar_url || user?.avatar} className="object-cover" />
                               )}
                               <AvatarFallback className={msg.role === 'ai' ? 'bg-teal-600 text-white' : 'bg-slate-200'}>
                                 {msg.role === 'ai' ? <Brain className="w-5 h-5" /> : (getFullName()[0] || 'U')}
@@ -912,7 +1444,9 @@ export const AIChatSection = ({
                                 }`}>
                                 <div className={`${isYoungLearner && msg.role === 'ai' ? 'text-base font-bold font-display sm:text-xl' : 'text-sm sm:text-base'} min-w-0 max-w-full overflow-hidden break-words leading-relaxed [overflow-wrap:anywhere] prose dark:prose-invert prose-p:max-w-full prose-pre:max-w-full prose-pre:overflow-x-auto prose-table:block prose-table:max-w-full prose-table:overflow-x-auto`}>
                                   {msg.role === 'ai' ? (
-                                    <ReactMarkdown components={mathMarkdownComponents}>{prepareTutorMarkdown(msg.content)}</ReactMarkdown>
+                                    <AcademicMarkdown className="prose-p:mb-3 prose-li:mb-1 prose-headings:mb-3 prose-headings:tracking-normal prose-strong:text-slate-950 dark:prose-strong:text-white">
+                                      {prepareTutorMarkdown(msg.content)}
+                                    </AcademicMarkdown>
                                   ) : (
                                     <p className="min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere]"><MathText>{msg.content}</MathText></p>
                                   )}
@@ -942,29 +1476,227 @@ export const AIChatSection = ({
                         </div>
                       ))}
 
-                      {masteryPassed && (
+                      {isLessonCompleted && (
                         <div className="max-w-6xl mx-auto rounded-lg border border-emerald-100 bg-emerald-50/70 p-4 shadow-none dark:border-emerald-900/50 dark:bg-emerald-950/20">
                           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                             <div className="min-w-0">
                               <p className="text-xs font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-300">Lesson Complete</p>
                               <p className="mt-1 text-sm text-slate-700 dark:text-slate-200">
-                                You have mastered <span className="font-bold">{selectedTopic?.name || focusTopicLabel}</span>. Click below to move to the next lesson; this one stays open for revision, but chat is now closed for this lesson.
+                                You have mastered <span className="font-bold">{completedLessonLabel}</span>. This lesson now stays open as a revision stop, while live tutoring stays closed so your progress does not reopen by accident.
                               </p>
                             </div>
-                            <Button
-                              type="button"
-                              disabled={!nextLessonCandidate}
-                              onClick={handleContinueToNextLesson}
-                              className="h-11 rounded-lg bg-teal-600 px-4 font-bold text-white hover:bg-teal-700 disabled:opacity-60"
-                            >
-                              {nextLessonCandidate ? 'Move to Next Lesson' : 'All Lessons Completed'}
-                              <ArrowRight className="ml-2 h-4 w-4" />
-                            </Button>
+                            <div className="flex flex-wrap gap-2">
+                              {suggestedVideos.length > 0 && (
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  className="h-11 rounded-lg border-emerald-200 bg-white px-4 font-bold text-emerald-700 hover:bg-emerald-50 dark:border-emerald-900/60 dark:bg-slate-900 dark:text-emerald-300"
+                                  onClick={() => setShowRecommendedVideos(true)}
+                                >
+                                  <Video className="mr-2 h-4 w-4" />
+                                  Review with videos
+                                </Button>
+                              )}
+                              <Button
+                                type="button"
+                                disabled={!nextLessonCandidate}
+                                onClick={handleContinueToNextLesson}
+                                className="h-11 rounded-lg bg-teal-600 px-4 font-bold text-white hover:bg-teal-700 disabled:opacity-60"
+                              >
+                                {nextLessonCandidate ? 'Move to Next Lesson' : 'All Lessons Completed'}
+                                <ArrowRight className="ml-2 h-4 w-4" />
+                              </Button>
+                            </div>
                           </div>
                         </div>
                       )}
 
-                      {!masteryPassed && !aiLoading && !showMasteryTest && aiChatMessages.length > 0 && (
+                      {isLessonCompleted && (
+                        <div className="max-w-6xl mx-auto rounded-lg border border-slate-200 bg-white p-4 shadow-none dark:border-slate-800 dark:bg-slate-900">
+                          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                            <div className="min-w-0">
+                              <p className="text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">Revision Mode</p>
+                              <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+                                Use the lesson transcript, recommended videos, and the next unlocked lesson to keep momentum without reopening this mastered topic.
+                              </p>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              {aiChatMessages.length > 0 && (
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  className="rounded-lg"
+                                  onClick={() => {
+                                    latestMessageRef.current?.scrollIntoView({
+                                      block: 'start',
+                                      inline: 'nearest',
+                                      behavior: 'smooth',
+                                    });
+                                  }}
+                                >
+                                  <RefreshCw className="mr-2 h-4 w-4" />
+                                  Review lesson transcript
+                                </Button>
+                              )}
+                              {suggestedVideos.length > 0 && (
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  className="rounded-lg"
+                                  onClick={() => setShowRecommendedVideos((prev) => !prev)}
+                                >
+                                  <Video className="mr-2 h-4 w-4" />
+                                  {showRecommendedVideos ? 'Hide videos' : 'Show videos'}
+                                </Button>
+                              )}
+                              {nextLessonCandidate && (
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  className="rounded-lg"
+                                  onClick={handleContinueToNextLesson}
+                                >
+                                  <ArrowRight className="mr-2 h-4 w-4" />
+                                  Open next lesson
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {masteryNeedsReview && !aiLoading && !showMasteryTest && (
+                        <div className="max-w-6xl mx-auto rounded-lg border border-amber-200 bg-amber-50/70 p-4 shadow-none dark:border-amber-900/50 dark:bg-amber-950/20">
+                          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                            <div className="min-w-0">
+                              <p className="text-xs font-black uppercase tracking-widest text-amber-700 dark:text-amber-300">Recovery Plan</p>
+                              <p className="mt-1 text-sm text-slate-700 dark:text-slate-200">
+                                You are close, but <span className="font-bold">{focusTopicLabel}</span> still needs repair before the next mastery check.
+                                {aiState?.result?.missed_count
+                                  ? ` EduNexus marked ${aiState.result.missed_count} ${aiState.result.missed_count === 1 ? 'question' : 'questions'} for review.`
+                                  : ' Start with one guided repair step below.'}
+                              </p>
+                              {failedMasteryReviewQuestions.length > 0 && (
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                  {failedMasteryReviewQuestions.slice(0, 2).map((item: any) => (
+                                    <span
+                                      key={item.question_id}
+                                      className="inline-flex max-w-full items-center rounded-full border border-amber-200 bg-white px-3 py-1 text-[11px] font-medium text-slate-600 dark:border-amber-900/60 dark:bg-slate-900 dark:text-slate-300"
+                                    >
+                                      {formatTopicLike(item.prompt)}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                className="rounded-lg border-amber-200 bg-white text-amber-800 hover:bg-amber-100 dark:border-amber-900/60 dark:bg-slate-900 dark:text-amber-300"
+                                onClick={() => void startMasteryRecovery('review')}
+                              >
+                                <RefreshCw className="mr-2 h-4 w-4" />
+                                Review missed concepts
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                className="rounded-lg border-amber-200 bg-white text-amber-800 hover:bg-amber-100 dark:border-amber-900/60 dark:bg-slate-900 dark:text-amber-300"
+                                onClick={() => void startMasteryRecovery('simplify')}
+                              >
+                                <Layers className="mr-2 h-4 w-4" />
+                                Simplify it for me
+                              </Button>
+                              <Button
+                                type="button"
+                                className="rounded-lg bg-amber-600 text-white hover:bg-amber-700"
+                                onClick={() => void startMasteryRecovery('practice')}
+                              >
+                                <Target className="mr-2 h-4 w-4" />
+                                Try one repair question
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {inLessonRepairMode && !aiLoading && !showMasteryTest && (
+                        <div className="max-w-6xl mx-auto rounded-lg border border-amber-200 bg-amber-50/70 p-4 shadow-none dark:border-amber-900/50 dark:bg-amber-950/20">
+                          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                            <div className="min-w-0">
+                              <p className="text-xs font-black uppercase tracking-widest text-amber-700 dark:text-amber-300">Repair This Step</p>
+                              <p className="mt-1 text-sm text-slate-700 dark:text-slate-200">
+                                EduNexus thinks <span className="font-bold">{focusTopicLabel}</span> needs one smaller repair before we move on.
+                                Stay with this exact step, fix the weak part, then try a lighter check.
+                              </p>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                className="rounded-lg border-amber-200 bg-white text-amber-800 hover:bg-amber-100 dark:border-amber-900/60 dark:bg-slate-900 dark:text-amber-300"
+                                onClick={() => void startLessonRepair('review')}
+                              >
+                                <RefreshCw className="mr-2 h-4 w-4" />
+                                Show what I missed
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                className="rounded-lg border-amber-200 bg-white text-amber-800 hover:bg-amber-100 dark:border-amber-900/60 dark:bg-slate-900 dark:text-amber-300"
+                                onClick={() => void startLessonRepair('simplify')}
+                              >
+                                <Layers className="mr-2 h-4 w-4" />
+                                Break it down
+                              </Button>
+                              <Button
+                                type="button"
+                                className="rounded-lg bg-amber-600 text-white hover:bg-amber-700"
+                                onClick={() => void startLessonRepair('practice')}
+                              >
+                                <Target className="mr-2 h-4 w-4" />
+                                Try a lighter check
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {repairResolved && !aiLoading && !showMasteryTest && (
+                        <div className="max-w-6xl mx-auto rounded-lg border border-emerald-200 bg-emerald-50/70 p-4 shadow-none dark:border-emerald-900/50 dark:bg-emerald-950/20">
+                          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                            <div className="min-w-0">
+                              <p className="text-xs font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-300">Back On Track</p>
+                              <p className="mt-1 text-sm text-slate-700 dark:text-slate-200">
+                                That weak step in <span className="font-bold">{focusTopicLabel}</span> looks healthier now.
+                                Confirm it with one short check, or try one fresh practice question before we build further.
+                              </p>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                className="rounded-lg border-emerald-200 bg-white text-emerald-800 hover:bg-emerald-100 dark:border-emerald-900/60 dark:bg-slate-900 dark:text-emerald-300"
+                                onClick={() => void continueAfterRepair('check')}
+                              >
+                                <CheckCircle2 className="mr-2 h-4 w-4" />
+                                Confirm this step
+                              </Button>
+                              <Button
+                                type="button"
+                                className="rounded-lg bg-emerald-600 text-white hover:bg-emerald-700"
+                                onClick={() => void continueAfterRepair('practice')}
+                              >
+                                <Target className="mr-2 h-4 w-4" />
+                                Fresh practice
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {!isLessonCompleted && !masteryNeedsReview && !inLessonRepairMode && !repairResolved && !aiLoading && !showMasteryTest && aiChatMessages.length > 0 && (
                         <div className="max-w-6xl mx-auto rounded-lg border border-teal-100 dark:border-teal-900/50 bg-teal-50/60 dark:bg-teal-950/10 p-4 shadow-none">
                           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
                             <div>
@@ -994,48 +1726,43 @@ export const AIChatSection = ({
                         </div>
                       )}
 
-                      {!masteryPassed && !aiLoading && !showMasteryTest && suggestedVideos.length > 0 && (
+                      {!aiLoading && !showMasteryTest && suggestedVideos.length > 0 && (
                         <div className="max-w-6xl mx-auto min-w-0 rounded-lg border border-slate-100 bg-white p-4 shadow-none dark:border-slate-800 dark:bg-slate-900">
-                          <p className="mb-3 flex items-center gap-2 text-sm font-bold text-slate-600 dark:text-slate-300">
-                            <Video className="h-4 w-4 text-teal-600" /> Recommended videos for this lesson
-                          </p>
-                          {activeVideo && (
-                            <div className="relative mb-3 w-full overflow-hidden rounded-lg shadow-none ring-1 ring-black/10" style={{ paddingBottom: '56.25%' }}>
-                              <iframe
-                                className="absolute inset-0 h-full w-full"
-                                src={`https://www.youtube.com/embed/${activeVideo}?autoplay=1`}
-                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                allowFullScreen
-                              />
-                              <button
-                                type="button"
-                                className="absolute right-2 top-2 rounded-full bg-black/60 p-2 text-white hover:bg-black/80"
-                                onClick={() => setActiveVideo(null)}
-                              >
-                                <X className="h-4 w-4" />
-                              </button>
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div>
+                              <p className="flex items-center gap-2 text-sm font-bold text-slate-600 dark:text-slate-300">
+                                <Video className="h-4 w-4 text-teal-600" /> Recommended videos for this lesson
+                              </p>
+                              <p className="text-xs text-muted-foreground">{videoSupportMessage}</p>
                             </div>
-                          )}
-                          <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
-                            {suggestedVideos.map((video, vIdx) => (
-                              <Card
-                                key={vIdx}
-                                className="group min-w-0 cursor-pointer overflow-hidden border-slate-100 shadow-none transition-all hover:border-teal-400 dark:border-slate-800"
-                                onClick={() => { setSelectedVideo(video); setActiveVideo(video.id); }}
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline" className="w-fit shrink-0 text-[10px] uppercase font-bold text-teal-600 border-teal-200">
+                                {videoSupportBadge}
+                              </Badge>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="rounded-lg"
+                                onClick={() => setShowRecommendedVideos((prev) => !prev)}
                               >
-                                <div className="relative aspect-video">
-                                  <img src={video.thumbnail} alt={video.title} className="h-full w-full object-cover transition-transform group-hover:scale-105" />
-                                  <div className="absolute inset-0 flex items-center justify-center bg-black/25 opacity-0 transition-opacity group-hover:opacity-100">
-                                    <Play className="h-8 w-8 fill-current text-white" />
-                                  </div>
-                                </div>
-                                <div className="p-2.5">
-                                  <p className="line-clamp-2 text-xs font-bold text-slate-800 dark:text-slate-100">{video.title}</p>
-                                </div>
-                              </Card>
-                            ))}
+                                {showRecommendedVideos ? 'Hide videos' : 'Show videos'}
+                              </Button>
+                            </div>
                           </div>
-                        </div>
+                          {showRecommendedVideos && (
+                            <>
+                              <div className="mt-4 rounded-lg border border-primary/15 bg-primary/5 p-3">
+                                <p className="text-[11px] font-semibold uppercase tracking-wide text-primary">How to use these</p>
+                                <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+                                  Start with the first video if you want the clearest next explanation for this exact lesson step. EduNexus ranks these by topic fit and learner signals, not by pretending the tutor has watched them for you.
+                                </p>
+                              </div>
+                              <div className="mt-4 grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
+                                {suggestedVideos.map((video) => renderRecommendedVideoCard(video, true))}
+                              </div>
+                              </>
+                            )}
+                          </div>
                       )}
 
                       {aiLoading && (
@@ -1073,17 +1800,17 @@ export const AIChatSection = ({
                       <div className="flex items-center gap-3 px-6 py-3 bg-white dark:bg-slate-900 rounded-lg shadow-none  border border-emerald-100 dark:border-emerald-900">
                         <Trophy className="w-6 h-6 text-emerald-500 animate-bounce" />
                         <div>
-                          <p className="text-sm font-black text-slate-800 dark:text-slate-100">Topic Mastered! 🏆</p>
+                          <p className="text-sm font-black text-slate-800 dark:text-slate-100">Topic Mastered!</p>
                           <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Review Mode Only</p>
                         </div>
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          className="ml-4 text-teal-600 font-black text-xs h-8 hover:bg-teal-50"
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="ml-4 h-8 text-xs font-black text-teal-600 hover:bg-teal-50"
                           onClick={handleContinueToNextLesson}
                           disabled={!nextLessonCandidate}
                         >
-                          Next Topic →
+                          Next Topic
                         </Button>
                       </div>
                     </div>
@@ -1140,66 +1867,193 @@ export const AIChatSection = ({
                     )}
                   </div>
                 )}
-                <div className="hidden sm:flex items-center justify-center gap-6 mt-4 opacity-50">
-                  <p className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">EduNexus Socratic Engineering v2.0</p>
+                <div className="hidden sm:flex items-center justify-center gap-6 mt-4 opacity-60">
+                  <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-[0.18em]">Guided lesson flow</p>
                   <div className="h-1 w-1 bg-slate-400 rounded-full" />
-                  <p className="text-[11px] font-black text-teal-600 uppercase tracking-[0.2em]">Mastery Mode Enabled</p>
+                  <p className="text-[11px] font-semibold text-primary uppercase tracking-[0.18em]">Mastery-aware tutor</p>
                 </div>
               </div>
             </div>
           </div>
         </Card>
       ) : (
-        <div className="grid xl:grid-cols-[minmax(0,1fr)_320px] gap-4 flex-1 min-h-0 overflow-y-auto overscroll-contain pb-8 px-3 sm:px-4">
+        <div className={`grid gap-5 flex-1 min-h-0 overflow-y-auto overscroll-contain pb-8 px-3 sm:px-4 ${shouldShowSupportRail ? 'xl:grid-cols-[minmax(0,1fr)_296px]' : 'grid-cols-1'}`}>
           <div className="min-w-0 space-y-4">
             <Card className="rounded-lg border-border shadow-none bg-card">
-              <CardHeader className="flex flex-row items-center justify-between py-4">
+              <CardHeader className="flex flex-row items-center justify-between py-3 sm:py-4">
                 <div>
-                  <CardTitle className="text-lg font-semibold">Select Subject</CardTitle>
-                  <p className="text-xs text-muted-foreground mt-1">Pick a subject you are enrolled in to start learning</p>
+                  <CardTitle className="text-base sm:text-lg font-semibold">Select Subject</CardTitle>
+                  <p className="mt-1 text-[11px] sm:text-xs text-muted-foreground">Pick a subject you are enrolled in to start learning</p>
+                </div>
+                <div className="hidden items-center gap-2 sm:flex">
+                  <Badge variant="outline" className="rounded-full text-[11px] font-semibold">
+                    {displaySubjects.length} active subject{displaySubjects.length === 1 ? '' : 's'}
+                  </Badge>
+                  {!selectedSubject && (
+                    <Badge variant="secondary" className="rounded-full bg-primary/10 text-[11px] font-semibold text-primary">
+                      {learningGoal.note}
+                    </Badge>
+                  )}
                 </div>
               </CardHeader>
               <CardContent className="pt-0">
                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
-                  {displaySubjects.length > 0 ? (
+                  {loading ? (
+                    Array.from({ length: 6 }).map((_, index) => (
+                      <div key={`subject-skeleton-${index}`} className="rounded-lg border border-border px-3 py-2.5 sm:p-3">
+                        <div className="flex items-center gap-3">
+                          <Skeleton className="h-8 w-8 rounded-lg sm:h-9 sm:w-9" />
+                          <div className="min-w-0 flex-1 space-y-2">
+                            <Skeleton className="h-4 w-3/4" />
+                            <Skeleton className="h-3 w-1/2" />
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  ) : displaySubjects.length > 0 ? (
                     displaySubjects.map(subject => (
                       <button
                         key={subject.id}
-                        className={`group min-w-0 p-3 rounded-lg border transition-all flex items-center gap-3 text-left ${selectedSubject?.id === subject.id
+                        className={`group min-w-0 rounded-lg border px-3 py-2.5 sm:p-3 transition-all flex items-center gap-3 text-left ${selectedSubject?.id === subject.id
                           ? 'border-primary bg-primary/10'
                           : 'border-border hover:border-primary/40 hover:bg-muted/40'
                           }`}
                         onClick={() => handleSubjectSelect(subject)}
                       >
-                        <div className="w-9 h-9 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0">
-                          <BookMarked className="w-4 h-4" />
+                        <div className="h-8 w-8 sm:h-9 sm:w-9 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0">
+                          <BookMarked className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                         </div>
-                        <span className="min-w-0 font-semibold text-sm truncate">{subject.name}</span>
+                        <div className="min-w-0 flex-1">
+                          <span className="block truncate font-semibold text-[15px] sm:text-sm">{subject.name}</span>
+                          <span className="block text-[10px] sm:text-[11px] text-muted-foreground">Ready to continue</span>
+                        </div>
                       </button>
                     ))
                   ) : (
-                    <div className="col-span-full py-12 text-center">
+                    <div className="col-span-full rounded-lg border border-dashed border-border bg-muted/20 py-12 text-center">
                       <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4">
                         <BookMarked className="w-8 h-8 text-slate-400" />
                       </div>
-                      <p className="text-slate-500 font-medium">You aren't enrolled in any subjects yet.</p>
-                      <Button variant="link" onClick={() => setActiveView('subjects')} className="mt-2 text-teal-600 font-bold">Browse Subjects catalog →</Button>
+                      <p className="font-semibold text-slate-700 dark:text-slate-200">You have not picked a learning lane yet.</p>
+                      <p className="mt-2 text-sm text-muted-foreground">Open your subject catalog, enroll in the subjects you want, and your tutor workspace will be ready here.</p>
+                      <Button variant="outline" onClick={() => setActiveView('subjects')} className="mt-4 rounded-lg">Open Subjects catalog</Button>
                     </div>
                   )}
                 </div>
+
+                {!selectedSubject && displaySubjects.length > 0 && (
+                  <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1.25fr)_minmax(260px,0.75fr)]">
+                    <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 sm:p-5 lg:col-span-2">
+                      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-primary">Start here</p>
+                          <h3 className="mt-1 text-lg font-semibold text-slate-900 dark:text-slate-100">Open one subject and let EduNexus guide the next step</h3>
+                          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-300">
+                            Choose the subject you want to study now. Once you open it, EduNexus will surface the right topic, guide the lesson in small steps, and build toward mastery.
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {displaySubjects.slice(0, 2).map((subject) => (
+                            <Button
+                              key={`quick-start-${subject.id}`}
+                              variant="outline"
+                              className="rounded-lg border-primary/20 bg-white text-slate-700 hover:bg-primary/10"
+                              onClick={() => handleSubjectSelect(subject)}
+                            >
+                              <BookMarked className="mr-2 h-4 w-4 text-primary" />
+                              Open {subject.name}
+                            </Button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="rounded-lg border border-border bg-muted/20 p-3.5 sm:p-4">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">How this works</p>
+                      <div className="mt-3 grid gap-2.5 sm:grid-cols-3">
+                        <div className="rounded-lg border border-border bg-background px-3 py-3">
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-primary">1. Choose</p>
+                          <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">Pick one subject</p>
+                          <p className="mt-1 text-xs leading-5 text-muted-foreground">Start with the subject you want to study right now.</p>
+                        </div>
+                        <div className="rounded-lg border border-border bg-background px-3 py-3">
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-primary">2. Focus</p>
+                          <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">Open one topic</p>
+                          <p className="mt-1 text-xs leading-5 text-muted-foreground">EduNexus will guide the lesson in small, manageable steps.</p>
+                        </div>
+                        <div className="rounded-lg border border-border bg-background px-3 py-3">
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-primary">3. Check</p>
+                          <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">Build toward mastery</p>
+                          <p className="mt-1 text-xs leading-5 text-muted-foreground">You will get quick checks, feedback, and a mastery quiz when ready.</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="rounded-lg border border-border bg-card p-3.5 sm:p-4">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Current learning goal</p>
+                      <div className="mt-3 flex items-center gap-3">
+                        <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                          <Trophy className="h-5 w-5" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{learningGoal.title}</p>
+                          <p className="text-xs text-muted-foreground">{learningGoal.note}</p>
+                        </div>
+                      </div>
+                      <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
+                        <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${learningGoal.progress}%` }} />
+                      </div>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
-            {/* Brain Power Cards Section - Reading Recommendations */}
-            {selectedTopic && (
-              <BrainPowerCardsSection
-                topicName={selectedTopicName}
-                subjectName={selectedSubject?.name}
-                onJumpIn={(card) => {
-                  handleAIContinue(`I'd like to learn more about "${card.title}" — specifically the part about: ${card.snippet}`);
-                  setShowAIPanel(true);
-                }}
-              />
+            {selectedSubject && !selectedTopic && (
+              <Card className="rounded-lg border-primary/20 bg-primary/5 shadow-none">
+                <CardContent className="p-5 sm:p-6">
+                  <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-primary">Next study move</p>
+                      <h3 className="mt-1 text-xl font-semibold text-slate-900 dark:text-slate-100">
+                        {currentUnlockedLesson
+                          ? `Continue with ${formatTopicLike(currentUnlockedLesson)}`
+                          : `Choose a topic in ${selectedSubject.name}`}
+                      </h3>
+                      <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-300">
+                        {currentUnlockedLesson
+                          ? `EduNexus found your best open lesson in ${selectedSubject.name}. Start there for the safest progression, then the tutor will take over step by step.`
+                          : `Your subject is ready. Pick one topic below and EduNexus will open the lesson with a clear goal, one core idea, and one gentle first check.`}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-3">
+                      {currentUnlockedLesson ? (
+                        <Button
+                          className="rounded-lg gap-2"
+                          onClick={() => handleTopicSelect(currentUnlockedLesson)}
+                        >
+                          <Play className="h-4 w-4" />
+                          Start this lesson
+                        </Button>
+                      ) : null}
+                      <Button
+                        variant="outline"
+                        className="rounded-lg gap-2"
+                        onClick={() => {
+                          const firstVisibleTopic = visibleTopics[0];
+                          if (firstVisibleTopic) {
+                            void handleTopicSelect(firstVisibleTopic);
+                          }
+                        }}
+                        disabled={!visibleTopics.length}
+                      >
+                        <ArrowRight className="h-4 w-4" />
+                        {visibleTopics.length ? 'Open first available topic' : 'Topics loading'}
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
             )}
 
             {/* Suggested Videos Section */}
@@ -1214,49 +2068,31 @@ export const AIChatSection = ({
                         <span className="line-clamp-2 break-words">For {selectedTopicName}</span>
                       </span>
                     </CardTitle>
-                    <Badge variant="outline" className="w-fit shrink-0 text-[10px] uppercase font-bold text-teal-600 border-teal-200">YouTube Resources</Badge>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className="w-fit shrink-0 text-[10px] uppercase font-bold text-teal-600 border-teal-200">YouTube Resources</Badge>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="rounded-lg"
+                        onClick={() => setShowRecommendedVideos((prev) => !prev)}
+                      >
+                        {showRecommendedVideos ? 'Hide' : 'Show'}
+                      </Button>
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent>
-                  {activeVideo && (
-                    <div className="mb-6 relative w-full rounded-xl overflow-hidden shadow-none ring-1 ring-black/10 transition-all duration-700" 
-                         style={{paddingBottom: '56.25%'}}>
-                      <iframe
-                        className="absolute inset-0 w-full h-full"
-                        src={`https://www.youtube.com/embed/${activeVideo}?autoplay=1`}
-                        allow="accelerometer; autoplay; clipboard-write; 
-                               encrypted-media; gyroscope; picture-in-picture"
-                        allowFullScreen
-                      />
-                      <button
-                        className="absolute top-2 right-2 bg-black/60 text-white 
-                                   rounded-full p-2 hover:bg-black/80 shadow-none"
-                        onClick={() => setActiveVideo(null)}
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
+                  {!showRecommendedVideos ? (
+                    <p className="text-sm text-muted-foreground">
+                      Keep this folded until you want an extra explanation, or open it when you want to reinforce the lesson at your own pace.
+                    </p>
+                  ) : (
+                    <>
+                      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                        {suggestedVideos.map((video) => renderRecommendedVideoCard(video))}
+                      </div>
+                    </>
                   )}
-                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                      {suggestedVideos.map((video, idx) => (
-                        <Card key={idx} className="group min-w-0 cursor-pointer overflow-hidden border-slate-100 transition-all hover:border-teal-400 dark:border-slate-800" onClick={() => {
-                          setSelectedVideo(video);
-                          setEnergy((prev: number) => Math.min(100, prev + 25));
-                          setActiveVideo(video.id);
-                        }}>
-                          <div className="relative aspect-video overflow-hidden">
-                            <img src={video.thumbnail} alt={video.title} className="w-full h-full object-cover group- transition-transform duration-500" />
-                            <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                              <Play className="w-10 h-10 text-white fill-current" />
-                            </div>
-                          </div>
-                          <CardContent className="p-3">
-                            <h4 className="font-bold text-sm line-clamp-2 group-hover:text-teal-600 transition-colors">{video.title}</h4>
-                            <p className="text-xs text-muted-foreground mt-1">{video.channel_title}</p>
-                          </CardContent>
-                        </Card>
-                      ))}
-                  </div>
                 </CardContent>
               </Card>
             )}
@@ -1274,17 +2110,84 @@ export const AIChatSection = ({
                     <div className="flex justify-center py-10"><Loader2 className="w-8 h-8 animate-spin text-teal-500" /></div>
                   ) : (
                     <div className="space-y-6 max-h-[min(68vh,720px)] overflow-y-auto pr-1">
-                      {Array.from(new Set(visibleTopics.map(t => t.term || 'Other'))).sort((a, b) => {
-                        const order: Record<string, number> = { 'First Term': 1, 'Second Term': 2, 'Third Term': 3, 'Other': 4 };
-                        return (order[a as string] || 5) - (order[b as string] || 5);
-                      }).map((termGroup) => (
-                        <div key={termGroup as string}>
+                      {prioritizedTopics.length > 0 && (
+                        <div>
+                          <h4 className="mb-3 ml-1 flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-300">
+                            <Target className="h-4 w-4 text-primary" />
+                            Your path right now
+                          </h4>
+                          <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
+                            {prioritizedTopics.map((topic: any, idx: number) => {
+                              const tp = getTopicProgress(topic.id);
+                              const structuredTopic = topicsForCurrentSubject.find((st: any) => st.id === topic.id);
+                              const status = String(structuredTopic?.status || '').toLowerCase();
+                              const isLocked = status === 'locked';
+                              const isCurrent = currentUnlockedLesson && String(currentUnlockedLesson.id) === String(topic.id);
+                              const isSelected = selectedTopic?.id === topic.id;
+                              const pct = tp?.progress_pct ?? 0;
+                              const done = !!tp?.completed_at || status === 'completed';
+                              const quickLabel = done
+                                ? 'Completed'
+                                : isCurrent
+                                  ? 'Best next lesson'
+                                  : status === 'in_progress'
+                                    ? 'In progress'
+                                    : status === 'unlocked' || status === 'active'
+                                      ? 'Ready now'
+                                      : 'Available';
+                              return (
+                                <Button
+                                  key={`priority-topic-${topic.id}-${idx}`}
+                                  variant={isSelected ? 'default' : 'outline'}
+                                  className={`h-auto min-h-[3.6rem] rounded-lg justify-start px-3 gap-2 flex-col items-stretch ${
+                                    isSelected
+                                      ? 'bg-primary text-primary-foreground'
+                                      : isCurrent
+                                        ? 'border-primary/30 bg-primary/5 hover:bg-primary/10'
+                                        : isLocked
+                                          ? 'border-dashed border-amber-200 bg-amber-50/40 text-slate-600 hover:bg-amber-50 dark:border-amber-900 dark:bg-amber-950/10'
+                                          : 'hover:bg-muted'
+                                  }`}
+                                  onClick={() => handleTopicSelect(topic)}
+                                >
+                                  <div className="flex w-full items-center gap-3">
+                                    <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
+                                      isSelected ? 'bg-white/20' : isCurrent ? 'bg-primary/10 text-primary' : 'bg-slate-100 dark:bg-slate-800'
+                                    }`}>
+                                      {done ? <CheckCircle2 className="h-4 w-4 text-emerald-500" /> : isLocked ? <Lock className="h-4 w-4 text-amber-600" /> : isCurrent ? <Play className="h-4 w-4" /> : <Layers className="h-4 w-4" />}
+                                    </div>
+                                    <div className="min-w-0 flex-1 text-left">
+                                      <span className="block whitespace-normal text-sm font-semibold">{formatTopicLike(topic)}</span>
+                                      <span className={`block text-[10px] font-semibold uppercase tracking-wide ${
+                                        isSelected ? 'text-white/80' : isCurrent ? 'text-primary' : 'text-muted-foreground'
+                                      }`}>
+                                        {quickLabel}
+                                      </span>
+                                    </div>
+                                    {pct > 0 && !done && (
+                                      <span className="text-[10px] font-bold tabular-nums text-teal-600 dark:text-teal-400">{pct}%</span>
+                                    )}
+                                  </div>
+                                  {pct > 0 && (
+                                    <div className="w-full h-1 rounded-full overflow-hidden bg-slate-200 dark:bg-slate-700">
+                                      <div className={`h-full rounded-full transition-all duration-500 ${done ? 'bg-emerald-500' : 'bg-teal-500'}`} style={{ width: `${pct}%` }} />
+                                    </div>
+                                  )}
+                                </Button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {groupedVisibleTopics.map(({ termGroup, topics }) => (
+                        <div key={termGroup}>
                           <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-3 ml-1 flex items-center gap-2">
                             <BookOpen className="w-4 h-4 text-teal-500" />
-                            {termGroup as string}
+                            {termGroup}
                           </h4>
                           <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
-                            {visibleTopics.filter(t => (t.term || 'Other') === termGroup).map(topic => {
+                            {topics.map(topic => {
                               const tp = getTopicProgress(topic.id);
                               const structuredTopic = topicsForCurrentSubject.find((st: any) => st.id === topic.id);
                               const isLocked = structuredTopic?.status === 'locked';
@@ -1360,98 +2263,128 @@ export const AIChatSection = ({
             )}
 
             {selectedTopic && (
-              <Card className="border-0 shadow-none bg-primary hover:bg-primary/90 text-white animate-in zoom-in-95 duration-500">
-                <CardContent className="p-8">
-                  <div className="flex flex-col md:flex-row items-center gap-8">
-                    <div className="w-32 h-32 bg-white/20 backdrop-blur-md rounded-lg flex items-center justify-center flex-shrink-0 border border-white/20 overflow-hidden shadow-none">
-                      <img src={`/avatars/ai_tutor_${tutorGender}.png`} alt="AI Tutor" className="w-full h-full object-cover" />
-                    </div>
-                    <div className="flex-1 text-center md:text-left">
-                      <Badge variant="outline" className="text-white border-white/30 bg-white/10 mb-2">Ready to Learn</Badge>
-                      <h3 className="text-2xl font-bold mb-2">{selectedTopicName}</h3>
-                      <p className="text-teal-50 mb-6 max-w-lg">I'm ready to teach you about {selectedTopicName}. We can start with a basic explanation or dive straight into practice.</p>
-
-                      <div className="flex flex-wrap gap-3 justify-center md:justify-start">
-                        <Button className="bg-white text-teal-700 hover:bg-teal-50 rounded-xl px-6 gap-2" onClick={() => openTutorFromSelection(selectedTopic, setShowAIPanel, handleAIContinue, aiChatMessages)}>
-                          <Sparkles className="w-4 h-4" /> Start Tutoring
-                        </Button>
-                        <Button variant="outline" className="border-white/40 text-white hover:bg-white/10 rounded-xl px-6 gap-2" onClick={() => setActiveView('quiz')}>
-                          <FileText className="w-4 h-4" /> Take Quiz
-                        </Button>
-                        <Button variant="outline" className="border-white/40 text-white hover:bg-white/10 rounded-xl px-6 gap-2" onClick={() => handleAIContinue(`Give me a summary of ${selectedTopicName}`)}>
-                          <Repeat className="w-4 h-4" /> Summary
-                        </Button>
+              <Card className="animate-in zoom-in-95 rounded-lg border-border bg-card shadow-none duration-500">
+                <CardContent className="p-5 sm:p-6">
+                  <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="flex min-w-0 items-start gap-4">
+                      <div className="h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-primary/20 bg-primary/10">
+                        <img src={`/avatars/ai_tutor_${tutorGender}.png`} alt="AI Tutor" className="h-full w-full object-cover" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant="outline" className="rounded-full text-[10px] font-semibold uppercase tracking-wide">
+                            Ready to learn
+                          </Badge>
+                          <Badge variant="secondary" className="rounded-full bg-primary/10 text-[10px] font-semibold text-primary">
+                            {focusProgressPercent}% topic progress
+                          </Badge>
+                        </div>
+                        <h3 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">
+                          {selectedTopicName}
+                        </h3>
+                        <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-300">
+                          Start with a gentle explanation, jump to guided practice, or open a quiz when you want to test what is already stable.
+                        </p>
                       </div>
                     </div>
+
+                    <div className="grid gap-2 sm:grid-cols-3 lg:min-w-[320px] lg:max-w-[360px]">
+                      {focusSignalItems.map((item) => (
+                        <div key={item.label} className="rounded-lg border border-border bg-muted/30 px-3 py-3">
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{item.label}</p>
+                          <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">{item.value}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="mt-5 flex flex-wrap gap-3">
+                    <Button className="rounded-lg gap-2" onClick={() => openTutorFromSelection(selectedTopic, setShowAIPanel, handleAIContinue, aiChatMessages)}>
+                      <Sparkles className="w-4 h-4" /> Start tutoring
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="rounded-lg gap-2"
+                      onClick={() => startQuiz(selectedTopic, selectedSubject)}
+                    >
+                      <FileText className="w-4 h-4" /> Start mastery check
+                    </Button>
+                    <Button variant="outline" className="rounded-lg gap-2" onClick={() => handleAIContinue(`Give me a summary of ${selectedTopicName}`)}>
+                      <Repeat className="w-4 h-4" /> Get summary
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
             )}
           </div>
 
-          <div className="space-y-6">
-            <Card className="border-0 shadow-none">
+          {shouldShowSupportRail && (
+          <div className="space-y-4 xl:sticky xl:top-4 xl:self-start">
+            <Card className="rounded-lg border-border bg-card shadow-none">
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm flex items-center gap-2">
-                  <Target className="w-4 h-4 text-amber-500" /> Suggested Topics
+                <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                  <Target className="w-4 h-4 text-primary" /> Focus Support
                 </CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  {actionableSuggestedTopics.length > 0 ? actionableSuggestedTopics.map((topic, idx) => (
-                    <Button key={idx} variant="ghost" className="w-full justify-start text-sm hover:bg-amber-50 dark:hover:bg-amber-950/20 group" onClick={() => {
-                      const subject = subjects.find(s => s.id === topic.subject_id) || selectedSubject;
-                      if (subject) {
-                        handleSubjectSelect(subject);
-                        if (typeof topic !== 'string') handleTopicSelect(topic);
-                      }
-                    }}>
-                      <div className="w-2 h-2 rounded-full bg-amber-400 mr-3 group-hover:scale-150 transition-transform" />
-                      <span className="truncate">{formatTopicLike(topic)}</span>
-                    </Button>
-                  )) : (
-                    <div className="py-4 text-center">
-                      <p className="text-xs text-muted-foreground flex flex-col items-center gap-2">
-                        <Sparkles className="w-6 h-6 opacity-30" />
+              <CardContent className="space-y-4">
+                <div>
+                  <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Suggested topics
+                  </p>
+                  <div className="space-y-2">
+                    {actionableSuggestedTopics.length > 0 ? actionableSuggestedTopics.map((topic, idx) => (
+                      <Button
+                        key={idx}
+                        variant="ghost"
+                        className="w-full justify-start rounded-lg text-sm hover:bg-muted/60 group"
+                        onClick={() => {
+                          const subject = subjects.find(s => s.id === topic.subject_id) || selectedSubject;
+                          if (subject) {
+                            handleSubjectSelect(subject);
+                            if (typeof topic !== 'string') handleTopicSelect(topic);
+                          }
+                        }}
+                      >
+                        <div className="w-2 h-2 rounded-full bg-primary/70 mr-3 group-hover:scale-150 transition-transform" />
+                        <span className="truncate">{formatTopicLike(topic)}</span>
+                      </Button>
+                    )) : (
+                      <p className="text-xs text-muted-foreground leading-5">
                         {hasLearningSignals
-                          ? 'No extra topic suggestions right now'
-                          : 'Complete a lesson or mastery quiz to generate suggestions'}
+                          ? 'No extra topic suggestions right now.'
+                          : 'Complete a lesson or mastery quiz to generate suggestions.'}
                       </p>
-                    </div>
-                  )}
+                    )}
+                  </div>
+                </div>
+
+                <div className="border-t border-border pt-4">
+                  <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Areas to strengthen
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {actionableWeaknessAreas.length > 0 ? actionableWeaknessAreas.map((area, idx) => (
+                      <Badge key={idx} variant="destructive" className="rounded-lg px-2.5 py-1">{area}</Badge>
+                    )) : (
+                      <p className="text-xs text-muted-foreground leading-5">
+                        {hasLearningSignals
+                          ? 'No specific weaknesses identified from your recent activity.'
+                          : 'Complete a lesson or quiz so EduNexus can identify improvement areas.'}
+                      </p>
+                    )}
+                  </div>
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="border-0 shadow-none">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm flex items-center gap-2">
-                  <Activity className="w-4 h-4 text-red-500" /> Areas for Improvement
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-wrap gap-2">
-                  {actionableWeaknessAreas.length > 0 ? actionableWeaknessAreas.map((area, idx) => (
-                    <Badge key={idx} variant="destructive" className="rounded-lg px-2.5 py-1">{area}</Badge>
-                  )) : (
-                    <p className="text-xs text-muted-foreground italic">
-                      {hasLearningSignals
-                        ? 'No specific weaknesses identified from your recent activity.'
-                        : 'Complete a lesson or quiz so EduNexus can identify improvement areas.'}
-                    </p>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-0 shadow-none bg-teal-50 dark:bg-emerald-950/20 border-teal-100 dark:border-teal-900/50">
+            <Card className="rounded-lg border-border bg-card shadow-none">
               <CardContent className="p-6">
                 <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-white dark:bg-slate-900 rounded-lg flex items-center justify-center shadow-none">
-                    <Trophy className="w-6 h-6 text-teal-600" />
+                  <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center shadow-none">
+                    <Trophy className="w-6 h-6 text-primary" />
                   </div>
                   <div>
-                    <p className="text-xs text-teal-600 dark:text-teal-400 font-bold uppercase tracking-wider">Learning Goal</p>
+                    <p className="text-xs text-primary font-bold uppercase tracking-wider">Learning Goal</p>
                     <p className="font-semibold text-slate-800 dark:text-slate-100">{learningGoal.title}</p>
                   </div>
                 </div>
@@ -1462,83 +2395,9 @@ export const AIChatSection = ({
               </CardContent>
             </Card>
           </div>
+          )}
         </div>
       )}
     </div>
   );
 };
-
-// Internal helper component to call the hook
-function BrainPowerCardsSection({ topicName, subjectName, onJumpIn }: { topicName: string; subjectName?: string; onJumpIn: (card: BrainPowerCardData) => void }) {
-  const { data, isLoading } = useReadingRecommendations({
-    topic: topicName,
-    subject: subjectName,
-    limit: 4,
-    enabled: true,
-  });
-
-  const cards = data?.cards || [];
-
-  return (
-    <Card className="mb-6 rounded-lg border-border bg-card shadow-none">
-      <CardHeader className="pb-2">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-          <CardTitle className="flex min-w-0 items-start gap-2 text-base font-semibold leading-snug sm:text-lg">
-            <BookOpen className="mt-0.5 h-4 w-4 shrink-0 text-teal-600 sm:h-5 sm:w-5" />
-            <span className="min-w-0">
-              <span className="block text-xs font-medium uppercase tracking-wide text-muted-foreground">Study materials</span>
-              <span className="line-clamp-2 break-words">For {topicName}</span>
-            </span>
-          </CardTitle>
-          <Badge variant="outline" className="w-fit shrink-0 text-[10px] uppercase font-bold text-teal-600 border-teal-200">Reading Material</Badge>
-        </div>
-      </CardHeader>
-      <CardContent>
-        {isLoading ? (
-          <div className="flex justify-center py-8">
-            <Loader2 className="w-6 h-6 animate-spin text-teal-500" />
-          </div>
-        ) : cards.length === 0 ? (
-          <div className="text-center py-4 text-slate-400">
-            <p className="text-xs">No reading materials yet. Ask your teacher to upload curriculum PDFs!</p>
-          </div>
-        ) : (
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              {cards.map((card) => (
-                <Card key={card.id} className="group min-w-0 cursor-pointer overflow-hidden border-slate-100 transition-all hover:border-teal-400 dark:border-slate-800">
-                  <CardContent className="p-4">
-                    <div className="flex items-center gap-2 mb-2">
-                      <div className="p-1.5 rounded-lg bg-teal-100 dark:bg-teal-900/50">
-                        <BookOpen className="w-4 h-4 text-teal-600 dark:text-teal-400" />
-                      </div>
-                      <span className="text-[10px] bg-teal-100 dark:bg-teal-900 text-teal-700 dark:text-teal-300 px-2 py-0.5 rounded font-medium">
-                        {card.subject}
-                      </span>
-                    </div>
-                    <h4 className="font-bold text-sm line-clamp-2 group-hover:text-teal-600 transition-colors mb-2">
-                      {card.title}
-                    </h4>
-                    <p className="text-xs text-muted-foreground line-clamp-3 mb-3">
-                      {card.snippet}
-                    </p>
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] text-muted-foreground flex items-center gap-1">
-                        <Clock className="w-3 h-3" /> {Math.max(1, Math.round(card.estimated_read_seconds / 60))} min read
-                      </span>
-                      <Button 
-                        size="sm" 
-                        className="h-7 text-xs bg-teal-600 hover:bg-teal-700"
-                        onClick={() => onJumpIn(card)}
-                      >
-                        <Zap className="w-3 h-3 mr-1" /> Jump In
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}

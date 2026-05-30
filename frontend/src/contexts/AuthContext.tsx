@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import type { ReactNode } from 'react';
@@ -95,15 +95,15 @@ const dashboardPathForRole = (role?: string | null) => {
 };
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const initialStoredUserRaw = useRef<string | null>(localStorage.getItem('edunexus_user'));
   const [user, setUser] = useState<User | null>(() => {
-    const saved = localStorage.getItem('edunexus_user');
-    if (!saved) return null;
-    const parsed = JSON.parse(saved);
+    if (!initialStoredUserRaw.current) return null;
+    const parsed = JSON.parse(initialStoredUserRaw.current);
     return { ...parsed, role: normalizeRole(parsed.role) };
   });
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(!!localStorage.getItem('edunexus_user'));
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(!!initialStoredUserRaw.current);
   const [mustChangePassword, setMustChangePassword] = useState<boolean>(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState<boolean>(!!initialStoredUserRaw.current);
   const [error, setError] = useState<string | null>(null);
   const [verificationEmail, setVerificationEmail] = useState<string | null>(null);
   const navigate = useNavigate();
@@ -111,7 +111,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // C-05: Load user status from API via cookie on mount
   useEffect(() => {
     const initAuth = async () => {
-      setIsLoading(true);
+      const shouldBlockOnBootstrap = !!initialStoredUserRaw.current;
+      const currentPath = window.location.pathname.toLowerCase().split(/[?#]/)[0].replace(/\/$/, '') || '/';
+      const protectedPrefixes = ['/student', '/teacher', '/admin', '/session', '/change-password'];
+      const shouldProbeSession = shouldBlockOnBootstrap || protectedPrefixes.some(prefix => currentPath === prefix || currentPath.startsWith(`${prefix}/`));
+
+      if (!shouldProbeSession) {
+        return;
+      }
+
+      if (shouldBlockOnBootstrap) {
+        setIsLoading(true);
+      }
       try {
         const freshUser = await userAPI.getMe({ silentAuth: true });
         if (freshUser) {
@@ -138,7 +149,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setUser(null);
         setIsAuthenticated(false);
       } finally {
-        setIsLoading(false);
+        if (shouldBlockOnBootstrap) {
+          setIsLoading(false);
+        }
       }
     };
 

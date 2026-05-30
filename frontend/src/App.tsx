@@ -1,4 +1,4 @@
-import React, { useState, useEffect, Suspense } from 'react';
+﻿import React, { useState, useEffect, Suspense, useRef } from 'react';
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -28,8 +28,16 @@ import type { User as UserType } from '@/types';
 function App() {
   const { user, logout, setUser: updateUser, mustChangePassword, completePasswordChange, isAuthenticated } = useAuth();
   const [showSmartHelper, setShowSmartHelper] = useState(false);
-  const [activeSession, setActiveSession] = useState<{ id: string; title: string; isTeacher: boolean } | null>(null);
+  const [activeSession, setActiveSession] = useState<{
+    id: string;
+    title: string;
+    isTeacher: boolean;
+    token?: string | null;
+    roomName?: string;
+    sessionData?: any;
+  } | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const lastFetchFailureRef = useRef<{ signature: string; timestamp: number } | null>(null);
   const location = useLocation();
   const shouldShowSmartHelper = !location.pathname.startsWith('/student/learn') && !location.pathname.startsWith('/session');
 
@@ -93,10 +101,18 @@ function App() {
     const handleFetchFailed = (e: any) => {
       const url = e.detail?.url || 'Unknown';
       const isRegistration = String(url).includes('/auth/register');
-      toast.error(isRegistration ? 'Server is taking longer than usual' : 'Connection Failed', {
+      const signature = `${isRegistration ? 'registration' : 'general'}:${String(url).split('?')[0]}`;
+      const now = Date.now();
+      const previous = lastFetchFailureRef.current;
+      if (previous && previous.signature === signature && now - previous.timestamp < 6000) {
+        return;
+      }
+      lastFetchFailureRef.current = { signature, timestamp: now };
+      toast.error(isRegistration ? 'Server is taking longer than usual' : 'We could not reach the platform', {
+        id: isRegistration ? 'registration-fetch-failed' : 'api-fetch-failed',
         description: isRegistration
-          ? 'Please wait a moment, then submit again. Free hosting can take a little time to wake during account creation.'
-          : `Could not reach the server. Please check your internet or if the backend is online.`,
+          ? 'Please wait a moment, then submit again. Hosting can take a little time to wake during account creation.'
+          : `Please check your internet connection or try again in a moment.`,
         duration: 10000,
       });
     };
@@ -185,6 +201,9 @@ function App() {
                   sessionId={activeSession.id}
                   title={activeSession.title}
                   isTeacher={activeSession.isTeacher}
+                  initialToken={activeSession.token}
+                  initialRoomName={activeSession.roomName}
+                  initialSessionData={activeSession.sessionData}
                   onClose={() => {
                     setActiveSession(null);
                     setRefreshKey(prev => prev + 1);
@@ -225,3 +244,6 @@ function App() {
 }
 
 export default App;
+
+
+

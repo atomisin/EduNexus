@@ -1,7 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_, func, any_, text
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import noload, selectinload
 from pydantic import BaseModel
 from typing import Optional, List
 import uuid
@@ -160,6 +160,58 @@ def _dedupe_subjects_for_catalog(
     )
 
 
+def _light_subject_score(
+    subject: dict,
+    mapped_grade: Optional[str] = None,
+    education_level: Optional[str] = None,
+    curriculum_type: Optional[str] = None,
+) -> int:
+    score = 0
+    grade_levels = subject.get("grade_levels") or []
+    if mapped_grade and mapped_grade in grade_levels:
+        score += 100
+    elif mapped_grade and not grade_levels:
+        score += 10
+
+    subject_level = subject.get("education_level")
+    if education_level and subject_level == education_level:
+        score += 50
+    elif education_level and subject_level in EDUCATION_LEVEL_MAP.get(education_level, []):
+        score += 20
+
+    if curriculum_type and subject.get("curriculum_type") == curriculum_type:
+        score += 30
+
+    if subject.get("created_by"):
+        score += 5
+
+    return score
+
+
+def _dedupe_light_subjects_for_catalog(
+    subjects: List[dict],
+    mapped_grade: Optional[str] = None,
+    education_level: Optional[str] = None,
+    curriculum_type: Optional[str] = None,
+) -> List[dict]:
+    best_by_name: dict[str, dict] = {}
+    best_score_by_name: dict[str, int] = {}
+
+    for subject in subjects:
+        key = _normalize_subject_name(subject.get("name") or "")
+        if not key:
+            continue
+        score = _light_subject_score(subject, mapped_grade, education_level, curriculum_type)
+        if key not in best_by_name or score > best_score_by_name[key]:
+            best_by_name[key] = subject
+            best_score_by_name[key] = score
+
+    return sorted(
+        best_by_name.values(),
+        key=lambda s: ((s.get("name") or "").lower(), min(s.get("grade_levels") or ["ZZZ"])),
+    )
+
+
 async def generate_curriculum_for_subject(
     subject_id: str,
     subject_name: str,
@@ -274,6 +326,9 @@ async def get_subjects(
     curriculum_type: Optional[str] = None,
     search: Optional[str] = None,
     mine: bool = False,
+    summary: bool = False,
+    light: bool = False,
+    exact_grade: bool = Query(False, description="Only return subjects that explicitly match the requested class grade."),
     db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -287,20 +342,28 @@ async def get_subjects(
     if curriculum_type == "": curriculum_type = None
     
     # Base query for all active subjects
-    query = select(Subject).filter(Subject.is_active == True).options(selectinload(Subject.topics))
+    query = select(Subject).filter(Subject.is_active == True)
     
     # Fetch student profile for automatic filtering if logged in as student
     student_profile = None
     if current_user.role == "student":
         from app.models.student import StudentProfile
-        res_prof = await db.execute(select(StudentProfile).filter(StudentProfile.user_id == current_user.id))
+        res_prof = await db.execute(
+            select(StudentProfile)
+            .options(noload("*"))
+            .filter(StudentProfile.user_id == current_user.id)
+        )
         student_profile = res_prof.scalars().first()
 
     # CASE 1: Fetching "My" subjects (linked to profile)
     if mine:
         if current_user.role == "teacher":
             from app.models.user import TeacherProfile
-            res_exec = await db.execute(select(TeacherProfile).filter(TeacherProfile.user_id == current_user.id))
+            res_exec = await db.execute(
+                select(TeacherProfile)
+                .options(noload("*"))
+                .filter(TeacherProfile.user_id == current_user.id)
+            )
             teacher_profile = res_exec.scalars().first()
             linked_subject_ids = []
             if teacher_profile and teacher_profile.subjects_taught:
@@ -374,12 +437,15 @@ async def get_subjects(
     # Apply Grade Level Filter
     if grade_level:
         mapped_grade = map_grade_level(grade_level)
-        # Match specific grade OR general subjects (empty grade list)
-        query = query.filter(or_(
-            Subject.grade_levels.contains([mapped_grade]),
-            Subject.grade_levels == [],
-            Subject.grade_levels == None
-        ))
+        if exact_grade:
+            query = query.filter(Subject.grade_levels.contains([mapped_grade]))
+        else:
+            # Match specific grade OR general subjects (empty grade list)
+            query = query.filter(or_(
+                Subject.grade_levels.contains([mapped_grade]),
+                Subject.grade_levels == [],
+                Subject.grade_levels == None
+            ))
     else:
         # If no grade requested/detected, we don't filter BY grade (show all for that ed_level)
         pass
@@ -404,14 +470,72 @@ async def get_subjects(
 
     mapped_grade_for_dedupe = map_grade_level(grade_level) if grade_level else None
 
+    should_load_topics = not summary and not light
+    if not should_load_topics:
+        light_query = query.with_only_columns(
+            Subject.id,
+            Subject.name,
+            Subject.code,
+            Subject.education_level,
+            Subject.curriculum_type,
+            Subject.description,
+            Subject.grade_levels,
+            Subject.created_by,
+        )
+        res_exec = await db.execute(light_query)
+        subjects = _dedupe_light_subjects_for_catalog(
+            [
+                {
+                    "id": row.id,
+                    "name": row.name,
+                    "code": row.code,
+                    "education_level": row.education_level,
+                    "curriculum_type": row.curriculum_type,
+                    "description": row.description,
+                    "grade_levels": row.grade_levels,
+                    "created_by": row.created_by,
+                }
+                for row in res_exec.all()
+            ],
+            mapped_grade=mapped_grade_for_dedupe,
+            education_level=education_level,
+            curriculum_type=curriculum_type,
+        )
+
+        if summary:
+            return {"count": len(subjects)}
+
+        return {
+            "subjects": [
+                {
+                    "id": str(s["id"]),
+                    "name": s["name"],
+                    "code": s["code"],
+                    "education_level": s["education_level"],
+                    "curriculum_type": s["curriculum_type"],
+                    "description": s["description"],
+                    "grade_levels": s["grade_levels"],
+                    "topic_count": None,
+                }
+                for s in subjects
+            ]
+        }
+
     # Execute
-    res_exec = await db.execute(query)
+    if should_load_topics:
+        subject_query = query.options(selectinload(Subject.topics))
+    else:
+        subject_query = query.options(noload("*"))
+    res_exec = await db.execute(subject_query)
     subjects = _dedupe_subjects_for_catalog(
         res_exec.scalars().all(),
         mapped_grade=mapped_grade_for_dedupe,
         education_level=education_level,
         curriculum_type=curriculum_type,
     )
+
+    if summary:
+        return {"count": len(subjects)}
  
     return {
         "subjects": [
@@ -423,7 +547,7 @@ async def get_subjects(
                 "curriculum_type": s.curriculum_type,
                 "description": s.description,
                 "grade_levels": s.grade_levels,
-                "topic_count": len(s.topics),
+                "topic_count": len(s.topics) if should_load_topics else None,
             }
             for s in subjects
         ]

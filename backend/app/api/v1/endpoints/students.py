@@ -17,6 +17,7 @@ from app.api.v1.endpoints.auth import get_current_user
 from app.models.user import User, UserRole, StudentTopicRequest, TeacherStudent
 from app.models.student import StudentProfile, LearningStyleAssessment
 from app.models.subject import Subject, Topic
+from sqlalchemy.orm import noload
 from sqlalchemy.orm.attributes import flag_modified
 from app.models.junction_tables import StudentTopicProgress
 from app.services.storage_service import storage_service
@@ -133,6 +134,7 @@ def require_student(current_user: User = Depends(get_current_user)):
 
 @router.get("/profile")
 async def get_student_profile(
+    summary: bool = Query(False),
     db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -141,7 +143,9 @@ async def get_student_profile(
         raise HTTPException(status_code=403, detail="Only students have profiles")
 
     result = await db.execute(
-        select(StudentProfile).filter(StudentProfile.user_id == current_user.id)
+        select(StudentProfile)
+        .options(noload("*"))
+        .filter(StudentProfile.user_id == current_user.id)
     )
     profile = result.scalars().first()
 
@@ -165,6 +169,26 @@ async def get_student_profile(
     if ensure_daily_brain_power(profile):
         await db.commit()
         await db.refresh(profile)
+
+    if summary:
+        return {
+            "id": str(profile.id),
+            "user_id": str(profile.user_id),
+            "student_id": profile.student_id,
+            "learning_style": profile.learning_style,
+            "attention_span_minutes": profile.attention_span_minutes,
+            "best_study_time": profile.best_study_time,
+            "education_level": profile.education_level,
+            "grade_level": profile.grade_level or profile.current_grade_level,
+            "current_grade_level": profile.current_grade_level,
+            "brain_power": profile.brain_power,
+            "curriculum_type": profile.curriculum_type,
+            "xp": profile.xp or 0,
+            "level": profile.level or 1,
+            "current_streak": profile.current_streak or 0,
+            "avatar_url": storage_service.resolve_url(getattr(profile, "avatar_url", None)),
+            "department": profile.department,
+        }
 
     return {
         "id": str(profile.id),
@@ -208,7 +232,9 @@ async def get_my_brain_power(
 ):
     """Get current student's remaining brain power"""
     result = await db.execute(
-        select(StudentProfile).filter(StudentProfile.user_id == current_user.id)
+        select(StudentProfile)
+        .options(noload("*"))
+        .filter(StudentProfile.user_id == current_user.id)
     )
     profile = result.scalars().first()
 
@@ -243,7 +269,9 @@ async def update_student_profile(
         raise HTTPException(status_code=403, detail="Only students have profiles")
 
     result = await db.execute(
-        select(StudentProfile).filter(StudentProfile.user_id == current_user.id)
+        select(StudentProfile)
+        .options(noload("*"))
+        .filter(StudentProfile.user_id == current_user.id)
     )
     profile = result.scalars().first()
 
@@ -336,7 +364,7 @@ async def update_student_profile(
                             subject_id=new_subject.id,
                             name=st_name,
                             description=f"Core module for {corrected_course_name}: {st_name}",
-                            display_order=i,
+                            sort_order=i,
                         )
                         db.add(topic)
 
@@ -465,7 +493,7 @@ async def enroll_in_subject(
             res_topic = await db.execute(
                 select(Topic)
                 .filter(Topic.subject_id == enrollment_data.subject_id)
-                .order_by(getattr(Topic, "sort_order", Topic.display_order).asc())
+                .order_by(Topic.sort_order.asc())
             )
             first_topic = next(iter(filter_learning_topics(res_topic.scalars().all())), None)
 
@@ -577,7 +605,7 @@ async def enroll_custom_professional(
                     subject_id=new_subject.id,
                     name=st_name,
                     description=f"Core module for {corrected_course_name}: {st_name}",
-                    display_order=i,
+                    sort_order=i,
                 )
                 db.add(topic)
 
@@ -592,7 +620,7 @@ async def enroll_custom_professional(
                 res_topic = await db.execute(
                     select(Topic)
                     .filter(Topic.subject_id == new_subject_id)
-                    .order_by(Topic.display_order.asc())
+                    .order_by(Topic.sort_order.asc())
                 )
                 first_topic = next(iter(filter_learning_topics(res_topic.scalars().all())), None)
                 if first_topic:
@@ -1129,7 +1157,7 @@ async def get_my_topic_requests(
     """
     Get all topic requests made by the current student
     """
-    stmt = select(StudentTopicRequest).filter(
+    stmt = select(StudentTopicRequest).options(noload("*")).filter(
         StudentTopicRequest.student_id == current_user.id
     )
 
@@ -1148,8 +1176,10 @@ async def get_my_topic_requests(
     ]
     teachers_map = {}
     if teacher_ids:
-        res_t = await db.execute(select(User).filter(User.id.in_(teacher_ids)))
-        teachers_map = {str(t.id): t.full_name for t in res_t.scalars().all()}
+        res_t = await db.execute(
+            select(User.id, User.full_name).filter(User.id.in_(teacher_ids))
+        )
+        teachers_map = {str(t.id): t.full_name for t in res_t.all()}
 
     result = []
     for req in requests:
@@ -1181,6 +1211,33 @@ async def get_my_topic_requests(
         )
 
     return result
+
+
+@router.get("/my-teachers")
+async def get_my_teachers(
+    db: AsyncSession = Depends(get_async_db),
+    current_user: User = Depends(require_student),
+):
+    """Get active teachers linked to the current student."""
+    res = await db.execute(
+        select(User.id, User.full_name, User.email)
+        .join(TeacherStudent, TeacherStudent.teacher_id == User.id)
+        .filter(
+            TeacherStudent.student_id == current_user.id,
+            TeacherStudent.status == "active",
+            User.role == UserRole.TEACHER,
+        )
+        .order_by(User.full_name.asc())
+    )
+
+    return [
+        {
+            "id": str(row.id),
+            "full_name": row.full_name or row.email or "Teacher",
+            "email": row.email,
+        }
+        for row in res.all()
+    ]
 
 
 @router.get("/topics/{request_id}", response_model=TopicRequestResponse)
@@ -1378,7 +1435,7 @@ async def get_teacher_topic_requests(
     student_ids = [s[0] for s in res_sids.all()]
 
     # Query requests from these students or assigned to this teacher
-    stmt = select(StudentTopicRequest).filter(
+    stmt = select(StudentTopicRequest).options(noload("*")).filter(
         (StudentTopicRequest.student_id.in_(student_ids))
         | (StudentTopicRequest.assigned_teacher_id == current_user.id)
     )
@@ -1396,8 +1453,8 @@ async def get_teacher_topic_requests(
     student_ids = [req.student_id for req in requests]
     students_map = {}
     if student_ids:
-        res_stud = await db.execute(select(User).filter(User.id.in_(student_ids)))
-        students_map = {str(s.id): s.full_name for s in res_stud.scalars().all()}
+        res_stud = await db.execute(select(User.id, User.full_name).filter(User.id.in_(student_ids)))
+        students_map = {str(s.id): s.full_name for s in res_stud.all()}
 
     result = []
     for req in requests:

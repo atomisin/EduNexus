@@ -29,7 +29,8 @@ from app.api.v1.endpoints.auth import (
     get_current_teacher,
     verify_token,
 )
-from app.models.user import User, UserRole
+from app.models.user import User, UserRole, TeacherStudent
+from app.models.subject import Subject, Topic
 from app.models.session import (
     TeachingSession,
     SessionStudent,
@@ -118,11 +119,82 @@ async def get_sessions(
     session_status: Optional[str] = None,
     limit: int = 50,
     offset: int = 0,
+    summary: bool = Query(False),
     db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_user),
 ):
     """Get user's sessions (both teacher and student)"""
     try:
+        if summary:
+            stmt = (
+                select(
+                    TeachingSession.id,
+                    TeachingSession.teacher_id,
+                    TeachingSession.subject_id,
+                    TeachingSession.topic_id,
+                    TeachingSession.title,
+                    TeachingSession.session_type,
+                    TeachingSession.status,
+                    TeachingSession.scheduled_start,
+                    TeachingSession.actual_start,
+                    TeachingSession.actual_end,
+                    TeachingSession.duration_minutes,
+                    TeachingSession.livekit_room_name,
+                    TeachingSession.student_access_code,
+                    TeachingSession.student_access_enabled,
+                    TeachingSession.created_at,
+                    TeachingSession.updated_at,
+                    Subject.name.label("subject_name"),
+                    Topic.name.label("topic_name"),
+                    User.full_name.label("teacher_name"),
+                )
+                .outerjoin(Subject, Subject.id == TeachingSession.subject_id)
+                .outerjoin(Topic, Topic.id == TeachingSession.topic_id)
+                .outerjoin(User, User.id == TeachingSession.teacher_id)
+            )
+
+            if current_user.role in ["teacher", "admin"]:
+                stmt = stmt.filter(TeachingSession.teacher_id == current_user.id)
+            else:
+                stmt = stmt.join(
+                    SessionStudent,
+                    SessionStudent.session_id == TeachingSession.id,
+                ).filter(SessionStudent.student_id == current_user.id)
+
+            if session_status:
+                if "," in session_status:
+                    stmt = stmt.filter(TeachingSession.status.in_(session_status.split(",")))
+                else:
+                    stmt = stmt.filter(TeachingSession.status == session_status)
+
+            result = await db.execute(
+                stmt.order_by(TeachingSession.created_at.desc()).offset(offset).limit(limit)
+            )
+            return [
+                {
+                    "id": str(row.id),
+                    "teacher_id": str(row.teacher_id),
+                    "teacher_name": row.teacher_name,
+                    "subject_id": str(row.subject_id) if row.subject_id else None,
+                    "subject_name": row.subject_name,
+                    "topic_id": str(row.topic_id) if row.topic_id else None,
+                    "topic_name": row.topic_name,
+                    "title": row.title,
+                    "session_type": row.session_type,
+                    "status": row.status,
+                    "scheduled_start": row.scheduled_start.isoformat() if row.scheduled_start else None,
+                    "actual_start": row.actual_start.isoformat() if row.actual_start else None,
+                    "actual_end": row.actual_end.isoformat() if row.actual_end else None,
+                    "duration_minutes": row.duration_minutes,
+                    "livekit_room_name": row.livekit_room_name,
+                    "student_access_code": row.student_access_code,
+                    "student_access_enabled": row.student_access_enabled,
+                    "created_at": row.created_at.isoformat() if row.created_at else None,
+                    "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+                }
+                for row in result.all()
+            ]
+
         manager = SessionManager(db)
 
         # Check if user is teacher or student
@@ -548,6 +620,24 @@ async def prepare_smart_lesson(
     for a specific student and subject.
     """
     try:
+        try:
+            student_uuid = uuid.UUID(student_id)
+            uuid.UUID(subject_id)
+            if topic_id:
+                uuid.UUID(topic_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid ID format")
+
+        rel_res = await db.execute(
+            select(TeacherStudent).filter(
+                TeacherStudent.teacher_id == current_user.id,
+                TeacherStudent.student_id == student_uuid,
+                TeacherStudent.status == "active",
+            )
+        )
+        if not rel_res.scalars().first():
+            raise HTTPException(status_code=403, detail="Student is not in your roster")
+
         manager = SessionManager(db)
         result = await manager.prepare_smart_lesson(
             teacher_id=str(current_user.id),
@@ -556,6 +646,8 @@ async def prepare_smart_lesson(
             topic_id=topic_id,
         )
         return result
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
@@ -628,7 +720,22 @@ async def push_session_content(
         
         student_ids = []
         if request.target_student_id:
-            student_ids.append(uuid.UUID(request.target_student_id))
+            try:
+                target_student_uuid = uuid.UUID(request.target_student_id)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid target student ID")
+            enrollment = await db.execute(
+                select(SessionStudent.id).filter(
+                    SessionStudent.session_id == uuid.UUID(session_id),
+                    SessionStudent.student_id == target_student_uuid,
+                )
+            )
+            if enrollment.scalar() is None:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Target student is not enrolled in this session",
+                )
+            student_ids.append(target_student_uuid)
         else:
             stmt = select(SessionStudent.student_id).filter(SessionStudent.session_id == uuid.UUID(session_id))
             res = await db.execute(stmt)
@@ -880,7 +987,14 @@ async def submit_quiz(
 ):
     """Student submits answers to pre/post session quiz"""
     try:
+        if current_user.role != UserRole.STUDENT:
+            raise HTTPException(status_code=403, detail="Only students can submit session quizzes")
+
         manager = SessionManager(db)
+        is_enrolled, _ = await manager.is_student_enrolled(session_id, str(current_user.id))
+        if not is_enrolled:
+            raise HTTPException(status_code=403, detail="Not enrolled in this session")
+
         if submission.quiz_type == "live_pop":
             result = await manager.submit_live_quiz(
                 session_id=session_id,
@@ -899,6 +1013,8 @@ async def submit_quiz(
             "detail": "Quiz submitted and scored successfully",
             "result": result,
         }
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -952,8 +1068,18 @@ async def get_engagement_report(
     """Get full engagement report for teacher"""
     try:
         manager = SessionManager(db)
+        session = await manager._get_session(session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+        if str(session.teacher_id) != str(current_user.id):
+            raise HTTPException(status_code=403, detail="Not authorized")
+
         report = await manager.get_engagement_report(session_id)
         return {"success": True, "report": report}
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Error getting engagement report: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))

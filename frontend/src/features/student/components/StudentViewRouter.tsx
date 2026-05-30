@@ -1,19 +1,19 @@
-import React from 'react';
-import { Loader2 } from 'lucide-react';
+﻿import React from 'react';
 import type { ViewType, Subject, Session } from '../types';
 import { DashboardHome } from '../dashboard/DashboardHome';
 import { AIChatSection } from '../ai-tutor/AIChatSection';
-import { QuizView } from '../ai-tutor/QuizView';
 import { SessionsView } from '../sessions/SessionsView';
 import { SubjectsView } from '../learning/SubjectsView';
 import MockExamsView from '../learning/MockExamsView';
 import { ProgressView } from '../dashboard/ProgressView';
 import { ProfileView } from '../profile/ProfileView';
 import { MessagingView } from '@/components/messaging/MessagingView';
+import { StudentEmptyState, StudentPageSkeleton } from './StudentStatePanel';
 
 interface StudentViewRouterProps {
   activeView: ViewType;
   isLoading: boolean;
+  error?: string | null;
   profile: any;
   energy: number;
   getLearningStyleLabel: (style?: string) => { label: string; desc: string };
@@ -44,6 +44,7 @@ interface StudentViewRouterProps {
   handleSubjectSelect: (subject: any) => Promise<void>;
   handleTopicSelect: (topic: any, subject?: any) => Promise<void>;
   suggestedVideos: any[];
+  videoSupportState?: any;
   setSelectedVideo: (v: any) => void;
   setProfile: (p: any) => void;
   suggestedTopics: any[];
@@ -66,10 +67,7 @@ interface StudentViewRouterProps {
   getFullName: () => string;
   tutorGender: 'male' | 'female';
   setTutorGender: (val: 'male' | 'female') => void;
-  // Subjects props
-  materials: any[];
   handleEnroll: (id: string, enrolled: boolean) => Promise<void>;
-  handleDeleteMaterial: (id: string) => Promise<void>;
   customCourseName: string;
   setCustomCourseName: (val: string) => void;
   isGeneratingCourse: boolean;
@@ -85,31 +83,39 @@ interface StudentViewRouterProps {
   radarData: any[];
   searchQuery: string;
   setSearchQuery: (val: string) => void;
+  examHistoryInsights?: any;
 }
 
 export const StudentViewRouter: React.FC<StudentViewRouterProps> = ({
-  activeView, isLoading, profile, energy, getLearningStyleLabel,
+  activeView, isLoading, error, profile, energy, getLearningStyleLabel,
   setActiveView, liveSessions, upcomingSessions, handleJoinSession,
   formatDate, showAIPanel, setShowAIPanel, selectedTopic, selectedSubject,
   roadmap, viewingSubtopic, setViewingSubtopic, handleSubtopicClick,
   showMasteryTest, activeSubtopic, messages, aiState, lessonController, avatarUrl, user,
   handleAIContinue, subjects, enrolledSubjects,
-  handleSubjectSelect, handleTopicSelect, suggestedVideos, setSelectedVideo,
+  handleSubjectSelect, handleTopicSelect, suggestedVideos, videoSupportState, setSelectedVideo,
   setProfile, suggestedTopics, weaknessAreas, topics,
   roadmapLoading, structuredTopics, isStructuredLoading, scrollAreaRef, onMasteryTestComplete,
   startQuiz, dismissQuizConfirm, placementState, startPlacementCheck, submitPlacementCheck,
   acceptPlacementRecommendation, cancelPlacementCheck, lockedLessonNotice, openCurrentUnlockedLesson,
-  getFullName, tutorGender, setTutorGender, materials, handleEnroll, handleDeleteMaterial, customCourseName,
+  getFullName, tutorGender, setTutorGender, handleEnroll, customCourseName,
   setCustomCourseName, isGeneratingCourse, handleGenerateCustomCourse,
   isEditingProfile, setIsEditingProfile, profileFormData, setProfileFormData,
-  setAvatarUrl, startAssessment, progress, radarData, searchQuery, setSearchQuery
+  setAvatarUrl, startAssessment, progress, radarData, searchQuery, setSearchQuery, examHistoryInsights
 }) => {
   const renderContent = () => {
     switch (activeView) {
       case 'dashboard': return isLoading ? (
-        <div className="flex items-center justify-center h-[400px]">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
+        <StudentPageSkeleton
+          title="Learning Overview"
+          subtitle="Loading dashboard signals and recent activity."
+          cards={4}
+        />
+      ) : error && !profile ? (
+        <StudentEmptyState
+          title="We are reconnecting to your dashboard"
+          description="Your learner summary did not settle yet. Give EduNexus a moment, then reopen this page and your study signals should return."
+        />
       ) : (
         <DashboardHome
           profile={profile}
@@ -121,6 +127,7 @@ export const StudentViewRouter: React.FC<StudentViewRouterProps> = ({
           upcomingSessions={upcomingSessions}
           handleJoinSession={handleJoinSession}
           formatDate={formatDate}
+          examHistoryInsights={examHistoryInsights}
         />
       );
       case 'learn': return <AIChatSection
@@ -150,6 +157,7 @@ export const StudentViewRouter: React.FC<StudentViewRouterProps> = ({
         handleSubjectSelect={handleSubjectSelect}
         handleTopicSelect={(t: any) => handleTopicSelect(t, selectedSubject)}
         suggestedVideos={suggestedVideos}
+        videoSupportState={videoSupportState}
         setSelectedVideo={setSelectedVideo}
         setEnergy={(val: any) => {
           const current = profile?.brain_power ?? 100;
@@ -167,6 +175,7 @@ export const StudentViewRouter: React.FC<StudentViewRouterProps> = ({
         isStructuredLoading={isStructuredLoading}
         scrollAreaRef={scrollAreaRef}
         onMasteryTestComplete={onMasteryTestComplete}
+        startQuiz={startQuiz}
         placementState={placementState}
         lockedLessonNotice={lockedLessonNotice}
         startPlacementCheck={startPlacementCheck}
@@ -176,25 +185,12 @@ export const StudentViewRouter: React.FC<StudentViewRouterProps> = ({
         openCurrentUnlockedLesson={openCurrentUnlockedLesson}
         getFullName={getFullName}
       />;
-      case 'quiz': return <QuizView
-        selectedTopic={selectedTopic}
-        handleAIContinue={handleAIContinue}
-        subjects={subjects}
-        enrolledSubjects={enrolledSubjects}
-        selectedSubject={selectedSubject}
-        handleSubjectSelect={handleSubjectSelect}
-        topics={topics}
-        setSelectedTopic={(t: any) => handleTopicSelect(t, selectedSubject)} 
-        setActiveView={setActiveView}
-        setShowAIPanel={setShowAIPanel}
-        setShowMasteryTest={startQuiz}
-        progress={progress}
-        profile={profile}
-      />;
       case 'sessions': return isLoading ? (
-        <div className="flex items-center justify-center h-[400px]">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
+        <StudentPageSkeleton
+          title="Classes"
+          subtitle="Loading live and upcoming classes."
+          cards={3}
+        />
       ) : (
         <SessionsView
           searchQuery=""
@@ -210,22 +206,30 @@ export const StudentViewRouter: React.FC<StudentViewRouterProps> = ({
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
         loading={isLoading}
+        error={error}
         handleEnroll={handleEnroll}
-        materials={materials}
-        expandedSubjectId={null}
-        setExpandedSubjectId={() => { }}
-        handleDeleteMaterial={handleDeleteMaterial}
         user={user}
         profile={profile}
         customCourseName={customCourseName}
         setCustomCourseName={setCustomCourseName}
         isGeneratingCourse={isGeneratingCourse}
         handleGenerateCustomCourse={() => handleGenerateCustomCourse()}
-        setUploadSubject={() => { }}
-        setShowUploadModal={() => { }}
       />;
       case 'mock-exams': return <MockExamsView />;
-      case 'progress': return <ProgressView progress={progress} radarData={radarData} />;
+      case 'progress': return isLoading ? (
+        <StudentPageSkeleton
+          title="Learning Analytics"
+          subtitle="Loading mastery, activity, and growth trends."
+          cards={3}
+        />
+      ) : error && !progress && radarData.length === 0 ? (
+        <StudentEmptyState
+          title="We are reconnecting to your analytics"
+          description="Your progress signals are still loading back in. Give EduNexus a moment and this view should recover without losing any learning history."
+        />
+      ) : (
+        <ProgressView progress={progress} radarData={radarData} error={error} profile={profile} examHistoryInsights={examHistoryInsights} />
+      );
       case 'profile': return <ProfileView
         user={user}
         profile={profile}
@@ -240,6 +244,8 @@ export const StudentViewRouter: React.FC<StudentViewRouterProps> = ({
         enrolledSubjects={enrolledSubjects}
         getLearningStyleLabel={getLearningStyleLabel}
         startAssessment={startAssessment}
+        handleGenerateCustomCourse={handleGenerateCustomCourse}
+        isGeneratingCourse={isGeneratingCourse}
       />;
       case 'messages': return <MessagingView currentUser={user} />;
       default: return null;
@@ -248,3 +254,5 @@ export const StudentViewRouter: React.FC<StudentViewRouterProps> = ({
 
   return renderContent();
 };
+
+

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { ChevronRight, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
@@ -15,6 +15,7 @@ interface LoginPageProps {
 
 export const LoginPage = ({ onBack, onSuccess }: LoginPageProps) => {
   const { login, error, isLoading, user } = useAuth();
+  const [submitting, setSubmitting] = useState(false);
 
   if (user) {
     return (
@@ -34,6 +35,7 @@ export const LoginPage = ({ onBack, onSuccess }: LoginPageProps) => {
     e.preventDefault();
     console.log('LoginPage: Submitting login for:', email);
     try {
+      setSubmitting(true);
       const success = await login(email, password);
       console.log('LoginPage: Login result:', success);
       if (success) {
@@ -45,6 +47,8 @@ export const LoginPage = ({ onBack, onSuccess }: LoginPageProps) => {
       }
     } catch (err) {
       console.error('LoginPage handler error:', err);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -61,7 +65,7 @@ export const LoginPage = ({ onBack, onSuccess }: LoginPageProps) => {
           <div className="mx-auto mb-4">
             <img src="/edunexus-logo.png" alt="EduNexus" className="h-16 w-auto mx-auto" />
           </div>
-          <CardTitle className="text-2xl text-foreground">Welcome Back</CardTitle>
+          <CardTitle className="text-2xl text-foreground">Welcome back</CardTitle>
           <CardDescription>Sign in to your EduNexus account</CardDescription>
         </CardHeader>
         <CardContent className="pb-8">
@@ -80,7 +84,7 @@ export const LoginPage = ({ onBack, onSuccess }: LoginPageProps) => {
                 placeholder="Email address"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                disabled={isLoading}
+                disabled={submitting}
                 className="input-premium"
                 required
               />
@@ -94,14 +98,14 @@ export const LoginPage = ({ onBack, onSuccess }: LoginPageProps) => {
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                disabled={isLoading}
+                disabled={submitting}
                 className="input-premium"
                 required
               />
             </div>
 
-            <Button type="submit" className="w-full btn-primary rounded-xl py-3" disabled={isLoading}>
-              {isLoading ? (
+            <Button type="submit" className="w-full btn-primary rounded-xl py-3" disabled={submitting}>
+              {submitting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Signing in...
@@ -119,7 +123,7 @@ export const LoginPage = ({ onBack, onSuccess }: LoginPageProps) => {
                 onClick={() => window.dispatchEvent(new CustomEvent('navigate', { detail: 'register' }))}
                 className="text-primary hover:underline font-medium"
               >
-                Create Account
+                Create an account
               </button>
             </p>
           </div>
@@ -129,3 +133,5 @@ export const LoginPage = ({ onBack, onSuccess }: LoginPageProps) => {
     </div>
   );
 };
+
+

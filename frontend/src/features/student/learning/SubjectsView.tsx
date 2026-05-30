@@ -7,19 +7,14 @@ interface SubjectsViewProps {
   searchQuery: string;
   setSearchQuery: (q: string) => void;
   loading: boolean;
+  error?: string | null;
   handleEnroll: (id: string, enrolled: boolean) => Promise<void>;
-  materials: any[];
-  expandedSubjectId: string | null;
-  setExpandedSubjectId: (id: string | null) => void;
-  handleDeleteMaterial: (id: string) => Promise<void>;
   user: any;
   profile: any;
   customCourseName: string;
   setCustomCourseName: (name: string) => void;
   isGeneratingCourse: boolean;
   handleGenerateCustomCourse: () => Promise<void>;
-  setUploadSubject: (id: string) => void;
-  setShowUploadModal: (show: boolean) => void;
 }
 
 export const SubjectsView: React.FC<SubjectsViewProps> = (props) => {

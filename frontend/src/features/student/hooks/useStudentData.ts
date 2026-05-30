@@ -1,15 +1,29 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { studentAPI, sessionAPI, subjectsAPI, 
-  progressAPI, materialsAPI 
-} from '@/services/api';
-import type { StudentProfile, Session, Subject, ProgressData } from '../types';
+import { studentAPI, sessionAPI, subjectsAPI, progressAPI } from '@/services/api';
+import type { StudentProfile, Session, Subject, ProgressData, ViewType } from '../types';
 
 const normalizeSubjectName = (name?: string) => (name || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
 const MINUTE = 60 * 1000;
+const isTransientStudentDataError = (error: unknown) => {
+  const message = error instanceof Error ? error.message.toLowerCase() : String(error || '').toLowerCase();
+  return (
+    message.includes('unable to connect') ||
+    message.includes('failed to fetch') ||
+    message.includes('taking too long') ||
+    message.includes('try again in a moment') ||
+    message.includes('timeout') ||
+    message.includes('service unavailable') ||
+    message.includes('http 5')
+  );
+};
 const STUDENT_QUERY_OPTIONS = {
   refetchOnWindowFocus: false,
-  retry: 1,
+  retry: (failureCount: number, error: unknown) => {
+    if (!isTransientStudentDataError(error)) return false;
+    return failureCount < 2;
+  },
+  retryDelay: (attemptIndex: number) => Math.min(1500 * (attemptIndex + 1), 4000),
 } as const;
 
 const subjectScore = (subject: Subject, profile?: StudentProfile | null) => {
@@ -22,8 +36,17 @@ const subjectScore = (subject: Subject, profile?: StudentProfile | null) => {
   return score;
 };
 
-export const useStudentData = (user?: any) => {
+export const useStudentData = (user?: any, activeView?: ViewType) => {
   const queryClient = useQueryClient();
+  const needsSubjectCatalog = ['learn', 'subjects', 'profile'].includes(activeView || '');
+  const needsEnrolledSubjects = ['learn', 'subjects', 'profile'].includes(activeView || '');
+  const needsSessions = ['dashboard', 'sessions'].includes(activeView || '');
+  const needsProgress = activeView === 'progress';
+  const needsAnalytics = activeView === 'progress';
+  const needsLiveBrainPower = ['dashboard', 'learn', 'profile'].includes(activeView || '');
+  const sessionLimit = activeView === 'sessions' ? 50 : 12;
+  const needsFullProfile = ['learn', 'subjects', 'profile', 'progress'].includes(activeView || '');
+  const shouldFetchEnrolledSubjects = needsEnrolledSubjects && !needsFullProfile;
 
   // Profile Query
   const { 
@@ -32,8 +55,8 @@ export const useStudentData = (user?: any) => {
     error: profileError,
     refetch: refetchProfile 
   } = useQuery<StudentProfile | null>({
-    queryKey: ['student', 'profile'],
-    queryFn: studentAPI.getProfile,
+    queryKey: ['student', 'profile', needsFullProfile ? 'full' : 'summary'],
+    queryFn: () => studentAPI.getProfile({ summary: !needsFullProfile }),
     enabled: !!user,
     staleTime: 5 * MINUTE,
     ...STUDENT_QUERY_OPTIONS,
@@ -46,7 +69,7 @@ export const useStudentData = (user?: any) => {
   } = useQuery<any>({
     queryKey: ['student', 'brain-power'],
     queryFn: () => studentAPI.getBrainPower(),
-    enabled: !!user,
+    enabled: !!user && needsLiveBrainPower,
     staleTime: MINUTE,
     ...STUDENT_QUERY_OPTIONS,
   });
@@ -59,12 +82,15 @@ export const useStudentData = (user?: any) => {
     isLoading: isSubjectsLoading,
     error: subjectsError
   } = useQuery<Subject[]>({
-    queryKey: ['student', 'subjects', profile?.grade_level, profile?.department],
+    queryKey: ['student', 'subjects', profile?.education_level, profile?.grade_level, profile?.department],
     queryFn: () => subjectsAPI.getAll({ 
+      education_level: profile?.education_level,
       grade_level: profile?.grade_level,
-      department: profile?.department
+      department: profile?.department,
+      mine: profile?.education_level === 'professional',
+      light: true,
     }).then((r: any) => r.subjects || r || []),
-    enabled: !!user && !!profile,
+    enabled: !!user && !!profile && needsSubjectCatalog,
     staleTime: 10 * MINUTE,
     ...STUDENT_QUERY_OPTIONS,
   });
@@ -72,11 +98,12 @@ export const useStudentData = (user?: any) => {
   // Enrolled Subjects Query
   const { 
     data: enrolledSubjects = [], 
-    refetch: refetchEnrolled 
+    refetch: refetchEnrolled,
+    isLoading: isEnrolledLoading,
   } = useQuery<string[]>({
     queryKey: ['student', 'enrolled-subjects'],
     queryFn: () => studentAPI.getEnrolledSubjects().then((r: any) => r.enrolled_subjects || []),
-    enabled: !!user,
+    enabled: !!user && shouldFetchEnrolledSubjects,
     staleTime: 5 * MINUTE,
     ...STUDENT_QUERY_OPTIONS,
   });
@@ -88,19 +115,10 @@ export const useStudentData = (user?: any) => {
     isLoading: isSessionsLoading,
     error: sessionsError
   } = useQuery<Session[]>({
-    queryKey: ['student', 'sessions'],
-    queryFn: () => studentAPI.getSessions().then((r: any) => r.sessions || r || []),
-    enabled: !!user,
+    queryKey: ['student', 'sessions', activeView, sessionLimit],
+    queryFn: () => studentAPI.getSessions({ limit: sessionLimit, summary: true }).then((r: any) => r.sessions || r || []),
+    enabled: !!user && needsSessions,
     staleTime: MINUTE,
-    ...STUDENT_QUERY_OPTIONS,
-  });
-
-  // Materials Query
-  const { data: materials = [] } = useQuery<any[]>({
-    queryKey: ['student', 'materials'],
-    queryFn: () => studentAPI.getMaterials().then((r: any) => r.materials || r || []),
-    enabled: !!user,
-    staleTime: 5 * MINUTE,
     ...STUDENT_QUERY_OPTIONS,
   });
 
@@ -108,7 +126,7 @@ export const useStudentData = (user?: any) => {
   const { data: progress = null } = useQuery<ProgressData | null>({
     queryKey: ['student', 'progress'],
     queryFn: () => studentAPI.getProgress().then((r: any) => r.progress || r || null),
-    enabled: !!user,
+    enabled: !!user && needsProgress,
     staleTime: 2 * MINUTE,
     ...STUDENT_QUERY_OPTIONS,
   });
@@ -117,7 +135,7 @@ export const useStudentData = (user?: any) => {
   const { data: analytics = null } = useQuery<any | null>({
     queryKey: ['student', 'analytics', 'performance'],
     queryFn: () => progressAPI.getPerformanceAnalytics(),
-    enabled: !!user,
+    enabled: !!user && needsAnalytics,
     staleTime: 2 * MINUTE,
     ...STUDENT_QUERY_OPTIONS,
   });
@@ -140,6 +158,49 @@ export const useStudentData = (user?: any) => {
     return Array.from(best.values());
   }, [allSubjectsRaw, profile]);
 
+  const rawEnrollmentEntries = useMemo(() => {
+    if (Array.isArray(enrolledSubjects) && enrolledSubjects.length > 0) {
+      return enrolledSubjects;
+    }
+    if (Array.isArray(profile?.enrolled_subjects) && profile.enrolled_subjects.length > 0) {
+      return profile.enrolled_subjects;
+    }
+    return [];
+  }, [enrolledSubjects, profile?.enrolled_subjects]);
+
+  const resolvedEnrolledSubjects = useMemo(() => {
+    if (!Array.isArray(rawEnrollmentEntries) || rawEnrollmentEntries.length === 0) {
+      return [];
+    }
+
+    const subjectIdSet = new Set(subjects.map((subject) => subject.id));
+    const subjectByName = new Map(
+      subjects.map((subject) => [normalizeSubjectName(subject.name), subject.id] as const)
+    );
+
+    const resolved = new Set<string>();
+    for (const entry of rawEnrollmentEntries) {
+      const rawValue = typeof entry === 'string'
+        ? entry
+        : typeof entry === 'object' && entry !== null
+          ? String((entry as any).id || (entry as any).subject_id || (entry as any).name || '')
+          : '';
+      if (!rawValue) continue;
+
+      if (subjectIdSet.has(rawValue)) {
+        resolved.add(rawValue);
+        continue;
+      }
+
+      const matchedId = subjectByName.get(normalizeSubjectName(rawValue));
+      if (matchedId) {
+        resolved.add(matchedId);
+      }
+    }
+
+    return Array.from(resolved);
+  }, [rawEnrollmentEntries, subjects]);
+
 
 
   const handleEnroll = useCallback(async (subjectId: string, enrolled: boolean) => {
@@ -149,28 +210,12 @@ export const useStudentData = (user?: any) => {
       } else {
         await studentAPI.enrollSubject(subjectId);
       }
-      // Invalidate queries to trigger refetch
       queryClient.invalidateQueries({ queryKey: ['student', 'enrolled-subjects'] });
+      queryClient.invalidateQueries({ queryKey: ['student', 'profile'] });
+      queryClient.invalidateQueries({ queryKey: ['student', 'subjects'] });
     } catch (err: any) {
       throw err;
     }
-  }, [queryClient]);
-
-  const handleDeleteMaterial = useCallback(async (materialId: string) => {
-    await materialsAPI.delete(materialId);
-    queryClient.invalidateQueries({ queryKey: ['student', 'materials'] });
-  }, [queryClient]);
-
-  const handleUpload = useCallback(async (file: File, subject: string) => {
-    const result = await materialsAPI.upload({
-      title: file.name,
-      subject,
-      education_level: 'professional',
-      is_public: false,
-      file
-    });
-    queryClient.invalidateQueries({ queryKey: ['student', 'materials'] });
-    return result;
   }, [queryClient]);
 
   const handleJoinSession = useCallback(async (session: Session, onJoinSession?: (id: string, title: string) => void) => {
@@ -178,7 +223,7 @@ export const useStudentData = (user?: any) => {
     onJoinSession?.(session.id, session.title || 'Live Session');
   }, []);
 
-  const combinedLoading = isProfileLoading || isSubjectsLoading || isSessionsLoading || isLoadingManual;
+  const combinedLoading = isProfileLoading || isSubjectsLoading || isEnrolledLoading || isSessionsLoading || isLoadingManual;
   const combinedError = 
     (profileError as Error)?.message || 
     (subjectsError as Error)?.message || 
@@ -189,8 +234,7 @@ export const useStudentData = (user?: any) => {
     profile: profile || null,
     sessions,
     subjects,
-    enrolledSubjects,
-    materials,
+    enrolledSubjects: resolvedEnrolledSubjects,
     progress,
     analytics,
     brainPower,
@@ -201,9 +245,10 @@ export const useStudentData = (user?: any) => {
     refetchSessions,
     refetchBrainPower,
     handleEnroll,
-    handleDeleteMaterial,
-    handleUpload,
     handleJoinSession,
-    setProfile: (p: StudentProfile | null) => queryClient.setQueryData(['student', 'profile'], p)
+    setProfile: (p: StudentProfile | null) => {
+      queryClient.setQueryData(['student', 'profile', 'full'], p);
+      queryClient.setQueryData(['student', 'profile', 'summary'], p);
+    }
   };
 };

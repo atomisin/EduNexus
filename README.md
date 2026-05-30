@@ -7,15 +7,18 @@ The platform is built with FastAPI, SQLAlchemy async, PostgreSQL, React, TypeScr
 ## Core Capabilities
 
 - AI Tutor with lesson-aware teaching, guided prompts, mastery checks, speech support, and professional math/academic rendering.
+- Agentic tutor quality checks for heavier academic work, including teaching review, calculation verification, and response repair before learner display.
 - Curriculum-aware learning paths for primary, JSS, SS, exam-prep, and professional learners.
 - Lesson locking with placement checks for learners who want to jump ahead.
-- Practice quizzes, pre/post assessments, mastery quizzes, and performance analytics.
+- Practice quizzes, pre/post assessments, 10-question mastery quizzes, and performance analytics.
+- Mastery question safeguards that reject ambiguous repeated-digit place-value questions and duplicate correct number-word options.
 - Teacher live sessions with lesson prep, outlines, class notes, quizzes, take-home assignments, and student activity tracking.
 - Parent/guardian progress reports with charts, strengths, improvement areas, attendance, participation, and quiz performance.
-- Admin dashboard for user approval, AI usage/cost visibility, content oversight, and platform operations.
+- Admin dashboard for user approval, AI usage/cost visibility, custom-course governance, video-evidence review, and platform operations.
 - Email verification, admin approval, password reset, and secure cookie-based authentication.
+- Direct video recommendations with learner feedback capture for like/dislike quality signals.
 - Student and teacher profile management, including avatar uploads.
-- Mobile-first student, teacher, admin, registration, and legal document layouts.
+- Mobile-first student, teacher, admin, registration, and legal document layouts with lazy-loaded heavier admin panels.
 
 ## Repository Layout
 
@@ -118,6 +121,14 @@ Run a single Python file compile check after backend edits:
 ```bash
 python -m py_compile backend/app/api/v1/endpoints/auth.py
 ```
+
+## Quality And Performance Guardrails
+
+- The AI Tutor should teach with class-appropriate rigor, visible worked examples, and one clear next action per turn.
+- Structured calculation-heavy responses should be checked before display instead of relying on prompt wording alone.
+- Mastery and placement flows must be server-owned; the client should not be trusted to unlock lessons or mark mastery directly.
+- Student, teacher, and admin dashboards should avoid eager-loading heavyweight panels. Fetch expensive data only when the active workflow needs it.
+- Video recommendations should refresh by active subject and topic, and learner feedback should be persisted for future ranking signals.
 
 ## Authentication Flow
 

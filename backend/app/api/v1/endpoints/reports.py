@@ -34,10 +34,57 @@ async def get_my_reports(
     month: Optional[int] = Query(None),
     year: Optional[int] = Query(None),
     report_status: Optional[str] = Query(None),
+    summary: bool = Query(False),
     db: AsyncSession = Depends(get_async_db),
     current_user=Depends(require_teacher),
 ):
     """Get all reports for the current teacher"""
+    if summary:
+        stmt = (
+            select(
+                StudentReport.id,
+                StudentReport.student_id,
+                StudentReport.month,
+                StudentReport.year,
+                StudentReport.status,
+                StudentReport.teacher_notes,
+                StudentReport.created_at,
+                StudentReport.approved_at,
+                StudentReport.sent_at,
+                User.full_name,
+                StudentProfile.guardian_email,
+                StudentProfile.guardian_name,
+            )
+            .outerjoin(User, User.id == StudentReport.student_id)
+            .outerjoin(StudentProfile, StudentProfile.user_id == StudentReport.student_id)
+            .filter(StudentReport.teacher_id == current_user.id)
+        )
+        if month:
+            stmt = stmt.filter(StudentReport.month == month)
+        if year:
+            stmt = stmt.filter(StudentReport.year == year)
+        if report_status:
+            stmt = stmt.filter(StudentReport.status == report_status)
+
+        res_reports = await db.execute(stmt.order_by(StudentReport.created_at.desc()))
+        return [
+            {
+                "id": str(row.id),
+                "student_id": str(row.student_id),
+                "student_name": row.full_name or "Unknown",
+                "guardian_email": row.guardian_email,
+                "guardian_name": row.guardian_name,
+                "month": row.month,
+                "year": row.year,
+                "status": row.status,
+                "created_at": row.created_at,
+                "teacher_notes": row.teacher_notes,
+                "approved_at": row.approved_at,
+                "sent_at": row.sent_at,
+            }
+            for row in res_reports.all()
+        ]
+
     stmt = select(StudentReport).filter(StudentReport.teacher_id == current_user.id)
     if month:
         stmt = stmt.filter(StudentReport.month == month)

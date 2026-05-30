@@ -29,6 +29,7 @@ import os
 import tempfile
 import logging
 import io
+import uuid
 
 logger = logging.getLogger(__name__)
 
@@ -742,12 +743,15 @@ async def download_material(
     material, uploader = result
 
     # Check permissions
-    if current_user.role != UserRole.TEACHER and not material.is_public:
-        if current_user.id not in (material.allowed_students or []):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="You don't have permission to access this material",
-            )
+    if (
+        material.uploader_id != current_user.id
+        and not material.is_public
+        and current_user.id not in (material.allowed_students or [])
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have permission to access this material",
+        )
 
     # Increment download count
     material.download_count += 1

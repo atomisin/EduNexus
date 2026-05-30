@@ -29,6 +29,8 @@ export const NotificationBell = () => {
     const [unreadCount, setUnreadCount] = useState(0);
     const [sharedContent, setSharedContent] = useState<any>(null);
     const [contentDialogOpen, setContentDialogOpen] = useState(false);
+    const [isOpen, setIsOpen] = useState(false);
+    const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
 
     const loadNotifications = async () => {
         if (document.visibilityState === 'hidden') return;
@@ -37,20 +39,36 @@ export const NotificationBell = () => {
             const data = await notificationsAPI.getAll();
             setNotifications(data);
             setUnreadCount(data.filter((n: Notification) => !n.is_read).length);
+            setHasLoadedOnce(true);
         } catch (error) {
             // Notification polling should never interrupt the active learning flow.
         }
     };
 
     useEffect(() => {
-        loadNotifications();
-        const interval = setInterval(loadNotifications, 180000);
-        window.addEventListener('edunexus:notifications-refresh', loadNotifications);
-        return () => {
-            clearInterval(interval);
-            window.removeEventListener('edunexus:notifications-refresh', loadNotifications);
+        const handleRefresh = () => {
+            if (hasLoadedOnce || isOpen) {
+                loadNotifications();
+            }
         };
-    }, []);
+        const deferredLoad = window.setTimeout(() => {
+            loadNotifications();
+        }, 2500);
+        const interval = setInterval(handleRefresh, 180000);
+        window.addEventListener('edunexus:notifications-refresh', handleRefresh);
+        return () => {
+            clearTimeout(deferredLoad);
+            clearInterval(interval);
+            window.removeEventListener('edunexus:notifications-refresh', handleRefresh);
+        };
+    }, [hasLoadedOnce, isOpen]);
+
+    const handleOpenChange = (open: boolean) => {
+        setIsOpen(open);
+        if (open && !hasLoadedOnce) {
+            loadNotifications();
+        }
+    };
 
     const handleMarkAsRead = async (id: string) => {
         try {
@@ -112,7 +130,7 @@ export const NotificationBell = () => {
         : [];
 
     return (
-        <DropdownMenu>
+        <DropdownMenu open={isOpen} onOpenChange={handleOpenChange}>
             <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="relative rounded-full hover:bg-slate-100 dark:hover:bg-slate-800">
                     <Bell className="w-5 h-5 text-slate-600 dark:text-slate-400" />

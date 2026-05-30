@@ -5,12 +5,13 @@ Admins can manage all users (teachers and students) and set limits
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 
 from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import Optional, List, Any, Dict
 import uuid
 from datetime import datetime, timezone
+import json
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, or_
+from sqlalchemy import select, func, or_, text
 from app.db.database import get_async_db
 from app.api.v1.endpoints.auth import get_current_user
 from app.models.user import User, UserRole, UserStatus, TeacherStudent, TeacherProfile
@@ -77,6 +78,32 @@ class TeacherLimitUpdate(BaseModel):
     plan_type: Optional[str] = "basic"  # basic, premium, enterprise
 
 
+class CustomCourseReviewRequest(BaseModel):
+    action: str
+    admin_reason: Optional[str] = None
+    selected_suggestion: Optional[str] = None
+    clarification_message: Optional[str] = None
+    email_message: Optional[str] = None
+    send_email: Optional[bool] = False
+
+
+class CustomCourseRejectionDraftRequest(BaseModel):
+    admin_reason: str
+
+
+class VideoCreatorProfilePayload(BaseModel):
+    creator_name: str
+    channel_aliases: List[str] = Field(default_factory=list)
+    domains: List[str] = Field(default_factory=list)
+    topic_keywords: List[str] = Field(default_factory=list)
+    recommended_query_terms: List[str] = Field(default_factory=list)
+    community_evidence_count: int = 0
+    community_evidence_summary: Optional[str] = None
+    source_notes: Optional[str] = None
+    is_active: bool = True
+    sort_order: int = 0
+
+
 def require_admin(current_user: User = Depends(get_current_user)):
     """Dependency to ensure only admins can access these endpoints"""
     if current_user.role != UserRole.ADMIN:
@@ -85,6 +112,30 @@ def require_admin(current_user: User = Depends(get_current_user)):
             detail="Only administrators can access this resource"
         )
     return current_user
+
+
+def _json_list(value: Any) -> List[str]:
+    if isinstance(value, list):
+        return [str(item) for item in value if item]
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+            if isinstance(parsed, list):
+                return [str(item) for item in parsed if item]
+        except json.JSONDecodeError:
+            return [value] if value else []
+    return []
+
+
+def _report_number(value: Any) -> float:
+    try:
+        return float(value or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _report_dict(value: Any) -> Dict[str, Any]:
+    return value if isinstance(value, dict) else {}
 
 
 @router.get("/users", response_model=List[UserListResponse])
@@ -102,7 +153,29 @@ async def list_all_users(
     List all users in the system with filtering options
     Admins can view and filter teachers, students, and other admins
     """
-    stmt = select(User)
+    stmt = (
+        select(
+            User.id,
+            User.email,
+            User.username,
+            User.full_name,
+            User.role,
+            User.status,
+            User.is_active,
+            User.created_at,
+            User.last_login,
+            User.phone_number,
+            User.avatar_url,
+            User.email_verified_at,
+            StudentProfile.education_level,
+            StudentProfile.current_grade_level,
+            StudentProfile.grade_level,
+            StudentProfile.education_category,
+            StudentProfile.department,
+            StudentProfile.curriculum_type,
+        )
+        .outerjoin(StudentProfile, StudentProfile.user_id == User.id)
+    )
     
     # Apply filters
     if role:
@@ -131,34 +204,376 @@ async def list_all_users(
     
     # Pagination
     result = await db.execute(stmt.offset(skip).limit(limit))
-    users = result.scalars().all()
-    
-    # Resolve avatar URLs for each user
-    student_user_ids = [user.id for user in users if user.role == UserRole.STUDENT]
-    profile_map = {}
-    if student_user_ids:
-        profile_result = await db.execute(
-            select(StudentProfile).filter(StudentProfile.user_id.in_(student_user_ids))
+    users = []
+    for row in result.all():
+        role_value = row.role.value if hasattr(row.role, "value") else row.role
+        status_value = row.status.value if hasattr(row.status, "value") else row.status
+        class_level = (
+            row.current_grade_level
+            or row.grade_level
+            or row.education_level
+            or row.education_category
         )
-        profile_map = {profile.user_id: profile for profile in profile_result.scalars().all()}
+        users.append({
+            "id": row.id,
+            "email": row.email,
+            "username": row.username,
+            "full_name": row.full_name,
+            "role": role_value,
+            "status": status_value,
+            "is_active": row.is_active,
+            "created_at": row.created_at,
+            "last_login": row.last_login,
+            "phone_number": row.phone_number,
+            "avatar_url": storage_service.resolve_url(row.avatar_url),
+            "email_verified_at": row.email_verified_at,
+            "education_level": row.education_level,
+            "grade_level": row.current_grade_level or row.grade_level,
+            "class_level": class_level,
+            "department": row.department,
+            "curriculum_type": row.curriculum_type,
+        })
 
-    for user in users:
-        user.avatar_url = storage_service.resolve_url(user.avatar_url)
-        profile = profile_map.get(user.id)
-        if profile:
-            class_level = (
-                profile.current_grade_level
-                or profile.grade_level
-                or profile.education_level
-                or profile.education_category
-            )
-            user.education_level = profile.education_level
-            user.grade_level = profile.current_grade_level or profile.grade_level
-            user.class_level = class_level
-            user.department = profile.department
-            user.curriculum_type = profile.curriculum_type
-    
     return users
+
+
+@router.get("/custom-course-requests", response_model=List[dict])
+async def list_custom_course_requests(
+    include_completed: bool = Query(False),
+    db: AsyncSession = Depends(get_async_db),
+    current_user: User = Depends(require_admin),
+):
+    statuses_to_hide = {
+        "approved",
+        "rejected",
+        "suggested_existing_course",
+        "clarification_requested",
+        "completed",
+    }
+    stmt = text(
+        """
+        SELECT
+            c.id,
+            c.student_id,
+            c.requested_title,
+            c.normalized_title,
+            c.requested_description,
+            c.intended_outcome,
+            c.motivation,
+            c.status,
+            c.safety_status,
+            c.safety_flags,
+            c.suggested_courses,
+            c.safe_alternatives,
+            c.refined_admin_message,
+            c.admin_selected_suggestion,
+            c.approved_course_name,
+            c.created_at,
+            u.full_name AS student_name,
+            u.email AS student_email
+        FROM custom_course_requests c
+        LEFT JOIN users u ON u.id = c.student_id
+        ORDER BY c.created_at DESC
+        LIMIT 100
+        """
+    )
+    result = await db.execute(stmt)
+    requests = []
+    for row in result.mappings().all():
+        status_value = row["status"] or ""
+        if not include_completed and status_value in statuses_to_hide:
+            continue
+        requests.append(
+            {
+                "id": str(row["id"]),
+                "student_id": str(row["student_id"]),
+                "student_name": row["student_name"],
+                "student_email": row["student_email"],
+                "requested_title": row["requested_title"],
+                "normalized_title": row["normalized_title"],
+                "requested_description": row["requested_description"],
+                "intended_outcome": row["intended_outcome"],
+                "motivation": row["motivation"],
+                "status": status_value,
+                "safety_status": row["safety_status"] or "clear",
+                "safety_flags": _json_list(row["safety_flags"]),
+                "suggested_courses": _json_list(row["suggested_courses"]),
+                "safe_alternatives": _json_list(row["safe_alternatives"]),
+                "refined_admin_message": row["refined_admin_message"],
+                "admin_selected_suggestion": row["admin_selected_suggestion"],
+                "approved_course_name": row["approved_course_name"],
+                "created_at": row["created_at"].isoformat() if row["created_at"] else None,
+            }
+        )
+
+    return requests
+
+
+@router.post("/custom-course-requests/{request_id}/rejection-draft", response_model=dict)
+async def preview_custom_course_rejection_draft(
+    request_id: str,
+    payload: CustomCourseRejectionDraftRequest,
+    db: AsyncSession = Depends(get_async_db),
+    current_user: User = Depends(require_admin),
+):
+    try:
+        request_uuid = uuid.UUID(request_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid request ID format")
+
+    result = await db.execute(
+        text(
+            """
+            SELECT requested_title
+            FROM custom_course_requests
+            WHERE id = :request_id
+            """
+        ),
+        {"request_id": request_uuid},
+    )
+    row = result.mappings().first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Custom course request not found")
+
+    title = row["requested_title"]
+    draft = (
+        f"Thank you for requesting {title}. We cannot approve it in its current form because "
+        f"{payload.admin_reason.strip()} Please refine the learning goal or choose a safer, "
+        "more clearly educational course direction."
+    )
+    return {"draft": draft}
+
+
+@router.post("/custom-course-requests/{request_id}/review", response_model=dict)
+async def review_custom_course_request(
+    request_id: str,
+    payload: CustomCourseReviewRequest,
+    db: AsyncSession = Depends(get_async_db),
+    current_user: User = Depends(require_admin),
+):
+    try:
+        request_uuid = uuid.UUID(request_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid request ID format")
+
+    action = payload.action.strip().lower()
+    status_by_action = {
+        "approve": "approved",
+        "reject": "rejected",
+        "suggest_existing_course": "suggested_existing_course",
+        "request_clarification": "clarification_requested",
+    }
+    if action not in status_by_action:
+        raise HTTPException(status_code=400, detail="Unsupported review action")
+
+    selected_course = payload.selected_suggestion
+    admin_message = payload.email_message or payload.clarification_message
+    result = await db.execute(
+        text(
+            """
+            UPDATE custom_course_requests
+            SET
+                status = :status,
+                admin_decision = :action,
+                admin_reason = :admin_reason,
+                refined_admin_message = :admin_message,
+                admin_selected_suggestion = :selected_course,
+                approved_course_name = CASE WHEN :action = 'approve' THEN :selected_course ELSE approved_course_name END,
+                reviewed_by = :reviewed_by,
+                reviewed_at = CURRENT_TIMESTAMP,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = :request_id
+            RETURNING id
+            """
+        ),
+        {
+            "request_id": request_uuid,
+            "status": status_by_action[action],
+            "action": action,
+            "admin_reason": payload.admin_reason,
+            "admin_message": admin_message,
+            "selected_course": selected_course,
+            "reviewed_by": current_user.id,
+        },
+    )
+    if not result.mappings().first():
+        raise HTTPException(status_code=404, detail="Custom course request not found")
+
+    await db.commit()
+    return {"success": True, "status": status_by_action[action]}
+
+
+@router.get("/video-creator-profiles", response_model=List[dict])
+async def list_video_creator_profiles(
+    include_inactive: bool = Query(True),
+    db: AsyncSession = Depends(get_async_db),
+    current_user: User = Depends(require_admin),
+):
+    where_clause = "" if include_inactive else "WHERE is_active = TRUE"
+    result = await db.execute(
+        text(
+            f"""
+            SELECT
+                id,
+                creator_name,
+                channel_aliases,
+                domains,
+                topic_keywords,
+                recommended_query_terms,
+                community_evidence_count,
+                community_evidence_summary,
+                source_notes,
+                is_active,
+                sort_order
+            FROM video_creator_profiles
+            {where_clause}
+            ORDER BY sort_order ASC, creator_name ASC
+            """
+        )
+    )
+    return [
+        {
+            "id": str(row["id"]),
+            "creator_name": row["creator_name"],
+            "channel_aliases": _json_list(row["channel_aliases"]),
+            "domains": _json_list(row["domains"]),
+            "topic_keywords": _json_list(row["topic_keywords"]),
+            "recommended_query_terms": _json_list(row["recommended_query_terms"]),
+            "community_evidence_count": row["community_evidence_count"] or 0,
+            "community_evidence_summary": row["community_evidence_summary"],
+            "source_notes": row["source_notes"],
+            "is_active": bool(row["is_active"]),
+            "sort_order": row["sort_order"] or 0,
+        }
+        for row in result.mappings().all()
+    ]
+
+
+@router.post("/video-creator-profiles", response_model=dict)
+async def create_video_creator_profile(
+    payload: VideoCreatorProfilePayload,
+    db: AsyncSession = Depends(get_async_db),
+    current_user: User = Depends(require_admin),
+):
+    profile_id = uuid.uuid4()
+    await db.execute(
+        text(
+            """
+            INSERT INTO video_creator_profiles (
+                id,
+                creator_name,
+                channel_aliases,
+                domains,
+                topic_keywords,
+                recommended_query_terms,
+                community_evidence_count,
+                community_evidence_summary,
+                source_notes,
+                is_active,
+                sort_order,
+                created_at,
+                updated_at
+            )
+            VALUES (
+                :id,
+                :creator_name,
+                CAST(:channel_aliases AS jsonb),
+                CAST(:domains AS jsonb),
+                CAST(:topic_keywords AS jsonb),
+                CAST(:recommended_query_terms AS jsonb),
+                :community_evidence_count,
+                :community_evidence_summary,
+                :source_notes,
+                :is_active,
+                :sort_order,
+                CURRENT_TIMESTAMP,
+                CURRENT_TIMESTAMP
+            )
+            """
+        ),
+        {
+            "id": profile_id,
+            "creator_name": payload.creator_name.strip(),
+            "channel_aliases": json.dumps(payload.channel_aliases),
+            "domains": json.dumps(payload.domains),
+            "topic_keywords": json.dumps(payload.topic_keywords),
+            "recommended_query_terms": json.dumps(payload.recommended_query_terms),
+            "community_evidence_count": payload.community_evidence_count,
+            "community_evidence_summary": payload.community_evidence_summary,
+            "source_notes": payload.source_notes,
+            "is_active": payload.is_active,
+            "sort_order": payload.sort_order,
+        },
+    )
+    await db.commit()
+    return {"success": True, "id": str(profile_id)}
+
+
+@router.put("/video-creator-profiles/{profile_id}", response_model=dict)
+async def update_video_creator_profile(
+    profile_id: str,
+    payload: VideoCreatorProfilePayload,
+    db: AsyncSession = Depends(get_async_db),
+    current_user: User = Depends(require_admin),
+):
+    try:
+        profile_uuid = uuid.UUID(profile_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid profile ID format")
+
+    result = await db.execute(
+        text(
+            """
+            UPDATE video_creator_profiles
+            SET
+                creator_name = :creator_name,
+                channel_aliases = CAST(:channel_aliases AS jsonb),
+                domains = CAST(:domains AS jsonb),
+                topic_keywords = CAST(:topic_keywords AS jsonb),
+                recommended_query_terms = CAST(:recommended_query_terms AS jsonb),
+                community_evidence_count = :community_evidence_count,
+                community_evidence_summary = :community_evidence_summary,
+                source_notes = :source_notes,
+                is_active = :is_active,
+                sort_order = :sort_order,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = :id
+            RETURNING id
+            """
+        ),
+        {
+            "id": profile_uuid,
+            "creator_name": payload.creator_name.strip(),
+            "channel_aliases": json.dumps(payload.channel_aliases),
+            "domains": json.dumps(payload.domains),
+            "topic_keywords": json.dumps(payload.topic_keywords),
+            "recommended_query_terms": json.dumps(payload.recommended_query_terms),
+            "community_evidence_count": payload.community_evidence_count,
+            "community_evidence_summary": payload.community_evidence_summary,
+            "source_notes": payload.source_notes,
+            "is_active": payload.is_active,
+            "sort_order": payload.sort_order,
+        },
+    )
+    if not result.mappings().first():
+        raise HTTPException(status_code=404, detail="Video creator profile not found")
+
+    await db.commit()
+    return {"success": True, "id": profile_id}
+
+
+@router.post("/video-creator-profiles/seed", response_model=dict)
+async def seed_video_creator_profiles(
+    db: AsyncSession = Depends(get_async_db),
+    current_user: User = Depends(require_admin),
+):
+    result = await db.execute(text("SELECT COUNT(*) FROM video_creator_profiles"))
+    return {
+        "success": True,
+        "created": 0,
+        "existing": int(result.scalar() or 0),
+        "message": "Video creator evidence profiles are already managed from the database.",
+    }
 
 
 @router.get("/users/{user_id}", response_model=dict)
@@ -594,12 +1009,27 @@ async def list_teachers_with_limits(
     List all teachers with their student limits and current usage
     """
     active_student_count = func.count(TeacherStudent.id)
-    stmt = select(User, TeacherProfile, active_student_count.label("student_count")).join(
-        TeacherProfile, User.id == TeacherProfile.user_id
-    ).outerjoin(
-        TeacherStudent,
-        (TeacherStudent.teacher_id == User.id) & (TeacherStudent.status == "active"),
-    ).filter(User.role == UserRole.TEACHER)
+    stmt = (
+        select(
+            User.id.label("user_id"),
+            User.email,
+            User.full_name,
+            User.is_active,
+            User.created_at,
+            TeacherProfile.specialization,
+            TeacherProfile.years_of_experience,
+            TeacherProfile.is_verified_teacher,
+            TeacherProfile.plan_type,
+            TeacherProfile.max_students,
+            active_student_count.label("student_count"),
+        )
+        .join(TeacherProfile, User.id == TeacherProfile.user_id)
+        .outerjoin(
+            TeacherStudent,
+            (TeacherStudent.teacher_id == User.id) & (TeacherStudent.status == "active"),
+        )
+        .filter(User.role == UserRole.TEACHER)
+    )
     
     if plan_type:
         stmt = stmt.filter(TeacherProfile.plan_type == plan_type)
@@ -607,26 +1037,39 @@ async def list_teachers_with_limits(
     if is_verified is not None:
         stmt = stmt.filter(TeacherProfile.is_verified_teacher == is_verified)
     
-    stmt = stmt.group_by(User.id, TeacherProfile.id).order_by(User.created_at.desc())
+    stmt = stmt.group_by(
+        User.id,
+        User.email,
+        User.full_name,
+        User.is_active,
+        User.created_at,
+        TeacherProfile.id,
+        TeacherProfile.specialization,
+        TeacherProfile.years_of_experience,
+        TeacherProfile.is_verified_teacher,
+        TeacherProfile.plan_type,
+        TeacherProfile.max_students,
+    ).order_by(User.created_at.desc())
     
     exec_result = await db.execute(stmt)
     results = exec_result.all()
     
     teachers = []
-    for user, profile, student_count in results:
-        max_students = getattr(profile, 'max_students', 10)  # Default limit
-        plan = getattr(profile, 'plan_type', 'basic')
+    for row in results:
+        max_students = row.max_students or 10
+        plan = row.plan_type or "basic"
+        student_count = row.student_count or 0
         
         teachers.append({
-            "id": str(user.id),
-            "email": user.email,
-            "full_name": user.full_name,
-            "is_active": user.is_active,
-            "created_at": user.created_at.isoformat(),
+            "id": str(row.user_id),
+            "email": row.email,
+            "full_name": row.full_name,
+            "is_active": row.is_active,
+            "created_at": row.created_at.isoformat(),
             "teacher_profile": {
-                "specialization": profile.specialization,
-                "years_of_experience": profile.years_of_experience,
-                "is_verified_teacher": profile.is_verified_teacher,
+                "specialization": row.specialization,
+                "years_of_experience": row.years_of_experience,
+                "is_verified_teacher": row.is_verified_teacher,
                 "plan_type": plan,
                 "max_students": max_students,
                 "current_student_count": student_count,
@@ -764,6 +1207,147 @@ async def get_system_stats(
             {"plan": p.plan_type, "count": p.count} for p in plan_distribution
         ]
     }
+
+
+@router.get("/report-quality", response_model=dict)
+async def get_report_quality_overview(
+    limit_months: int = Query(6, ge=1, le=24),
+    db: AsyncSession = Depends(get_async_db),
+    current_user: User = Depends(require_admin),
+):
+    """
+    Summarize stored report evidence without loading full report/user ORM graphs.
+    """
+    result = await db.execute(
+        text(
+            """
+            SELECT
+                r.id,
+                r.month,
+                r.year,
+                r.report_data,
+                u.full_name AS teacher_name
+            FROM student_reports r
+            LEFT JOIN users u ON u.id = r.teacher_id
+            WHERE make_date(r.year, r.month, 1) >= (
+                date_trunc('month', CURRENT_DATE) - ((:limit_months - 1) * INTERVAL '1 month')
+            )
+            ORDER BY r.year DESC, r.month DESC
+            """
+        ),
+        {"limit_months": limit_months},
+    )
+
+    monthly: Dict[str, Dict[str, Any]] = {}
+    subjects: Dict[str, Dict[str, Any]] = {}
+    teachers: Dict[str, Dict[str, Any]] = {}
+    reports_analyzed = 0
+    total_validated = 0
+    total_fallback = 0
+
+    for row in result.mappings().all():
+        reports_analyzed += 1
+        data = _report_dict(row["report_data"])
+        quiz_perf = _report_dict(data.get("quiz_performance"))
+        quality_meta = _report_dict(data.get("assessment_quality"))
+
+        quiz_results = quiz_perf.get("quiz_results") if isinstance(quiz_perf.get("quiz_results"), list) else []
+        by_subject = quiz_perf.get("by_subject") if isinstance(quiz_perf.get("by_subject"), list) else []
+        validated = int(
+            _report_number(quality_meta.get("validated_assessments"))
+            or _report_number(data.get("validated_assessments"))
+            or _report_number(quiz_perf.get("total_quizzes"))
+            or len(quiz_results)
+        )
+        fallback = int(
+            _report_number(quality_meta.get("fallback_assessments"))
+            or _report_number(data.get("fallback_assessments"))
+        )
+
+        total_validated += validated
+        total_fallback += fallback
+
+        month_key = f"{int(row['year'])}-{int(row['month']):02d}"
+        month_bucket = monthly.setdefault(
+            month_key,
+            {
+                "month": month_key,
+                "reports": 0,
+                "validated_assessments": 0,
+                "fallback_assessments": 0,
+            },
+        )
+        month_bucket["reports"] += 1
+        month_bucket["validated_assessments"] += validated
+        month_bucket["fallback_assessments"] += fallback
+
+        teacher_name = row["teacher_name"] or "Unknown teacher"
+        teacher_bucket = teachers.setdefault(
+            teacher_name,
+            {
+                "teacher_name": teacher_name,
+                "reports": 0,
+                "validated_assessments": 0,
+                "fallback_assessments": 0,
+            },
+        )
+        teacher_bucket["reports"] += 1
+        teacher_bucket["validated_assessments"] += validated
+        teacher_bucket["fallback_assessments"] += fallback
+
+        for subject_item in by_subject:
+            subject_data = _report_dict(subject_item)
+            subject_name = subject_data.get("subject") or "General"
+            sessions = int(
+                _report_number(subject_data.get("sessions_count"))
+                or len(subject_data.get("sessions") if isinstance(subject_data.get("sessions"), list) else [])
+            )
+            subject_validated = sessions or (1 if _report_number(subject_data.get("post_score_avg")) > 0 else 0)
+            subject_fallback = int(_report_number(subject_data.get("fallback_assessments")))
+            subject_bucket = subjects.setdefault(
+                subject_name,
+                {
+                    "subject": subject_name,
+                    "sessions": 0,
+                    "validated_assessments": 0,
+                    "fallback_assessments": 0,
+                    "post_scores": [],
+                },
+            )
+            subject_bucket["sessions"] += sessions
+            subject_bucket["validated_assessments"] += subject_validated
+            subject_bucket["fallback_assessments"] += subject_fallback
+            post_score = _report_number(subject_data.get("post_score_avg"))
+            if post_score > 0:
+                subject_bucket["post_scores"].append(post_score)
+
+    denominator = total_validated + total_fallback
+    subject_rows = []
+    for item in subjects.values():
+        scores = item.pop("post_scores", [])
+        item["avg_post_score"] = round(sum(scores) / len(scores), 1) if scores else 0
+        subject_rows.append(item)
+
+    return {
+        "summary": {
+            "reports_analyzed": reports_analyzed,
+            "validated_assessments": total_validated,
+            "fallback_assessments": total_fallback,
+            "fallback_share_pct": round((total_fallback / denominator) * 100, 1) if denominator else 0,
+        },
+        "monthly_trend": sorted(monthly.values(), key=lambda item: item["month"]),
+        "subjects": sorted(
+            subject_rows,
+            key=lambda item: (item["fallback_assessments"], item["validated_assessments"]),
+            reverse=True,
+        )[:10],
+        "teachers": sorted(
+            teachers.values(),
+            key=lambda item: (item["fallback_assessments"], item["reports"]),
+            reverse=True,
+        )[:10],
+    }
+
 
 @router.get("/usage", response_model=dict)
 async def get_token_usage(
@@ -990,13 +1574,21 @@ async def list_admin_materials(
     subject: Optional[str] = Query(None),
     education_level: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
+    limit: int = Query(100, ge=1, le=500),
     db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(require_admin)
 ):
     """
     List materials with filtering
     """
-    stmt = select(Material)
+    stmt = select(
+        Material.id,
+        Material.title,
+        Material.subject,
+        Material.education_level,
+        Material.topic,
+        Material.created_at,
+    )
     if subject:
         stmt = stmt.filter(Material.subject == subject)
     if education_level:
@@ -1010,8 +1602,8 @@ async def list_admin_materials(
             )
         )
     
-    result = await db.execute(stmt.order_by(Material.created_at.desc()))
-    materials = result.scalars().all()
+    result = await db.execute(stmt.order_by(Material.created_at.desc()).limit(limit))
+    materials = result.all()
     
     return [
         {

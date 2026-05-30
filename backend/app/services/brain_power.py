@@ -44,10 +44,16 @@ def ensure_daily_brain_power(profile: Any) -> bool:
 
 def daily_token_budget_for_level(education_level: str | None = None) -> int:
     level = (education_level or "").strip().lower()
+    if level in {"creche", "nursery", "pre_primary", "pre-primary", "kg", "kindergarten"}:
+        return 40_000
+    if level in {"primary", "primary_school", "basic_primary"} or level.startswith("primary"):
+        return 80_000
     if level == "professional":
-        return 200_000
+        return 300_000
     if level in {"ss_1", "ss_2", "ss_3", "waec", "neco", "jamb"} or level.startswith("ss"):
-        return 150_000
+        if level in {"waec", "neco", "jamb"}:
+            return 220_000
+        return 160_000
     if level in {"jss_1", "jss_2", "jss_3"} or level.startswith("jss"):
         return 120_000
     return DAILY_TOKEN_BUDGET

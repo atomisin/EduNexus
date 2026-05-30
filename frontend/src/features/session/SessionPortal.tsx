@@ -16,6 +16,9 @@ interface SessionPortalProps {
   sessionId: string;
   title: string;
   isTeacher: boolean;
+  initialToken?: string | null;
+  initialRoomName?: string;
+  initialSessionData?: any;
   onClose: () => void;
 }
 
@@ -23,36 +26,81 @@ export const SessionPortal = ({
   sessionId,
   title,
   isTeacher,
+  initialToken,
+  initialRoomName,
+  initialSessionData,
   onClose
 }: SessionPortalProps) => {
   const { user } = useAuth();
   const [stage, setStage] = useState<'loading' | 'pre-quiz' | 'live' | 'post-quiz' | 'completed'>('loading');
-  const [sessionData, setSessionData] = useState<any>(null);
-  const [livekitToken, setLivekitToken] = useState<string | null>(null);
-  const [roomName, setRoomName] = useState<string>('');
+  const [sessionData, setSessionData] = useState<any>(initialSessionData ?? null);
+  const [livekitToken, setLivekitToken] = useState<string | null>(initialToken ?? null);
+  const [roomName, setRoomName] = useState<string>(initialRoomName ?? '');
   const [quizResults, setQuizResults] = useState<any>(null);
   const [quizLoading, setQuizLoading] = useState(false);
   const [isTheaterMode, setIsTheaterMode] = useState(false);
+
+  const normalizeQuiz = (quiz: any) => {
+    if (!quiz) return null;
+    const questions = Array.isArray(quiz.questions) ? quiz.questions : [];
+    return {
+      ...quiz,
+      questions: questions.map((question: any, index: number) => ({
+        ...question,
+        id: question?.id ?? index + 1,
+        question: question?.question || question?.text || question?.prompt || '',
+        correct_answer: question?.correct_answer ?? (
+          typeof question?.correct_index === 'number' ? String.fromCharCode(65 + question.correct_index) : undefined
+        ),
+      })),
+    };
+  };
+
+  const preQuiz = normalizeQuiz(sessionData?.pre_session_quiz);
+  const postQuiz = normalizeQuiz(sessionData?.post_session_quiz);
+  const preQuizReady = Boolean(preQuiz?.status === 'ready' && preQuiz?.questions?.length);
+  const postQuizReady = Boolean(postQuiz?.status === 'ready' && postQuiz?.questions?.length);
+
+  const refreshSessionState = async () => {
+    const sessionResponse = await sessionAPI.get(sessionId, { lite: !isTeacher });
+    const session = sessionResponse.session || sessionResponse;
+    setSessionData(session);
+    return session;
+  };
 
   useEffect(() => {
     const initSession = async () => {
       try {
         setStage('loading');
-        // Fetch session details - API returns {success, session, ...}
-        const sessionResponse = await sessionAPI.get(sessionId);
-        const session = sessionResponse.session || sessionResponse;
-        setSessionData(session);
+        let session = initialSessionData ?? null;
 
-        // Fetch LiveKit token
-        const tokenData = await sessionAPI.getToken(sessionId);
-        setLivekitToken(tokenData.token);
-        setRoomName(tokenData.room_name || `edunexus-session-${sessionId}`);
+        if (isTeacher) {
+          const [sessionResponse, tokenData] = await Promise.all([
+            refreshSessionState(),
+            sessionAPI.getToken(sessionId),
+          ]);
+          session = sessionResponse;
+          setLivekitToken(tokenData.token);
+          setRoomName(tokenData.room_name || `edunexus-session-${sessionId}`);
+        } else if (!session || !initialToken) {
+          const joinResponse = await sessionAPI.join(sessionId);
+          session = joinResponse.session || joinResponse;
+          setSessionData(session);
+          setLivekitToken(joinResponse.livekit_token || null);
+          setRoomName(joinResponse.livekit_room_name || session?.livekit_room_name || `edunexus-session-${sessionId}`);
+        } else {
+          setSessionData(session);
+          setLivekitToken(initialToken);
+          setRoomName(initialRoomName || session?.livekit_room_name || `edunexus-session-${sessionId}`);
+        }
 
         // Determine starting stage
         if (session.status === 'live') {
           setStage('live');
         } else if (session.status === 'upcoming' || session.status === 'scheduled') {
           setStage('pre-quiz');
+        } else if (session.status === 'ended' && Boolean((session.post_session_quiz?.questions || []).length)) {
+          setStage('post-quiz');
         } else {
           setStage('completed');
         }
@@ -69,7 +117,16 @@ export const SessionPortal = ({
     try {
       const type = stage === 'pre-quiz' ? 'pre' : 'post';
       if (!user) throw new Error("Not logged in");
-      const response = await sessionAPI.submitQuiz(sessionId, user.id, type, answers);
+      const apiAnswers = Object.fromEntries(
+        Object.entries(answers).map(([questionId, selected]) => {
+          const parsedQuestionId = Number(questionId);
+          const selectedIndex = /^[A-D]$/i.test(selected)
+            ? selected.toUpperCase().charCodeAt(0) - 65
+            : Number(selected);
+          return [parsedQuestionId, Number.isFinite(selectedIndex) ? selectedIndex : 0];
+        })
+      );
+      const response = await sessionAPI.submitQuiz(sessionId, user.id, type, apiAnswers);
       setQuizResults(response.result || response);
       toast.success(`${type === 'pre' ? 'Pre' : 'Post'}-session quiz completed!`);
 
@@ -98,14 +155,14 @@ export const SessionPortal = ({
   return (
     <div className={`fixed inset-0 z-50 bg-slate-100 dark:bg-slate-950 flex flex-col overflow-hidden transition-all duration-300 ${isTheaterMode || stage === 'live' ? 'p-0' : 'p-2 md:p-4'}`}>
       <div className={`w-full min-w-0 mx-auto flex-1 flex flex-col min-h-0 transition-all duration-300 ${isTheaterMode ? 'max-w-none' : 'max-w-[1400px]'}`}>
-        {stage === 'pre-quiz' && sessionData?.pre_session_quiz && (
+        {stage === 'pre-quiz' && preQuizReady && (
           <div className="flex-1 flex min-w-0 items-center justify-center px-3 py-6 sm:py-8">
             <div className="max-w-2xl w-full min-w-0">
               <h2 className="text-lg sm:text-2xl font-bold text-center mb-5 sm:mb-8 text-slate-900 dark:text-slate-100 italic">
                 Wait! Let's refresh some concepts before we start...
               </h2>
               <QuizView
-                quiz={sessionData.pre_session_quiz}
+                quiz={preQuiz}
                 onComplete={handleQuizComplete}
                 isLoading={quizLoading}
                 results={quizResults}
@@ -122,11 +179,24 @@ export const SessionPortal = ({
             roomName={roomName}
             serverUrl={import.meta.env.VITE_LIVEKIT_URL || "ws://localhost:7880"}
             onDisconnect={() => {
-              if (isTeacher) {
-                setStage('post-quiz');
-              } else {
-                onClose();
-              }
+              (async () => {
+                try {
+                  const refreshedSession = await refreshSessionState();
+                  const refreshedPostQuiz = normalizeQuiz(refreshedSession?.post_session_quiz);
+                  if (refreshedSession?.status === 'ended' && refreshedPostQuiz?.questions?.length) {
+                    setQuizResults(null);
+                    setStage('post-quiz');
+                    return;
+                  }
+                } catch (error) {
+                  console.error('Failed to refresh session after live room disconnect:', error);
+                }
+                if (isTeacher) {
+                  setStage('completed');
+                } else {
+                  onClose();
+                }
+              })();
             }}
             title={title}
             isTeacher={isTeacher}
@@ -135,14 +205,14 @@ export const SessionPortal = ({
           />
         )}
 
-        {stage === 'post-quiz' && sessionData?.post_session_quiz && (
+        {stage === 'post-quiz' && postQuizReady && (
           <div className="flex-1 flex min-w-0 items-center justify-center px-3 py-6 sm:py-8">
             <div className="max-w-2xl w-full min-w-0">
               <h2 className="text-lg sm:text-2xl font-bold text-center mb-5 sm:mb-8 text-slate-900 dark:text-slate-100 italic">
                 Session Complete! Let's see what you've learned...
               </h2>
               <QuizView
-                quiz={sessionData.post_session_quiz}
+                quiz={postQuiz}
                 onComplete={handleQuizComplete}
                 isLoading={quizLoading}
                 results={quizResults}
@@ -166,12 +236,12 @@ export const SessionPortal = ({
         )}
 
         {/* Fallback if quiz is missing but stage is quiz */}
-        {(stage === 'pre-quiz' && !sessionData?.pre_session_quiz) && (
+        {(stage === 'pre-quiz' && !preQuizReady) && (
           <div className="flex-1 flex items-center justify-center">
             <Button onClick={() => setStage('live')} className="btn-primary rounded-xl">Skip Intro & Start Session</Button>
           </div>
         )}
-        {(stage === 'post-quiz' && !sessionData?.post_session_quiz) && (
+        {(stage === 'post-quiz' && !postQuizReady) && (
           <div className="flex-1 flex items-center justify-center">
             <Button onClick={() => setStage('completed')} className="btn-primary rounded-xl">Finish Session</Button>
           </div>

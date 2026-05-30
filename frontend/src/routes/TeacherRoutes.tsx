@@ -46,8 +46,8 @@ export const TeacherRoutes: React.FC<TeacherRoutesProps> = ({
                   setActiveSession({ id, title, isTeacher: true });
                   navigate(`/session/${id}`);
                 }
-              } catch (error) {
-                toast.error('Failed to start session. Please try again.');
+              } catch (error: any) {
+                toast.error(error?.message || 'Failed to start session. Please try again.');
               }
             }}
           />

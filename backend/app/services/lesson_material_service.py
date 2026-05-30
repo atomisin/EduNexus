@@ -8,6 +8,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.subject import Subject, Topic
 from app.models.subject_outline import SubjectOutline
+from app.services.academic_agent_service import (
+    CURRICULUM_VALIDATOR_AGENT,
+    MATERIAL_COMPOSER_AGENT,
+    review_structured_academic_output,
+)
 from app.services.llm_service import llm_service
 
 logger = logging.getLogger(__name__)
@@ -188,6 +193,7 @@ def _fallback_material(subject: Subject, topic: Topic, education_level: str) -> 
     description = _text(topic.description)
     outcomes = _list(getattr(topic, "learning_outcomes", None), limit=5)
     assignment_tasks = _assignment_fallback_tasks(subject_name, topic_name)
+    is_professional = _text(education_level).lower() == "professional"
     goal = outcomes[0] if outcomes else f"Teach {topic_name} clearly for {education_level} learners."
     outline = [
         f"Open with the lesson goal: {goal}",
@@ -197,7 +203,7 @@ def _fallback_material(subject: Subject, topic: Topic, education_level: str) -> 
         "Close with a summary and take-home task.",
     ]
     note_body = description or f"{topic_name} is studied in {subject_name}. The class should focus on the main idea, correct vocabulary, one worked example, guided practice, and a short recap."
-    return {
+    material = {
         "outline": outline,
         "class_note": {
             "title": f"{subject_name}: {topic_name}",
@@ -225,6 +231,22 @@ def _fallback_material(subject: Subject, topic: Topic, education_level: str) -> 
         "video_search_terms": [f"{subject_name} {topic_name} {education_level}"],
         "version": 1,
     }
+    if is_professional:
+        material["teacher_tips"].extend(
+            [
+                "Frame the lesson with a realistic workplace scenario from the course context.",
+                "Ask learners to produce one small professional artifact and one quality check.",
+            ]
+        )
+        material["assignment"]["tasks"] = (
+            assignment_tasks[:3]
+            + [
+                f"Work-ready task: create a brief, checklist, plan, review note, calculation, or decision record that applies {topic_name} to a realistic workplace scenario.",
+                "Quality check: state one constraint, risk, standard, stakeholder need, or trade-off that affects your work.",
+                "Reflection: write one sentence explaining how you would improve the deliverable before using it professionally.",
+            ]
+        )[:6]
+    return material
 
 
 def normalize_lesson_material(raw: Any, subject: Subject, topic: Topic, education_level: str) -> Dict[str, Any]:
@@ -266,6 +288,8 @@ async def _generate_material(
     prompt = f"""
 Create shared EduNexus teacher preparation material.
 
+Role: {MATERIAL_COMPOSER_AGENT}
+
 This material is for a teacher before a live class starts. It must be rich, class-level appropriate, and reusable by every teacher teaching the same class/subject/topic.
 
 Subject: {subject.name}
@@ -289,6 +313,7 @@ Rules:
 - The class_note must be deep enough for the education level, not a shallow introduction.
 - The class_note must be well structured Markdown: use headings, short paragraphs, bullet lists, and numbered steps where helpful. Do not return one long paragraph.
 - For Mathematics, Physics, Chemistry, Accounting, and other technical subjects, include worked-example style content and correct notation.
+- For professional courses, build work-ready practice without hardcoding one job or tool: use a realistic scenario, practical deliverable, constraints/trade-offs, and a quality check that fit the active subject and topic.
 - The assignment must be progressive because the whole lesson may span multiple live sessions: 4-6 tasks moving from today's covered part, to practice, application, continuity notes, and optional stretch/prep for the next class.
 - For technical subjects, assignment tasks must require calculations, procedures, worked steps, diagrams, data interpretation, or problem solving as appropriate. Do not return a vague task such as "find the remainder of each number" without the actual questions.
 - Include a continuity task asking the learner to note where the class stopped and what should be clarified next time.
@@ -304,7 +329,33 @@ Rules:
         format="json_object",
         user_id=user_id,
     )
-    return normalize_lesson_material(response, subject, topic, education_level)
+    material = normalize_lesson_material(response, subject, topic, education_level)
+    review = await review_structured_academic_output(
+        agent_name=CURRICULUM_VALIDATOR_AGENT,
+        output_kind="class note and assignment material",
+        output=material,
+        context={
+            "subject": subject.name,
+            "education_level": education_level,
+            "topic": topic.name,
+            "topic_description": _text(topic.description, ""),
+            "learning_outcomes": _list(getattr(topic, "learning_outcomes", None), limit=8),
+        },
+        review_focus=[
+            "class-level academic depth",
+            "topic boundary alignment",
+            "assignment progression continuity",
+            "pop quiz answer-key consistency",
+            "student-note clarity and formatting",
+            "professional deliverable and quality check" if education_level.lower() == "professional" else "age-appropriate practice",
+        ],
+        user_id=user_id,
+        max_tokens=1800,
+    )
+    revised = review.get("revised_output")
+    if isinstance(revised, dict):
+        return normalize_lesson_material(revised, subject, topic, education_level)
+    return material
 
 
 async def get_or_create_shared_lesson_material(

@@ -209,7 +209,7 @@ class AIConfigModel(BaseModel):
     llm_enabled: bool = True
     tts_enabled: bool = False
     stt_enabled: bool = False
-    llm_model: str = settings.GROQ_MODEL or "llama-3.3-70b-versatile"
+    llm_model: str = settings.GROQ_MODEL or "meta-llama/llama-4-scout-17b-16e-instruct"
     tts_voice: str = "default"
     stt_model: str = "base"
     auto_explain: bool = True

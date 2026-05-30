@@ -21,15 +21,34 @@ async def get_notifications(
 ):
     """Get notifications for the current user"""
     stmt = (
-        select(Notification)
+        select(
+            Notification.id,
+            Notification.user_id,
+            Notification.type,
+            Notification.title,
+            Notification.message,
+            Notification.link,
+            Notification.is_read,
+            Notification.created_at,
+        )
         .filter(Notification.user_id == current_user.id)
         .order_by(Notification.created_at.desc())
         .limit(limit)
     )
     res = await db.execute(stmt)
-    notifications = res.scalars().all()
-    
-    return [n.to_dict() for n in notifications]
+    return [
+        {
+            "id": str(row.id),
+            "user_id": str(row.user_id),
+            "type": row.type,
+            "title": row.title,
+            "message": row.message,
+            "link": row.link,
+            "is_read": row.is_read,
+            "created_at": row.created_at.isoformat(),
+        }
+        for row in res.all()
+    ]
 
 @router.post("/{notification_id}/read")
 async def mark_notification_read(

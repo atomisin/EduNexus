@@ -16,7 +16,35 @@ import { Activity, BarChart2, Users, Sparkles } from 'lucide-react';
 interface SessionMetricsProps {
     engagementTimeline: any[];
     studentPresence: Record<string, any>;
-    quizResults?: { correct: number; total: number; responses: any[] } | null;
+    quizResults?: {
+        title?: string;
+        totalQuestions: number;
+        submissions: Array<{
+            studentId: string;
+            studentName: string;
+            score: number;
+            correct: number;
+            total: number;
+            submittedAt?: string | null;
+            details: any[];
+        }>;
+        questionBreakdown: Array<{
+            questionNumber: number;
+            question: string;
+            options: string[];
+            correctIndex: number;
+            correctChoice: string;
+            responses: Array<{
+                studentId: string;
+                studentName: string;
+                selectedIndex: number | null;
+                selectedChoice: string;
+                correctIndex: number;
+                correctChoice: string;
+                isCorrect: boolean;
+            }>;
+        }>;
+    } | null;
     className?: string;
 }
 
@@ -65,57 +93,92 @@ export const SessionMetrics: React.FC<SessionMetricsProps> = ({
         <div className={`min-w-0 space-y-4 ${className}`}>
             {/* Quick Stats */}
             <div className="grid min-w-0 grid-cols-3 gap-2">
-                <Card className="bg-slate-900/50 border-slate-800">
+                <Card className="border-border bg-background shadow-none">
                     <CardContent className="p-2.5 sm:p-3 flex min-w-0 flex-col gap-2">
-                        <div className="w-8 h-8 rounded-lg bg-teal-500/15 flex items-center justify-center">
-                            <Users className="w-4 h-4 text-teal-300" />
+                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+                            <Users className="w-4 h-4 text-primary" />
                         </div>
                         <div>
-                            <p className="truncate text-[9px] uppercase tracking-wide text-slate-400 sm:text-[10px]">Attendance</p>
-                            <p className="text-lg font-bold">{stats.activeStudents}/{stats.totalStudents}</p>
+                            <p className="truncate text-[9px] uppercase tracking-wide text-muted-foreground sm:text-[10px]">Attendance</p>
+                            <p className="text-lg font-semibold text-foreground">{stats.activeStudents}/{stats.totalStudents}</p>
                         </div>
                     </CardContent>
                 </Card>
-                <Card className="bg-slate-900/50 border-slate-800">
+                <Card className="border-border bg-background shadow-none">
                     <CardContent className="p-2.5 sm:p-3 flex min-w-0 flex-col gap-2">
-                        <div className="w-8 h-8 rounded-lg bg-emerald-500/15 flex items-center justify-center">
-                            <Activity className="w-4 h-4 text-emerald-300" />
+                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10">
+                            <Activity className="w-4 h-4 text-emerald-600" />
                         </div>
                         <div>
-                            <p className="truncate text-[9px] uppercase tracking-wide text-slate-400 sm:text-[10px]">Attention</p>
-                            <p className="text-lg font-bold">{stats.avgAttention}%</p>
+                            <p className="truncate text-[9px] uppercase tracking-wide text-muted-foreground sm:text-[10px]">Attention</p>
+                            <p className="text-lg font-semibold text-foreground">{stats.avgAttention}%</p>
                         </div>
                     </CardContent>
                 </Card>
-                <Card className="bg-slate-900/50 border-slate-800">
+                <Card className="border-border bg-background shadow-none">
                     <CardContent className="p-2.5 sm:p-3 flex min-w-0 flex-col gap-2">
-                        <div className="w-8 h-8 rounded-lg bg-amber-500/15 flex items-center justify-center">
-                            <Sparkles className="w-4 h-4 text-amber-300" />
+                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500/10">
+                            <Sparkles className="w-4 h-4 text-amber-600" />
                         </div>
                         <div>
-                            <p className="truncate text-[9px] uppercase tracking-wide text-slate-400 sm:text-[10px]">Quiz</p>
-                            <p className="text-lg font-bold truncate">
-                                {quizResults ? `${quizResults.correct}/${quizResults.total}` : 'No Quiz'}
+                            <p className="truncate text-[9px] uppercase tracking-wide text-muted-foreground sm:text-[10px]">Quiz</p>
+                            <p className="truncate text-lg font-semibold text-foreground">
+                                {quizResults ? `${quizResults.submissions.length} submitted` : 'No Quiz'}
                             </p>
                         </div>
                     </CardContent>
                 </Card>
             </div>
 
-            {quizResults && quizResults.responses.length > 0 && (
-                <Card className="bg-slate-900/50 border-slate-800">
+            {quizResults && quizResults.questionBreakdown.length > 0 && (
+                <Card className="border-border bg-background shadow-none">
                     <CardHeader className="pb-2">
                         <CardTitle className="text-sm font-medium flex items-center gap-2">
-                            <Sparkles className="w-4 h-4 text-emerald-400" />
-                            Live Pop Quiz Results
+                            <Sparkles className="w-4 h-4 text-primary" />
+                            {quizResults.title || 'Live Pop Quiz'}
                         </CardTitle>
                     </CardHeader>
-                    <CardContent>
-                        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-                            {quizResults.responses.map((res: any, idx: number) => (
-                                <div key={idx} className={`p-2 rounded-lg border flex flex-col items-center gap-1 ${res.isCorrect ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-rose-500/10 border-rose-500/20'}`}>
-                                    <span className="text-xs font-medium truncate w-full text-center">{res.studentName}</span>
-                                    <span className={`text-sm font-bold ${res.isCorrect ? 'text-emerald-400' : 'text-rose-400'}`}>{res.choice}</span>
+                    <CardContent className="space-y-4">
+                        {quizResults.submissions.length > 0 && (
+                            <div className="grid gap-2 sm:grid-cols-2">
+                                {quizResults.submissions.map((submission) => (
+                                    <div key={submission.studentId} className="rounded-lg border border-border bg-subtle p-3">
+                                        <div className="flex items-center justify-between gap-2">
+                                            <span className="truncate text-sm font-semibold text-foreground">{submission.studentName}</span>
+                                            <span className="text-xs font-medium text-muted-foreground">
+                                                {Math.round(submission.score)}% · {submission.correct}/{submission.total}
+                                            </span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                        <div className="space-y-3">
+                            {quizResults.questionBreakdown.map((item) => (
+                                <div key={item.questionNumber} className="rounded-lg border border-border bg-subtle p-3">
+                                    <p className="text-xs font-semibold uppercase tracking-wide text-primary">
+                                        Question {item.questionNumber} · Correct answer {item.correctChoice}
+                                    </p>
+                                    <p className="mt-1 text-sm font-medium text-foreground">{item.question}</p>
+                                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                                        {item.responses.map((response) => (
+                                            <div
+                                                key={`${item.questionNumber}-${response.studentId}`}
+                                                className={`rounded-lg border p-2 text-xs ${
+                                                    response.isCorrect
+                                                        ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                                                        : 'border-rose-200 bg-rose-50 text-rose-800'
+                                                }`}
+                                            >
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <span className="truncate font-semibold">{response.studentName}</span>
+                                                    <span className="font-bold">
+                                                        {response.selectedChoice}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
                             ))}
                         </div>
@@ -125,17 +188,17 @@ export const SessionMetrics: React.FC<SessionMetricsProps> = ({
 
             <div className="grid min-w-0 gap-4 lg:grid-cols-2 lg:gap-6">
                 {/* Attention Timeline */}
-                <Card className="bg-slate-900/50 border-slate-800">
+                <Card className="border-border bg-background shadow-none">
                     <CardHeader className="pb-2">
                         <CardTitle className="text-sm font-medium flex items-center gap-2">
-                            <Activity className="w-4 h-4 text-teal-300" />
+                            <Activity className="w-4 h-4 text-primary" />
                             Engagement Timeline
                         </CardTitle>
                     </CardHeader>
                     <CardContent className="h-64">
                         <ResponsiveContainer width="100%" height="100%">
                             <LineChart data={timelineData}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
                                 <XAxis
                                     dataKey="time"
                                     stroke="#64748b"
@@ -151,13 +214,13 @@ export const SessionMetrics: React.FC<SessionMetricsProps> = ({
                                     domain={[0, 100]}
                                 />
                                 <Tooltip
-                                    contentStyle={{ backgroundColor: '#0f172a', border: 'none', borderRadius: '8px', fontSize: '12px' }}
-                                    itemStyle={{ color: '#cbd5e1' }}
+                                    contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '12px' }}
+                                    itemStyle={{ color: '#334155' }}
                                 />
                                 <Line
                                     type="monotone"
                                     dataKey="attention"
-                                    stroke="#14b8a6"
+                                    stroke="#c67b2b"
                                     strokeWidth={3}
                                     dot={false}
                                     animationDuration={1000}
@@ -168,17 +231,17 @@ export const SessionMetrics: React.FC<SessionMetricsProps> = ({
                 </Card>
 
                 {/* Participation Comparison */}
-                <Card className="bg-slate-900/50 border-slate-800">
+                <Card className="border-border bg-background shadow-none">
                     <CardHeader className="pb-2">
                         <CardTitle className="text-sm font-medium flex items-center gap-2">
-                            <BarChart2 className="w-4 h-4 text-amber-400" />
+                            <BarChart2 className="w-4 h-4 text-amber-600" />
                             Top Participants
                         </CardTitle>
                     </CardHeader>
                     <CardContent className="h-64">
                         <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={participationData} layout="vertical">
-                                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" horizontal={false} />
+                                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
                                 <XAxis type="number" hide />
                                 <YAxis
                                     dataKey="name"
@@ -190,11 +253,11 @@ export const SessionMetrics: React.FC<SessionMetricsProps> = ({
                                     axisLine={false}
                                 />
                                 <Tooltip
-                                    contentStyle={{ backgroundColor: '#0f172a', border: 'none', borderRadius: '8px', fontSize: '12px' }}
+                                    contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '12px' }}
                                 />
                                 <Bar
                                     dataKey="participation"
-                                    fill="#f59e0b"
+                                    fill="#c67b2b"
                                     radius={[0, 4, 4, 0]}
                                     barSize={20}
                                 />

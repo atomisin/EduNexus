@@ -1,16 +1,26 @@
 const COMMON_SPOKEN_TERMS: Record<string, string> = {
   H2O: 'water',
+  'H_{2}O': 'water',
   CO2: 'carbon dioxide',
+  'CO_{2}': 'carbon dioxide',
   O2: 'oxygen',
+  'O_{2}': 'oxygen',
   N2: 'nitrogen',
+  'N_{2}': 'nitrogen',
   H2: 'hydrogen',
+  'H_{2}': 'hydrogen',
   NH3: 'ammonia',
+  'NH_{3}': 'ammonia',
   CH4: 'methane',
+  'CH_{4}': 'methane',
   HCl: 'hydrochloric acid',
   NaCl: 'sodium chloride',
   CaCO3: 'calcium carbonate',
+  'CaCO_{3}': 'calcium carbonate',
   H2SO4: 'sulfuric acid',
+  'H_{2}SO_{4}': 'sulfuric acid',
   HNO3: 'nitric acid',
+  'HNO_{3}': 'nitric acid',
   NaOH: 'sodium hydroxide',
 };
 
@@ -28,7 +38,12 @@ const looksLikeMath = (value: string) =>
 const normalizeMathOperators = (expression: string) =>
   expression
     .replace(/\u00d7/g, '\\times')
-    .replace(/\blog\s*([0-9]+|[A-Za-z])\s*\(([^()]+)\)/g, (_match, base, argument) => `\\log_{${base}}\\left(${argument.trim()}\\right)`)
+    .replace(/=\s*\\frac/g, '= \\frac')
+    .replace(/\}\s*=/g, '} =')
+    .replace(/\\log_\{([^}]+)\}\s*\(([^()]+)\)/g, (_match, base, argument) => `\\log_{${base}}(${argument.trim()})`)
+    .replace(/\\log\s*\(([^()]+)\)/g, (_match, argument) => `\\log(${argument.trim()})`)
+    .replace(/\\log\\\(\s*([^()\\\n]+(?:\([^()\n]*\)[^()\\\n]*)?)\s*\\\)/g, (_match, argument) => `\\log(${argument.trim()})`)
+    .replace(/\blog\s*([0-9]+|[A-Za-z])\s*\(([^()]+)\)/g, (_match, base, argument) => `\\log_{${base}}(${argument.trim()})`)
     .replace(/\b(-?\d+)\s*\/\s*(-?\d+)\b/g, (_match, numerator, denominator) => `\\frac{${numerator}}{${denominator}}`)
     .replace(/\b10\^(-?\d+)\b/g, (_match, exponent) => `10^{${exponent}}`)
     .replace(/\b(\d+(?:\.\d+)?)\^(-?\d+)\b/g, (_match, base, exponent) => `${base}^{${exponent}}`)
@@ -47,6 +62,43 @@ const isInsideDelimitedMath = (text: string, offset: number) => {
 const wrapInlineMathIfNeeded = (expression: string, fullText: string, offset: number) =>
   isInsideDelimitedMath(fullText, offset) ? normalizeMathOperators(expression.trim()) : wrapInlineMath(expression);
 
+const normalizeBrokenFormulaLayouts = (value: string) =>
+  value
+    .replace(/\n\s*([A-Za-z])\s*\n\s*\1\b/g, (_match, variable) => wrapInlineMath(variable))
+    .replace(
+      /(^|[:\n])\s*a\s*\n+\s*n\s*\n+\s*a\s*\n+\s*=\s*\n+\s*r\s*\n+\s*n\s*[−\-?]\s*1(?:[\s\S]{0,100}?=\s*r\s*n\s*[−\-?]\s*1)?/g,
+      (_match, prefix) => `${prefix}${prefix === ':' ? ' ' : ''}\\[\\frac{a_n}{a} = r^{n-1}\\]`
+    )
+    .replace(/(\\\[[^\]]+\\\])\s*\n?\s*\.\s+/g, '$1\n\n')
+    .replace(/\(\(\s*n\s*[-−]\s*1\s*\)\)th\b/gi, `${wrapInlineMath('n - 1')}th`)
+    .replace(
+      /\\\s*(a\s*,\s*ar\s*,\s*ar\^2\s*,\s*ar\^3\s*,\s*\\ldots\s*,\s*ar\^\{?n\s*[-−]\s*1\}?)\s*\\,/gi,
+      (_match, expression) => wrapInlineMath(expression.replace(/ar\^2/g, 'ar^{2}').replace(/ar\^3/g, 'ar^{3}').replace(/−/g, '-'))
+    )
+    .replace(
+      /\\+\s*([A-Za-z]{1,3}\s*=\s*)\\frac\{([^}]+)\}\{([^}]+)\}([^\\\n]*)\\+[,.]?/g,
+      (_match, prefix, numerator, denominator, suffix) => wrapInlineMath(`${prefix.trim()}\\frac{${numerator}}{${denominator}}${suffix.trim()}`)
+    )
+    .replace(
+      /\\+\s*([A-Za-z]{1,3}\s*(?:=|\\times)\s*[^\\\n]*(?:\\times|\\frac\{[^}]+\}\{[^}]+\})?[^\\\n]*)\s*\\+[,.]?/g,
+      (_match, expression) => wrapInlineMath(expression.trim())
+    )
+    .replace(
+      /\\+\s*([A-Za-z]{1,3}(?:\s*[+\-*/=]\s*[^\\\n]+)?|\\frac\{[^}]+\}\{[^}]+\}(?:\s*=\s*[^\\\n]+)?)\s*\\+/g,
+      (_match, expression) => wrapInlineMath(expression.replace(/ar\^2/g, 'ar^{2}').replace(/ar\^3/g, 'ar^{3}'))
+    )
+    .replace(/(?<![A-Za-z])\(\s*([A-Za-z]{2,3})\s*\)(?![A-Za-z])/g, (_match, expression) => wrapInlineMath(expression))
+    .replace(/\(\(\s*([A-Za-z])\s*\)\)/g, (_match, variable) => wrapInlineMath(variable))
+    .replace(/(?<![A-Za-z])\(\s*([A-Za-z])\s*\)(?![A-Za-z])/g, (_match, variable) => wrapInlineMath(variable))
+    .replace(
+      /\(\s*([^()\n]*(?:\\frac|\\left|\\right|\\sqrt|[=^_])[^()\n]*(?:\([^()\n]*\)[^()\n]*)?)\s*\)/g,
+      (match, expression, offset, fullText) => {
+        if (isInsideDelimitedMath(fullText, offset)) return match;
+        if (!/[=^_]|\\(?:frac|left|right|sqrt)/.test(expression)) return match;
+        return wrapInlineMath(normalizeMathOperators(expression.trim()));
+      }
+    );
+
 const isLikelyLogBase = (value: string) =>
   /^(?:\d+(?:\.\d+)?|[a-z])$/i.test(value);
 
@@ -62,6 +114,12 @@ export const normalizeAcademicTextForDisplay = (text: string) => {
     .replace(/[\u200b-\u200d\u2060\ufeff]/g, '')
     .replace(/\u2061/g, '')
     .replace(/\r\n/g, '\n');
+
+  normalized = normalizeBrokenFormulaLayouts(normalized);
+
+  normalized = normalized
+    .replace(/\\log\\\(\s*([^\\\n]+?)\s*\\\)/g, (_match, argument) => `log(${argument.trim()})`)
+    .replace(/\\log\s*\(\s*([^)\\\n]+?)\s*\)/g, (_match, argument) => `log(${argument.trim()})`);
 
   normalized = normalized.replace(/(^|\n)\s*:\s+(?=\S)/g, '$1');
 
@@ -97,6 +155,62 @@ export const normalizeAcademicTextForDisplay = (text: string) => {
   );
 
   normalized = normalized.replace(
+    /\\log_\{([^}]+)\}\s*\(\s*([^()\n]+)\s*\)\s*=\s*([^.\n]+)/g,
+    (_match, base, argument, value, offset, fullText) =>
+      wrapInlineMathIfNeeded(`\\log_{${base}}(${argument.trim()}) = ${value.trim()}`, fullText, offset)
+  );
+
+  normalized = normalized.replace(
+    /\\log_\{([^}]+)\}\s*\(\s*([^()\n]+)\s*\)/g,
+    (_match, base, argument, offset, fullText) =>
+      wrapInlineMathIfNeeded(`\\log_{${base}}(${argument.trim()})`, fullText, offset)
+  );
+
+  normalized = normalized.replace(
+    /\\log\s*\(\s*([^()\n]+)\s*\)\s*=\s*([^.\n]+)/g,
+    (_match, argument, value, offset, fullText) =>
+      wrapInlineMathIfNeeded(`\\log(${argument.trim()}) = ${value.trim()}`, fullText, offset)
+  );
+
+  normalized = normalized.replace(
+    /\\log\s*\(\s*([^()\n]+)\s*\)/g,
+    (_match, argument, offset, fullText) =>
+      wrapInlineMathIfNeeded(`\\log(${argument.trim()})`, fullText, offset)
+  );
+
+  normalized = normalized.replace(
+    /\\log\\\(\s*([^()\\\n]+(?:\([^()\n]*\)[^()\\\n]*)?)\s*\\\)\s*=\s*([^.\n]+)/g,
+    (_match, argument, value, offset, fullText) =>
+      wrapInlineMathIfNeeded(`\\log(${argument.trim()}) = ${value.trim()}`, fullText, offset)
+  );
+
+  normalized = normalized.replace(
+    /\\log\\\(\s*([^()\\\n]+(?:\([^()\n]*\)[^()\\\n]*)?)\s*\\\)/g,
+    (_match, argument, offset, fullText) =>
+      wrapInlineMathIfNeeded(`\\log(${argument.trim()})`, fullText, offset)
+  );
+
+  normalized = normalized.replace(
+    /(?<![$\\])((?:log\([^)\n]+\)|-?\d+(?:\.\d+)?(?:\^\{?-?\d+\}?)?|\\times|\s|=)+)(?=[.!?,;:](?:\s|$))/g,
+    (match, expression, offset, fullText) => {
+      if (!expression.includes('log(') || !expression.includes('=')) return match;
+      return wrapInlineMathIfNeeded(normalizeMathOperators(expression.trim()), fullText, offset);
+    }
+  );
+
+  normalized = normalized.replace(
+    /(?<![$\\])\blog\s*\(\s*([^()\n]+)\s*\)\s*=\s*(-?\d+(?:\.\d+)?)/g,
+    (_match, argument, value, offset, fullText) =>
+      wrapInlineMathIfNeeded(`\\log(${argument.trim()}) = ${value}`, fullText, offset)
+  );
+
+  normalized = normalized.replace(
+    /(?<![$\\])\blog\s*\(\s*([^()\n]+)\s*\)/g,
+    (_match, argument, offset, fullText) =>
+      wrapInlineMathIfNeeded(`\\log(${argument.trim()})`, fullText, offset)
+  );
+
+  normalized = normalized.replace(
     /(?<!\\)\blog(?:[\s\n]+|\u2044|\u2061)+([A-Za-z0-9]+)[\s\n]+([A-Za-z0-9]+)\s*=\s*(-?\d+(?:\.\d+)?)(?:[\s\n]+log[\s\n]*\1[\s\n]*\2\s*=\s*\3)?/g,
     (match, base, argument, value) => {
       if (!isLikelyLogBase(base) || !isLikelyLogArgument(argument)) return match;
@@ -121,7 +235,7 @@ export const normalizeAcademicTextForDisplay = (text: string) => {
     /(?<![$\\])\blog\s*([0-9]+|[A-Za-z])\s*\(([^()\n]+)\)\s*=\s*(-?\d+(?:\.\d+)?)/g,
     (match, base, argument, value, offset, fullText) => {
       if (!isLikelyLogBase(base)) return match;
-      return wrapInlineMathIfNeeded(`\\log_{${base}}\\left(${argument.trim()}\\right) = ${value}`, fullText, offset);
+      return wrapInlineMathIfNeeded(`\\log_{${base}}(${argument.trim()}) = ${value}`, fullText, offset);
     }
   );
 
@@ -129,13 +243,24 @@ export const normalizeAcademicTextForDisplay = (text: string) => {
     /(?<![$\\])\blog\s*([0-9]+|[A-Za-z])\s*\(([^()\n]+)\)/g,
     (match, base, argument, offset, fullText) => {
       if (!isLikelyLogBase(base)) return match;
-      return wrapInlineMathIfNeeded(`\\log_{${base}}\\left(${argument.trim()}\\right)`, fullText, offset);
+      return wrapInlineMathIfNeeded(`\\log_{${base}}(${argument.trim()})`, fullText, offset);
     }
   );
 
   normalized = normalized.replace(
     /(?<![$\\])\b(\d+(?:\.\d+)?)\^(-?\d+)\s*=\s*((?:\d+(?:\.\d+)?)|(?:\d+\s*\/\s*\d+))/g,
     (_match, base, exponent, value, offset, fullText) => wrapInlineMathIfNeeded(`${base}^{${exponent}} = ${value}`, fullText, offset)
+  );
+
+  normalized = normalized.replace(
+    /(?<![$\\])(-?\d+(?:\.\d+)?)\s*\\times\s*(-?\d+(?:\.\d+)?)/g,
+    (_match, left, right, offset, fullText) => wrapInlineMathIfNeeded(`${left} \\times ${right}`, fullText, offset)
+  );
+
+  normalized = normalized.replace(
+    /(?<![$\\])(\d+(?:\.\d+)?)\s*=\s*(\d+(?:\.\d+)?)\s*\n+\s*(-?\d+)(?=[\s,.;:!?)]|$)/g,
+    (_match, left, base, exponent, offset, fullText) =>
+      wrapInlineMathIfNeeded(`${left} = ${base}^{${exponent}}`, fullText, offset)
   );
 
   normalized = normalized.replace(
@@ -152,12 +277,12 @@ export const normalizeAcademicTextForDisplay = (text: string) => {
   );
 
   normalized = normalized.replace(
-    /(?<!\\)\(([^()]*\\[a-zA-Z]+[^()]*)\)/g,
+    /(?<!\\)(?<![A-Za-z])\(([^()]*\\[a-zA-Z]+[^()]*)\)/g,
     (_match, expression) => wrapInlineMath(expression)
   );
 
   normalized = normalized.replace(
-    /(?<!\\)\(([^()]*(?:[\^_=]|[xX\u00d7]\s*10)[^()]*)\)/g,
+    /(?<!\\)(?<![A-Za-z])\(([^()]*(?:[\^_=]|[xX\u00d7]\s*10)[^()]*)\)/g,
     (match, expression) => looksLikeMath(expression) ? wrapInlineMath(expression) : match
   );
 
@@ -234,6 +359,15 @@ export const normalizeAcademicTextForSpeech = (text: string) => {
   }
 
   spoken = spoken
+    .replace(/\bm\/s\^2\b/g, 'metres per second squared')
+    .replace(/\bm\/s2\b/g, 'metres per second squared')
+    .replace(/\bm\/s\b/g, 'metres per second')
+    .replace(/\bkg\/m\^3\b/g, 'kilograms per cubic metre')
+    .replace(/\bcm\^3\b/g, 'cubic centimetres')
+    .replace(/\bcm2\b/g, 'square centimetres')
+    .replace(/\bcm\^2\b/g, 'square centimetres')
+    .replace(/\bm2\b/g, 'square metres')
+    .replace(/\bm\^2\b/g, 'square metres')
     .replace(/\\\(|\\\)|\\\[|\\\]|\$\$/g, ' ')
     .replace(/\$/g, ' ')
     .replace(/\\log_\{([^}]+)\}\s*\(([^()]+)\)/g, ' log base $1 of $2 ')
@@ -245,6 +379,8 @@ export const normalizeAcademicTextForSpeech = (text: string) => {
     .replace(/\\times|\u00d7/g, ' times ')
     .replace(/\\div|\u00f7/g, ' divided by ')
     .replace(/\\pm/g, ' plus or minus ')
+    .replace(/=/g, ' equals ')
+    .replace(/\+/g, ' plus ')
     .replace(/\\leq|\u2264/g, ' less than or equal to ')
     .replace(/\\geq|\u2265/g, ' greater than or equal to ')
     .replace(/\\neq|\u2260/g, ' not equal to ')
@@ -271,6 +407,10 @@ export const normalizeAcademicTextForSpeech = (text: string) => {
     })
     .replace(/\*\*|__|\*|_/g, '')
     .replace(/([A-Z][a-z]?)(\d+)/g, '$1 $2')
+    .replace(/\bC\s*O\s*subscript\s*2\b/gi, 'carbon dioxide')
+    .replace(/\bH\s*subscript\s*2\s*O\b/gi, 'water')
+    .replace(/\bm\s*\/\s*s\s*squared\b/gi, 'metres per second squared')
+    .replace(/\bm\s*\/\s*s\b/gi, 'metres per second')
     .replace(/\u20a6\s?([\d,]+(?:\.\d+)?)/g, 'naira $1')
     .replace(/\$\s?([\d,]+(?:\.\d+)?)/g, 'dollars $1')
     .replace(/%/g, ' percent ')

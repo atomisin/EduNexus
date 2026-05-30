@@ -81,14 +81,14 @@ async def complete_topic_progression(
         curr_prog.completed_at = now
 
     # 3. Unlock the NEXT topic
-    # Find next topic by sort_order/display_order
-    current_order = getattr(topic, "sort_order", topic.display_order)
+    # Topic uses sort_order; keep a defensive fallback for older ORM objects.
+    current_order = getattr(topic, "sort_order", 0) or 0
 
     res_next = await db.execute(
         select(Topic)
         .filter(
             Topic.subject_id == topic.subject_id,
-            getattr(Topic, "sort_order", Topic.display_order) > current_order,
+            Topic.sort_order > current_order,
         )
         .order_by(Topic.sort_order.asc())
     )

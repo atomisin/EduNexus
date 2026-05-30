@@ -13,10 +13,11 @@ interface ProgressSummaryResponse {
   subjects: Record<string, TopicProgress[]>;
 }
 
-export function useTopicProgress() {
+export function useTopicProgress(enabled = true) {
   const { data, isLoading, refetch } = useQuery<ProgressSummaryResponse>({
     queryKey: ['topic-progress-summary'],
     queryFn: () => progressAPI.getProgressSummary(),
+    enabled,
     staleTime: 2 * 60 * 1000, // 2 minutes
     retry: 1,
   });

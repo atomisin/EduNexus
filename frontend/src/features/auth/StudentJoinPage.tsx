@@ -19,7 +19,7 @@ export const StudentJoinPage = ({ onBack }: StudentJoinPageProps) => {
   const [error, setError] = useState('');
   const [sessionInfo, setSessionInfo] = useState<any>(null);
   const [joined, setJoined] = useState(false);
-  const [activeSession, setActiveSession] = useState<{ id: string; title: string; isTeacher: boolean } | null>(null);
+  const [activeSession, setActiveSession] = useState<{ id: string; title: string; isTeacher: boolean; token: string; roomName: string } | null>(null);
 
   const verifyCode = async () => {
     if (!accessCode.trim()) {
@@ -52,7 +52,13 @@ export const StudentJoinPage = ({ onBack }: StudentJoinPageProps) => {
         student_name: studentName.trim() 
       });
       setJoined(true);
-      setActiveSession({ id: data.session.id, title: data.session.title, isTeacher: false });
+      setActiveSession({
+        id: data.session.id,
+        title: data.session.title,
+        isTeacher: false,
+        token: data.livekit_token,
+        roomName: data.room_name || data.session.livekit_room_name || `edunexus-session-${data.session.id}`,
+      });
     } catch (err: any) {
       setError(err.message || 'Failed to join session. Please try again.');
     } finally {
@@ -61,12 +67,18 @@ export const StudentJoinPage = ({ onBack }: StudentJoinPageProps) => {
   };
 
   if (joined && activeSession) {
-    return (
+      return (
       <LiveSessionRoom
         sessionId={activeSession.id}
-        sessionTitle={activeSession.title}
+        title={activeSession.title}
         isTeacher={false}
         studentName={studentName}
+        isGuest
+        guestAccessCode={accessCode.trim().toUpperCase()}
+        initialSessionData={sessionInfo ? { ...sessionInfo, id: activeSession.id } : null}
+        token={activeSession.token}
+        roomName={activeSession.roomName}
+        serverUrl={import.meta.env.VITE_LIVEKIT_URL || "ws://localhost:7880"}
         onLeave={() => { setJoined(false); setActiveSession(null); setAccessCode(''); setStudentName(''); }}
         onDisconnect={() => { setJoined(false); setActiveSession(null); setAccessCode(''); setStudentName(''); }}
       />

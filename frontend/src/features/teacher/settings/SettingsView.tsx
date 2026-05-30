@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -45,16 +45,38 @@ export const SettingsView = ({ user, onUserUpdate }: SettingsViewProps) => {
   };
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h2 className="text-3xl font-bold text-slate-900 dark:text-slate-100">Settings</h2>
-        <p className="text-slate-500 mt-1">Manage your account and preferences</p>
+    <div className="space-y-6">
+      <div className="space-y-1">
+        <h2 className="text-2xl font-semibold tracking-tight text-foreground">Settings</h2>
+        <p className="text-sm text-muted-foreground">Manage your teaching identity, alerts, and working preferences.</p>
       </div>
 
-      <div className="grid lg:grid-cols-2 gap-8">
-        <Card>
+      <Card className="rounded-lg border border-border bg-background shadow-none">
+        <CardContent className="grid gap-4 p-4 sm:grid-cols-[1.25fr_1fr]">
+          <div className="space-y-2">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Settings brief</p>
+            <h3 className="text-lg font-semibold text-foreground">Keep the workspace comfortable and reliable</h3>
+            <p className="text-sm leading-6 text-muted-foreground">
+              These settings shape how EduNexus supports your teaching day, from notification rhythm to workspace comfort.
+            </p>
+          </div>
+          <div className="grid gap-2 rounded-lg border border-border bg-subtle p-3 text-sm">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Email updates</p>
+              <p className="mt-1 text-foreground">{settings.emailNotifications ? 'Enabled' : 'Paused'}</p>
+            </div>
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">AI suggestions</p>
+              <p className="mt-1 text-foreground">{settings.aiSuggestions ? 'Available' : 'Paused'}</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card className="rounded-lg border border-border bg-background shadow-none">
           <CardHeader>
-            <CardTitle>Profile Settings</CardTitle>
+            <CardTitle>Profile</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
@@ -68,19 +90,19 @@ export const SettingsView = ({ user, onUserUpdate }: SettingsViewProps) => {
               <Label>Email</Label>
               <Input value={profileData.email} disabled />
             </div>
-            <Button onClick={handleUpdateProfile} className="w-full">Update Profile</Button>
+            <Button onClick={handleUpdateProfile} className="w-full rounded-lg bg-primary hover:bg-primary/90">Save changes</Button>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="rounded-lg border border-border bg-background shadow-none">
           <CardHeader>
-            <CardTitle>Preferences</CardTitle>
+            <CardTitle>Teaching preferences</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="font-medium">Email Notifications</p>
-                <p className="text-sm text-slate-500">Receive updates via email</p>
+                <p className="text-sm text-muted-foreground">Receive teaching updates by email</p>
               </div>
               <Switch
                 checked={settings.emailNotifications}
@@ -90,7 +112,7 @@ export const SettingsView = ({ user, onUserUpdate }: SettingsViewProps) => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="font-medium">AI Suggestions</p>
-                <p className="text-sm text-slate-500">Get personalized AI recommendations</p>
+                <p className="text-sm text-muted-foreground">Get AI suggestions shaped to your teaching pattern</p>
               </div>
               <Switch
                 checked={settings.aiSuggestions}
@@ -100,7 +122,7 @@ export const SettingsView = ({ user, onUserUpdate }: SettingsViewProps) => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="font-medium text-foreground">Dark Mode</p>
-                <p className="text-sm text-slate-500">Use dark theme</p>
+                <p className="text-sm text-muted-foreground">Use dark theme</p>
               </div>
               <Switch
                 checked={settings.darkMode}
@@ -113,3 +135,9 @@ export const SettingsView = ({ user, onUserUpdate }: SettingsViewProps) => {
     </div>
   );
 };
+
+
+
+
+
+

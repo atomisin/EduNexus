@@ -10,12 +10,12 @@ interface RegistrationPageProps {
 
 export const RegistrationPage = ({ onSuccess, onBack, isModal = false }: RegistrationPageProps) => {
   const content = (
-    <div className="relative w-full max-w-lg">
+    <div className="relative w-full max-w-5xl">
       {!isModal && (
         <Button
           variant="ghost"
           onClick={onBack}
-          className="absolute -top-12 left-0 text-slate-400 hover:text-slate-600"
+          className="absolute -top-12 left-0 text-muted-foreground hover:text-foreground"
         >
           <ChevronRight className="w-5 h-5 rotate-180 mr-1" />
           Back

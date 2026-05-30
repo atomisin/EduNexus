@@ -6,6 +6,7 @@ Teachers can add, remove, and manage their students
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
+from sqlalchemy.orm import noload
 from pydantic import BaseModel
 from typing import Optional, List
 import uuid
@@ -211,7 +212,9 @@ async def add_student(
     """
     # Check teacher's student limit
     res_prof = await db.execute(
-        select(TeacherProfile).filter(TeacherProfile.user_id == current_user.id)
+        select(TeacherProfile)
+        .options(noload("*"))
+        .filter(TeacherProfile.user_id == current_user.id)
     )
     teacher_profile = res_prof.scalars().first()
 
@@ -369,6 +372,7 @@ async def get_my_students(
         None, description="Filter by education level"
     ),
     learning_style: Optional[str] = Query(None, description="Filter by learning style"),
+    summary: bool = Query(False, description="Return a lean roster payload for dashboard analytics"),
     db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(require_teacher),
 ):
@@ -378,6 +382,62 @@ async def get_my_students(
     Combines students from both teacher_students and teacher_student_links tables
     """
     students_dict = {}
+
+    if summary:
+        stmt = (
+            select(
+                User.id,
+                User.email,
+                User.full_name,
+                User.username,
+                User.phone_number,
+                User.avatar_url,
+                TeacherStudent.added_at,
+                TeacherStudent.notes,
+                TeacherStudent.private_notes,
+                StudentProfile.learning_style,
+                StudentProfile.education_level,
+                StudentProfile.grade_level,
+                StudentProfile.school_name,
+                StudentProfile.subject_proficiency,
+            )
+            .join(TeacherStudent, User.id == TeacherStudent.student_id)
+            .outerjoin(StudentProfile, User.id == StudentProfile.user_id)
+            .filter(
+                TeacherStudent.teacher_id == current_user.id,
+                TeacherStudent.status == "active",
+            )
+        )
+
+        if search:
+            search_filter = f"%{search}%"
+            stmt = stmt.filter(
+                (User.full_name.ilike(search_filter)) | (User.email.ilike(search_filter))
+            )
+        if education_level:
+            stmt = stmt.filter(StudentProfile.education_level == education_level)
+        if learning_style:
+            stmt = stmt.filter(StudentProfile.learning_style == learning_style)
+
+        res = await db.execute(stmt)
+        return [
+            StudentResponse(
+                id=str(row.id),
+                email=row.email,
+                full_name=row.full_name,
+                username=row.username,
+                phone_number=row.phone_number,
+                added_at=row.added_at,
+                notes=row.private_notes or row.notes,
+                learning_style=row.learning_style,
+                education_level=row.education_level,
+                grade_level=row.grade_level,
+                school_name=row.school_name,
+                subject_proficiency=row.subject_proficiency,
+                avatar_url=storage_service.resolve_url(row.avatar_url),
+            )
+            for row in res.all()
+        ]
 
     # Query students through the TeacherStudent relationship (registered students)
     stmt1 = (
@@ -794,7 +854,9 @@ async def get_subscription_status(
     Get the teacher's current subscription status and student limits
     """
     res_prof = await db.execute(
-        select(TeacherProfile).filter(TeacherProfile.user_id == current_user.id)
+        select(TeacherProfile)
+        .options(noload("*"))
+        .filter(TeacherProfile.user_id == current_user.id)
     )
     teacher_profile = res_prof.scalars().first()
 
@@ -895,7 +957,9 @@ async def update_ai_settings(
         )
 
     res_prof = await db.execute(
-        select(TeacherProfile).filter(TeacherProfile.user_id == current_user.id)
+        select(TeacherProfile)
+        .options(noload("*"))
+        .filter(TeacherProfile.user_id == current_user.id)
     )
     teacher_profile = res_prof.scalars().first()
 
@@ -930,7 +994,9 @@ async def get_ai_settings(
         )
 
     res_prof = await db.execute(
-        select(TeacherProfile).filter(TeacherProfile.user_id == current_user.id)
+        select(TeacherProfile)
+        .options(noload("*"))
+        .filter(TeacherProfile.user_id == current_user.id)
     )
     teacher_profile = res_prof.scalars().first()
 

@@ -1,17 +1,15 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { Loader2 } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
 
 import { StudentSidebar } from './components/StudentSidebar';
 import { StudentHeader } from './components/StudentHeader';
 import { StudentViewRouter } from './components/StudentViewRouter';
-import { UploadMaterialModal } from './modals/UploadMaterialModal';
 import { LearningStyleAssessmentModal } from './modals/LearningStyleAssessmentModal';
 
-import { subjectsAPI, studentAPI } from '@/services/api';
+import { studentAPI, mockExamAPI } from '@/services/api';
 import { useStudentData } from './hooks/useStudentData';
 import { useAITutor } from './hooks/useAITutor';
 import { useProfileAssessment } from './hooks/useProfileAssessment';
@@ -31,7 +29,12 @@ export const StudentDashboard = ({
   const navigate = useNavigate();
   
   const currentPath = location.pathname.split('/').pop();
-  const initialView = (!currentPath || currentPath === 'student') ? 'dashboard' : currentPath as ViewType;
+  const normalizedInitialPath = (!currentPath || currentPath === 'student')
+    ? 'dashboard'
+    : currentPath === 'quiz'
+      ? 'learn'
+      : currentPath;
+  const initialView = normalizedInitialPath as ViewType;
   
   const [activeViewState, setActiveViewState] = useState<ViewType>(initialView);
   
@@ -42,7 +45,12 @@ export const StudentDashboard = ({
 
   useEffect(() => {
     const path = location.pathname.split('/').pop();
-    const view = (!path || path === 'student') ? 'dashboard' : path as ViewType;
+    const normalizedPath = (!path || path === 'student')
+      ? 'dashboard'
+      : path === 'quiz'
+        ? 'learn'
+        : path;
+    const view = normalizedPath as ViewType;
     if (view !== activeViewState) {
       setActiveViewState(view);
     }
@@ -57,6 +65,7 @@ export const StudentDashboard = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [customCourseName, setCustomCourseName] = useState('');
   const [isGeneratingCourse, setIsGeneratingCourse] = useState(false);
+  const [examHistoryInsights, setExamHistoryInsights] = useState<any | null>(null);
   const [tutorGender, setTutorGenderState] = useState<'male' | 'female'>(() => {
     if (typeof window === 'undefined') return 'female';
     return localStorage.getItem('edunexus_tutor_gender') === 'male' ? 'male' : 'female';
@@ -75,11 +84,12 @@ export const StudentDashboard = ({
 
   const {
     profile, sessions, subjects, progress, analytics, enrolledSubjects,
-    materials, brainPower, brainPowerData, isLoading: isDataLoading, error,
+    brainPower, brainPowerData, isLoading: isDataLoading, error,
     refetchProfile, refetchSessions, refetchBrainPower,
-    handleEnroll, handleDeleteMaterial, handleUpload, handleJoinSession,
+    handleEnroll, handleJoinSession,
     setProfile
-  } = useStudentData(user);
+  } = useStudentData(user, activeView);
+  const isExamStudent = ['jamb', 'waec', 'neco'].includes(String((profile?.curriculum_type || '')).toLowerCase());
 
   const {
     messages, aiState, currentTopic: selectedTopic,
@@ -88,16 +98,16 @@ export const StudentDashboard = ({
     setCurrentSubject: setSelectedSubject, sendMessage, clearMessages,
     topics, roadmap, roadmapLoading, showAIPanel, setShowAIPanel,
     viewingSubtopic, setViewingSubtopic, activeSubtopic,
-    suggestedVideos, selectedVideo, setSelectedVideo,
+    suggestedVideos, videoSupportState, selectedVideo, setSelectedVideo,
     weaknessAreas, suggestedTopics, structuredTopics, isStructuredLoading, refetchStructured,
     handleSubjectSelect, handleTopicSelect, handleSubtopicClick,
     handleAIContinue, onMasteryTestComplete, startQuiz, dismissQuizConfirm,
     placementState, startPlacementCheck, submitPlacementCheck,
     acceptPlacementRecommendation, cancelPlacementCheck,
     lockedLessonNotice, openCurrentUnlockedLesson
-  } = useAITutor(profile, getFullName);
+  } = useAITutor(profile, getFullName, activeView === 'learn');
 
-  const isLoading = isDataLoading || aiState.status === 'chatting';
+  const isLoading = isDataLoading;
   const showMasteryTest = aiState.status === 'quiz_active';
 
   const {
@@ -165,26 +175,30 @@ export const StudentDashboard = ({
 
     setIsGeneratingCourse(true);
     try {
-      const correctRes = await subjectsAPI.correctName(courseName.trim());
-      const cleanName = correctRes.corrected || courseName.trim();
-      toast.info(`Creating course: "${cleanName}"`);
-      const result = await subjectsAPI.create({
-        name: cleanName,
-        education_level: profile?.education_level || "professional",
-        auto_generate_topics: true
+      const result = await studentAPI.submitCustomCourseRequest({
+        course_name: courseName.trim(),
       });
-      if (result && result.id) await studentAPI.enrollSubject(result.id);
       setCustomCourseName('');
-      queryClient.invalidateQueries({ queryKey: ['student', 'subjects'] });
-      queryClient.invalidateQueries({ queryKey: ['student', 'enrolled-subjects'] });
       queryClient.invalidateQueries({ queryKey: ['student', 'profile'] });
-      toast.success('Course generated and enrolled successfully!');
+      queryClient.invalidateQueries({ queryKey: ['student', 'custom-course-requests'] });
+
+      if (result?.status === 'auto_rejected') {
+        const alternatives = Array.isArray(result?.safe_alternatives) && result.safe_alternatives.length
+          ? ` Safe alternatives: ${result.safe_alternatives.slice(0, 3).join(', ')}.`
+          : '';
+        toast.error(`${result?.reason || 'This course request was rejected.'}${alternatives}`);
+      } else if (result?.status === 'suspicious_review') {
+        toast.warning(result?.reason || 'This request needs admin review before it can move forward.');
+      } else if (Array.isArray(result?.suggested_courses) && result.suggested_courses.length) {
+        toast.success(`Request submitted. Closest course suggestions: ${result.suggested_courses.slice(0, 3).join(', ')}.`);
+      } else {
+        toast.success(result?.reason || 'Custom course request submitted for approval.');
+      }
     } catch (error: any) {
       const message = error?.response?.data?.detail || error?.message || 'Failed to generate course';
       toast.error(message);
-      setIsGeneratingCourse(false);
     } finally {
-      if (isGeneratingCourse) setTimeout(() => setIsGeneratingCourse(false), 5000);
+      setIsGeneratingCourse(false);
     }
   };
 
@@ -213,11 +227,22 @@ export const StudentDashboard = ({
   }, [isLoading, topics, subjects, selectedTopic, handleTopicSelect]);
 
   useEffect(() => {
-    if (scrollAreaRef.current) {
-      const scrollContainer = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
-      if (scrollContainer) scrollContainer.scrollTop = scrollContainer.scrollHeight;
+    if (!profile || !isExamStudent) {
+      setExamHistoryInsights(null);
+      return;
     }
-  }, [messages, isLoading]);
+    let active = true;
+    mockExamAPI.getHistoryInsights()
+      .then((data) => {
+        if (active) setExamHistoryInsights(data);
+      })
+      .catch(() => {
+        if (active) setExamHistoryInsights(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [profile, isExamStudent, activeView]);
 
   const profileWithBrainPower = profile ? { ...profile, ...(brainPowerData || {}), brain_power: brainPower } : profile;
   const energy = brainPower;
@@ -253,15 +278,11 @@ export const StudentDashboard = ({
         />
 
         <div className="flex-1 overflow-hidden relative flex flex-col">
-          {isLoading && activeView === 'dashboard' ? (
-            <div className="flex-1 flex items-center justify-center">
-              <Loader2 className="w-8 h-8 animate-spin text-teal-600" />
-            </div>
-          ) : (
-            activeView === 'learn' ? (
+          {activeView === 'learn' ? (
               <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
                 <StudentViewRouter
                    activeView={activeView} isLoading={isLoading} profile={profileWithBrainPower} energy={energy}
+                   error={error}
                    getLearningStyleLabel={getLearningStyleLabel} setActiveView={setActiveView}
                    liveSessions={liveSessions} upcomingSessions={upcomingSessions}
                    handleJoinSession={(s) => handleJoinSession(s, onJoinSession)} formatDate={formatDate}
@@ -272,7 +293,7 @@ export const StudentDashboard = ({
                    aiState={aiState} lessonController={lessonController} avatarUrl={avatarUrl} user={user}
                    handleAIContinue={handleAIContinue} subjects={subjects} enrolledSubjects={enrolledSubjects}
                    handleSubjectSelect={handleSubjectSelect} handleTopicSelect={handleTopicSelect}
-                   suggestedVideos={suggestedVideos} setSelectedVideo={setSelectedVideo} setProfile={setProfile}
+                   suggestedVideos={suggestedVideos} videoSupportState={videoSupportState} setSelectedVideo={setSelectedVideo} setProfile={setProfile}
                    suggestedTopics={suggestedTopics} weaknessAreas={weaknessAreas} topics={topics}
                    roadmapLoading={roadmapLoading} structuredTopics={structuredTopics} isStructuredLoading={isStructuredLoading}
                    scrollAreaRef={scrollAreaRef} onMasteryTestComplete={async (r) => { await onMasteryTestComplete(r); await refetchStructured(); }}
@@ -282,12 +303,13 @@ export const StudentDashboard = ({
                    cancelPlacementCheck={cancelPlacementCheck} lockedLessonNotice={lockedLessonNotice}
                    openCurrentUnlockedLesson={openCurrentUnlockedLesson}
                    getFullName={getFullName} tutorGender={tutorGender} setTutorGender={setTutorGender}
-                   materials={materials} handleEnroll={handleEnroll} handleDeleteMaterial={handleDeleteMaterial}
+                   handleEnroll={handleEnroll}
                    customCourseName={customCourseName} setCustomCourseName={setCustomCourseName} isGeneratingCourse={isGeneratingCourse}
                    handleGenerateCustomCourse={handleGenerateCustomCourse} isEditingProfile={isEditingProfile}
                    setIsEditingProfile={setIsEditingProfile} profileFormData={profileFormData}
                    setProfileFormData={setProfileFormData} setAvatarUrl={setAvatarUrl} startAssessment={startAssessment}
                    progress={progressForView} radarData={radarData} searchQuery={searchQuery} setSearchQuery={setSearchQuery}
+                   examHistoryInsights={examHistoryInsights}
                 />
               </div>
             ) : (
@@ -295,6 +317,7 @@ export const StudentDashboard = ({
                 <div className="w-full max-w-7xl mx-auto px-3 py-4 pb-24 sm:p-4 md:p-6 md:pb-8">
                   <StudentViewRouter
                      activeView={activeView} isLoading={isLoading} profile={profileWithBrainPower} energy={energy}
+                     error={error}
                      getLearningStyleLabel={getLearningStyleLabel} setActiveView={setActiveView}
                      liveSessions={liveSessions} upcomingSessions={upcomingSessions}
                      handleJoinSession={(s) => handleJoinSession(s, onJoinSession)} formatDate={formatDate}
@@ -305,7 +328,7 @@ export const StudentDashboard = ({
                      aiState={aiState} lessonController={lessonController} avatarUrl={avatarUrl} user={user}
                      handleAIContinue={handleAIContinue} subjects={subjects} enrolledSubjects={enrolledSubjects}
                      handleSubjectSelect={handleSubjectSelect} handleTopicSelect={handleTopicSelect}
-                     suggestedVideos={suggestedVideos} setSelectedVideo={setSelectedVideo} setProfile={setProfile}
+                     suggestedVideos={suggestedVideos} videoSupportState={videoSupportState} setSelectedVideo={setSelectedVideo} setProfile={setProfile}
                      suggestedTopics={suggestedTopics} weaknessAreas={weaknessAreas} topics={topics}
                      roadmapLoading={roadmapLoading} structuredTopics={structuredTopics} isStructuredLoading={isStructuredLoading}
                      scrollAreaRef={scrollAreaRef} onMasteryTestComplete={async (r) => { await onMasteryTestComplete(r); await refetchStructured(); }}
@@ -315,32 +338,19 @@ export const StudentDashboard = ({
                      cancelPlacementCheck={cancelPlacementCheck} lockedLessonNotice={lockedLessonNotice}
                      openCurrentUnlockedLesson={openCurrentUnlockedLesson}
                      getFullName={getFullName} tutorGender={tutorGender} setTutorGender={setTutorGender}
-                     materials={materials} handleEnroll={handleEnroll} handleDeleteMaterial={handleDeleteMaterial}
+                     handleEnroll={handleEnroll}
                      customCourseName={customCourseName} setCustomCourseName={setCustomCourseName} isGeneratingCourse={isGeneratingCourse}
                      handleGenerateCustomCourse={handleGenerateCustomCourse} isEditingProfile={isEditingProfile}
                      setIsEditingProfile={setIsEditingProfile} profileFormData={profileFormData}
                      setProfileFormData={setProfileFormData} setAvatarUrl={setAvatarUrl} startAssessment={startAssessment}
                      progress={progressForView} radarData={radarData} searchQuery={searchQuery} setSearchQuery={setSearchQuery}
+                     examHistoryInsights={examHistoryInsights}
                   />
                 </div>
               </ScrollArea>
-            )
-          )}
+            )}
         </div>
       </main>
-
-      <UploadMaterialModal
-        showUploadModal={false} // Trigger handles modal now
-        setShowUploadModal={() => { }}
-        uploadSubject=""
-        setUploadSubject={() => { }}
-        enrolledSubjects={enrolledSubjects}
-        subjects={subjects}
-        uploadFile={null}
-        setUploadFile={() => { }}
-        uploading={false}
-        handleUpload={() => { }}
-      />
 
       <LearningStyleAssessmentModal
         showLearningStyleModal={showLearningStyleModal}

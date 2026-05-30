@@ -1,4 +1,4 @@
-import React, { useState, useEffect, Suspense } from 'react';
+﻿import React, { useState, useEffect, Suspense } from 'react';
 import {
   Brain, CheckCircle, Video, BookOpen, Trophy, Menu, X
 } from 'lucide-react';
@@ -44,6 +44,15 @@ export const LandingPage = ({
 }: LandingPageProps) => {
   const [authMode, setAuthMode] = useState<'login' | 'register' | null>(null);
   const [legalDocument, setLegalDocument] = useState<'terms' | 'privacy' | null>(null);
+  const closeAuthModal = React.useCallback(() => {
+    setAuthMode(null);
+    const url = new URL(window.location.href);
+    if (url.searchParams.has('auth')) {
+      url.searchParams.delete('auth');
+      const nextUrl = `${url.pathname}${url.search}${url.hash}`;
+      window.history.replaceState({}, '', nextUrl || '/');
+    }
+  }, []);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -53,16 +62,22 @@ export const LandingPage = ({
   }, []);
 
   useEffect(() => {
+    if (user && authMode !== null) {
+      closeAuthModal();
+    }
+  }, [authMode, closeAuthModal, user]);
+
+  useEffect(() => {
     if (user && authMode === null) {
       onGoDashboard?.();
     }
   }, [authMode, onGoDashboard, user]);
 
   const features = [
-    { icon: Brain, title: 'Structured AI tutoring', desc: 'Students learn through guided explanations, worked examples, quick checks, and mastery quizzes that respond to their level of understanding.', color: 'text-primary' },
-    { icon: Video, title: 'Live learning with teachers', desc: 'Teachers can run real-time classes, share notes, launch quizzes, and keep students engaged inside one connected classroom workspace.', color: 'text-primary' },
-    { icon: BookOpen, title: 'Curriculum-aware pathways', desc: 'Lessons, revision checks, placement tests, and recommendations stay aligned with the learner’s class, subject, term, and unlocked progress.', color: 'text-primary' },
-    { icon: Trophy, title: 'Measurable progress', desc: 'Dashboards turn activity, mastery, scores, and weak areas into clear next steps for students, teachers, and school leaders.', color: 'text-primary' },
+    { icon: Brain, title: 'Guided AI tutoring', desc: 'Students learn in small, clear steps with explanations, examples, quick checks, and mastery practice that adjust to what they really understand.', color: 'text-primary' },
+    { icon: Video, title: 'Live teaching that stays connected', desc: 'Teachers can teach live, share notes, launch checks, and keep classwork, follow-up, and revision in one place.', color: 'text-primary' },
+    { icon: BookOpen, title: 'Curriculum-aware learning paths', desc: 'Lessons, revision, placement checks, and recommendations stay tied to the learner\'s class, subject, term, and actual progress.', color: 'text-primary' },
+    { icon: Trophy, title: 'Progress you can trust', desc: 'Students, teachers, and schools get clear signals on what is working, what is weak, and what to do next.', color: 'text-primary' },
   ];
 
   return (
@@ -144,35 +159,37 @@ export const LandingPage = ({
       </nav>
 
       {/* Hero Section */}
-      <section className="relative min-h-[92vh] overflow-hidden border-b border-border">
+      <section className="relative min-h-screen overflow-hidden border-b border-border">
         <img
           src="/images/Whisk_ygohrtzlddm3mmym1yy2uwotq2n3qtl0idox0co.jpeg"
           alt="Students learning attentively in a modern environment"
           className="absolute inset-0 h-full w-full object-cover"
         />
-        <div className="absolute inset-0 bg-slate-950/70" />
-        <div className="relative max-w-7xl mx-auto px-6 pt-32 pb-16 min-h-[92vh] flex items-end">
-            <div className="max-w-3xl space-y-8 animate-fade-in text-white">
-              <Badge variant="secondary" className="px-3 py-1 font-medium bg-secondary text-secondary-foreground rounded-full">
-                Built for serious learning
+        <div className="absolute inset-0 bg-background/88" />
+        <div className="absolute inset-0 bg-gradient-to-r from-background/94 via-background/78 to-background/62" />
+        <div className="absolute inset-x-0 bottom-0 h-44 bg-gradient-to-t from-background/78 to-transparent" />
+        <div className="relative mx-auto flex min-h-screen max-w-7xl items-center px-5 pb-14 pt-28 sm:px-6 sm:pt-32 lg:items-end lg:pb-16">
+            <div className="max-w-3xl space-y-6 animate-fade-in rounded-lg bg-background/18 px-2 py-2 text-white backdrop-blur-[2px] sm:space-y-8 sm:px-3 sm:py-3 lg:-ml-2">
+              <Badge variant="secondary" className="rounded-full bg-background/85 px-3 py-1 font-medium text-foreground">
+                Built for clear progress
               </Badge>
 
-              <h1 className="text-5xl lg:text-7xl font-bold leading-tight tracking-tight font-display">
+              <h1 className="text-4xl font-bold leading-tight tracking-tight font-display text-white drop-shadow-[0_8px_24px_rgba(0,0,0,0.45)] sm:text-5xl lg:text-7xl">
                 EduNexus
               </h1>
 
-              <p className="text-xl text-white/80 leading-relaxed max-w-2xl">
-                A modern learning platform for students, teachers, and schools. EduNexus combines structured AI tutoring, live classroom tools, curriculum pathways, and progress intelligence in one academic workspace.
+              <p className="max-w-2xl text-base leading-relaxed text-white/95 drop-shadow-[0_4px_14px_rgba(0,0,0,0.4)] sm:text-xl">
+                One learning platform for students, teachers, and schools. EduNexus brings guided tutoring, live teaching, structured curriculum paths, and dependable progress signals into one calm academic workspace.
               </p>
 
-              <div className="flex flex-wrap gap-4 pt-4">
-                <Button size="lg" className="bg-primary text-primary-foreground rounded-lg px-8 font-semibold" onClick={() => setAuthMode('register')}>
+              <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:flex-wrap sm:gap-4 sm:pt-4">
+                <Button size="lg" className="rounded-lg bg-primary px-8 font-semibold text-primary-foreground" onClick={() => setAuthMode('register')}>
                   Start Learning
                 </Button>
                 <Button
                   size="lg"
                   variant="outline"
-                  className="px-8 border-white/40 text-white bg-white/10 hover:bg-white/20 rounded-lg"
+                  className="rounded-lg border-white/35 bg-white/10 px-8 text-white hover:bg-white/20"
                   onClick={() => document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })}
                 >
                   Explore the Platform
@@ -181,7 +198,7 @@ export const LandingPage = ({
                   <Button
                     size="lg"
                     variant="outline"
-                    className="px-8 border-white/40 text-white bg-white/10 hover:bg-white/20 rounded-lg flex items-center gap-2"
+                    className="flex items-center gap-2 rounded-lg border-white/35 bg-white/10 px-8 text-white hover:bg-white/20"
                     onClick={onJoinSession}
                   >
                     <Video className="w-5 h-5" /> Join a Live Session
@@ -189,15 +206,15 @@ export const LandingPage = ({
                 )}
               </div>
 
-              <div className="flex flex-wrap items-center gap-6 pt-6 text-sm font-medium text-white/75 border-t border-white/20">
+              <div className="flex flex-wrap items-center gap-4 border-t border-white/16 pt-5 text-sm font-medium text-white/92 drop-shadow-[0_4px_12px_rgba(0,0,0,0.32)] sm:gap-6 sm:pt-6">
                 <div className="flex items-center gap-2">
-                  <CheckCircle className="w-4 h-4 text-emerald-600" /> Curriculum-aware lessons
+                  <CheckCircle className="w-4 h-4 text-primary" /> Curriculum-aware lessons
                 </div>
                 <div className="flex items-center gap-2">
-                  <CheckCircle className="w-4 h-4 text-emerald-600" /> Placement-based lesson unlocking
+                  <CheckCircle className="w-4 h-4 text-primary" /> Placement-based lesson unlocking
                 </div>
                 <div className="flex items-center gap-2">
-                  <CheckCircle className="w-4 h-4 text-emerald-600" /> AI and teacher-led learning
+                  <CheckCircle className="w-4 h-4 text-primary" /> AI support with teacher oversight
                 </div>
               </div>
             </div>
@@ -210,10 +227,10 @@ export const LandingPage = ({
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-20">
             <h2 className="text-4xl lg:text-5xl font-bold text-foreground mb-6 tracking-tight">
-              A Complete Academic Workspace
+              Everything learning needs, in one place
             </h2>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-              EduNexus is designed for the full learning cycle: prepare, teach, practise, assess, revise, and progress with evidence.
+              EduNexus helps learners move from explanation to practice to evidence-backed progress without losing context along the way.
             </p>
           </div>
 
@@ -250,21 +267,21 @@ export const LandingPage = ({
       <section id="about" className="py-28 px-6 bg-background border-t border-border">
         <div className="max-w-7xl mx-auto grid gap-12 lg:grid-cols-[0.9fr_1.1fr] items-start">
           <div className="space-y-5">
-            <Badge variant="outline" className="rounded-lg border-primary/30 text-primary">Platform model</Badge>
+            <Badge variant="outline" className="rounded-lg border-primary/30 text-primary">How it works</Badge>
             <h2 className="text-4xl lg:text-5xl font-bold tracking-tight text-foreground">
-              Built around understanding, not just access.
+              Built to help people understand, not just log in.
             </h2>
             <p className="text-lg text-muted-foreground leading-relaxed">
-              EduNexus helps learners move with confidence by checking readiness before advanced lessons, revising prerequisite work when needed, and keeping every learning decision tied to evidence.
+              EduNexus checks readiness before harder lessons, helps learners repair missing foundations, and keeps every next step tied to real learning evidence.
             </p>
           </div>
 
           <div className="grid sm:grid-cols-2 gap-4">
             {[
-              { title: 'For students', text: 'A focused learning workspace with AI tutoring, voice support, practice, recommended videos, reading materials, and mastery checks.' },
-              { title: 'For teachers', text: 'Classroom tools for live sessions, lesson preparation, shared content, mid-class quizzes, assignments, and student insight.' },
-              { title: 'For schools', text: 'Operational dashboards, user approvals, curriculum materials, cost visibility, and progress reporting across learners.' },
-              { title: 'For professional learners', text: 'Custom courses, technical explanations, applied questions, and learning paths beyond the standard school curriculum.' },
+              { title: 'For students', text: 'A focused learning workspace with tutoring, practice, revision help, recommended videos, and mastery checks.' },
+              { title: 'For teachers', text: 'Live teaching tools, prep support, shared class content, quick checks, assignments, and learner insight.' },
+              { title: 'For schools', text: 'Approvals, curriculum control, usage visibility, reporting, and quality oversight in one workspace.' },
+              { title: 'For professional learners', text: 'Custom courses, technical explanations, applied practice, and structured learning beyond the regular school path.' },
             ].map((item) => (
               <div key={item.title} className="rounded-lg border border-border bg-subtle/50 p-6">
                 <h3 className="font-bold text-lg text-foreground mb-2">{item.title}</h3>
@@ -279,10 +296,10 @@ export const LandingPage = ({
       <section className="py-32 px-6 bg-foreground text-background">
         <div className="max-w-4xl mx-auto text-center space-y-8">
           <h2 className="text-5xl lg:text-6xl font-bold font-display">
-            Start Learning Today
+            Start with one clear next step
           </h2>
           <p className="text-xl text-muted max-w-2xl mx-auto leading-relaxed opacity-90">
-            Create a learning path that knows what the student understands, what they missed, and what they should study next.
+            Give each learner a platform that can explain well, check honestly, and point them to the right next move.
           </p>
           <div className="flex flex-wrap justify-center gap-6 pt-8">
             <Button size="lg" className="bg-background text-foreground hover:bg-background/90 font-semibold px-10 rounded-lg" onClick={() => setAuthMode('register')}>
@@ -389,7 +406,7 @@ export const LandingPage = ({
                   {legalDocuments[legalDocument].title}
                 </DialogTitle>
                 <DialogDescription className="mt-2">
-                  EduNexus account, learning, safety, and data commitments.
+                  Terms, privacy, and the commitments that protect learners, teachers, and schools.
                 </DialogDescription>
               </div>
               <div className="max-h-[68vh] overflow-y-auto overflow-x-hidden px-5 py-4">
@@ -402,7 +419,7 @@ export const LandingPage = ({
 
       {/* Floating Auth Overlays */}
       <Dialog open={authMode !== null} onOpenChange={(open) => !open && setAuthMode(null)}>
-        <DialogContent className="max-w-md p-0 overflow-hidden border-none bg-transparent shadow-none [&>button]:hidden">
+        <DialogContent className={`overflow-hidden border-none bg-transparent p-0 shadow-none [&>button]:hidden ${authMode === 'login' ? 'max-w-md' : 'max-w-[min(72rem,calc(100vw-1rem))]'}`}>
           <DialogTitle className="sr-only">
             {authMode === 'login' ? 'Sign in to EduNexus' : 'Create an EduNexus account'}
           </DialogTitle>
@@ -413,23 +430,22 @@ export const LandingPage = ({
             <Suspense fallback={
               <div className="p-12 flex flex-col items-center justify-center bg-background rounded-lg">
                 <div className="h-10 w-10 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4" />
-                <p className="text-muted-foreground font-medium animate-pulse">Initializing Portal...</p>
+                <p className="text-muted-foreground font-medium animate-pulse">Opening secure access...</p>
               </div>
             }>
-              {authMode === 'login' ? (
-                <LoginForm 
-                  onSuccess={() => {
-                    setAuthMode(null);
-                  }}
-                  onRegisterClick={() => setAuthMode('register')}
-                />
-              ) : (
-                <div className="max-h-[85vh] overflow-y-auto rounded-lg bg-background shadow-xl">
-                  <RegistrationPage 
-                    onSuccess={() => {
-                      setAuthMode('login');
-                      toast.success('Registration successful! Please login.');
-                    }}
+                {authMode === 'login' ? (
+                  <LoginForm 
+                    onSuccess={closeAuthModal}
+                    onBackClick={closeAuthModal}
+                    onRegisterClick={() => setAuthMode('register')}
+                  />
+                ) : (
+                  <div className="rounded-lg bg-transparent shadow-none">
+                    <RegistrationPage 
+                      onSuccess={() => {
+                        setAuthMode('login');
+                        toast.success('Registration successful! Please login.');
+                      }}
                     onBack={() => setAuthMode('login')}
                     isModal={true}
                   />
@@ -442,4 +458,30 @@ export const LandingPage = ({
     </div>
   );
 };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Plus, UserPlus, Users, Activity, TrendingUp, Brain, Layers, Loader2, Mail } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -54,6 +54,17 @@ export const StudentManagementView = () => {
       setLoading(false);
     }
   };
+
+  const studentsByGrade = useMemo(() => (
+    Object.entries(
+      students.reduce((acc, student) => {
+        const grade = student.grade_level || 'Ungraded';
+        if (!acc[grade]) acc[grade] = [];
+        acc[grade].push(student);
+        return acc;
+      }, {} as Record<string, any[]>)
+    ).sort(([gradeA], [gradeB]) => gradeA.localeCompare(gradeB))
+  ), [students]);
 
   const handleAddStudentById = async () => {
     if (!studentIdInput.trim()) {
@@ -148,64 +159,64 @@ export const StudentManagementView = () => {
   };
 
   return (
-    <div className="space-y-8">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-3xl font-bold text-slate-900 dark:text-slate-100">My Students</h2>
-          <p className="text-slate-500 mt-1">Manage your students and track their progress</p>
+    <div className="space-y-6">
+      <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+        <div className="space-y-1">
+          <h2 className="text-2xl font-semibold tracking-tight text-foreground">Learner roster</h2>
+          <p className="text-sm text-muted-foreground">Keep your current learners, report contacts, and onboarding actions in one place.</p>
         </div>
         <div className="flex gap-3">
-          <Button onClick={() => setShowAddDialog(true)} className="btn-primary">
-            <Plus className="w-4 h-4 mr-2" /> Add Student
+          <Button onClick={() => setShowAddDialog(true)} className="rounded-lg bg-primary hover:bg-primary/90">
+            <Plus className="mr-2 h-4 w-4" /> Add Student
           </Button>
-          <Button onClick={() => setShowAddByIdDialog(true)} variant="outline">
-            <UserPlus className="w-4 h-4 mr-2" /> Add by ID
+          <Button onClick={() => setShowAddByIdDialog(true)} variant="outline" className="rounded-lg">
+            <UserPlus className="mr-2 h-4 w-4" /> Add by ID
           </Button>
         </div>
       </div>
 
-      <div className="grid md:grid-cols-4 gap-6">
-        <Card>
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <Card className="rounded-lg border border-border bg-background shadow-none">
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-slate-500">Total Students</p>
-                <p className="text-2xl font-bold">{students.length}</p>
+                <p className="text-sm text-muted-foreground">Total Students</p>
+                <p className="text-2xl font-semibold text-foreground">{students.length}</p>
               </div>
-              <Users className="w-8 h-8 text-teal-600" />
+              <Users className="h-8 w-8 text-primary" />
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="rounded-lg border border-border bg-background shadow-none">
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-slate-500">Active This Week</p>
-                <p className="text-2xl font-bold">{students.filter(s => s.last_active).length}</p>
+                <p className="text-sm text-muted-foreground">Active This Week</p>
+                <p className="text-2xl font-semibold text-foreground">{students.filter(s => s.last_active).length}</p>
               </div>
-              <Activity className="w-8 h-8 text-green-500" />
+              <Activity className="h-8 w-8 text-primary" />
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="rounded-lg border border-border bg-background shadow-none">
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-slate-500">Avg. Progress</p>
-                <p className="text-2xl font-bold">0%</p>
+                <p className="text-sm text-muted-foreground">Avg. Progress</p>
+                <p className="text-2xl font-semibold text-foreground">0%</p>
               </div>
-              <TrendingUp className="w-8 h-8 text-teal-500" />
+              <TrendingUp className="h-8 w-8 text-primary" />
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="rounded-lg border border-border bg-background shadow-none">
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-slate-500">AI Recommendations</p>
-                <p className="text-2xl font-bold">0</p>
+                <p className="text-sm text-muted-foreground">AI Recommendations</p>
+                <p className="text-2xl font-semibold text-foreground">0</p>
               </div>
-              <Brain className="w-8 h-8 text-teal-600" />
+              <Brain className="h-8 w-8 text-primary" />
             </div>
           </CardContent>
         </Card>
@@ -213,68 +224,66 @@ export const StudentManagementView = () => {
 
       {loading ? (
         <div className="flex justify-center py-12">
-          <Loader2 className="w-8 h-8 animate-spin text-teal-600" />
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
       ) : students.length === 0 ? (
-        <div className="text-center py-12">
-          <Users className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-slate-600">No students yet</h3>
-          <p className="text-slate-500 mt-1">Add students by email to start tracking their progress</p>
-        </div>
+        <Card className="rounded-lg border border-dashed border-border bg-background shadow-none">
+          <CardContent className="py-12 text-center">
+            <Users className="mx-auto mb-4 h-12 w-12 text-muted-foreground/35" />
+            <h3 className="text-lg font-medium text-foreground">No learners linked yet</h3>
+            <p className="mt-1 text-sm text-muted-foreground">Add a learner by registration or student ID to start building your roster.</p>
+          </CardContent>
+        </Card>
       ) : (
-        <div className="space-y-8">
-          {Object.entries(
-            students.reduce((acc, student) => {
-              const grade = student.grade_level || 'Ungraded';
-              if (!acc[grade]) acc[grade] = [];
-              acc[grade].push(student);
-              return acc;
-            }, {} as Record<string, any[]>)
-          ).sort(([gradeA], [gradeB]) => gradeA.localeCompare(gradeB))
-            .map(([grade, gradeStudents]) => (
-              <div key={grade} className="space-y-4">
-                <div className="flex items-center gap-2 border-b pb-2">
-                  <Layers className="w-5 h-5 text-teal-500" />
-                  <h3 className="text-xl font-bold text-slate-800 dark:text-slate-200">
-                    {grade} <span className="text-sm font-normal text-slate-500">({(gradeStudents as any[]).length} students)</span>
+        <div className="space-y-6">
+          {studentsByGrade.map(([grade, gradeStudents]) => (
+              <section key={grade} className="space-y-4">
+                <div className="flex items-center gap-2 border-b border-border pb-2">
+                  <Layers className="h-5 w-5 text-primary" />
+                  <h3 className="text-lg font-semibold text-foreground">
+                    {grade} <span className="text-sm font-normal text-muted-foreground">({(gradeStudents as any[]).length} learners)</span>
                   </h3>
                 </div>
-                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                   {(gradeStudents as any[]).map((student: any) => (
-                    <Card key={student.id} className="hover-lift">
-                      <CardContent className="p-6">
+                    <Card key={student.id} className="rounded-lg border border-border bg-background shadow-none">
+                      <CardContent className="p-5">
                         <div className="flex items-start gap-4">
-                          <Avatar className="w-12 h-12">
-                            <AvatarFallback className="bg-teal-100 text-teal-600">
+                          <Avatar className="h-12 w-12">
+                            <AvatarImage src={student.avatar_url || student.avatar} />
+                            <AvatarFallback className="bg-primary/10 text-primary">
                               {student.full_name?.[0] || student.email?.[0] || 'S'}
                             </AvatarFallback>
                           </Avatar>
-                          <div className="flex-1">
-                            <h3 className="font-semibold text-slate-900 dark:text-slate-100">{student.full_name || student.name || 'Student'}</h3>
-                            <p className="text-sm text-slate-500">{student.email}</p>
-                            <p className="mt-1 flex items-center gap-1 text-xs text-slate-500">
+                          <div className="min-w-0 flex-1">
+                            <h3 className="truncate font-semibold text-foreground">{student.full_name || student.name || 'Student'}</h3>
+                            <p className="truncate text-sm text-muted-foreground">{student.email}</p>
+                            <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
                               <Mail className="h-3.5 w-3.5" />
                               {student.guardian_email || 'No report email set'}
                             </p>
-                            <div className="flex items-center gap-2 mt-2">
-                              <Badge variant="outline" className="text-xs">
-                                {student.learning_style || 'Visual'} Learner
+                            <div className="mt-3 flex flex-wrap items-center gap-2">
+                              <Badge variant="outline" className="rounded-full border-primary/20 bg-primary/5 text-primary">
+                                {student.learning_style || 'Visual'} learner
                               </Badge>
                             </div>
                           </div>
                         </div>
-                        <div className="mt-4 pt-4 border-t flex items-center justify-between">
-                          <div>
-                            <p className="text-xs text-slate-500">Progress</p>
-                            <div className="w-24 h-2 bg-slate-200 rounded-full mt-1">
-                              <div className="h-full w-1/3 bg-teal-600 rounded-full" />
+                        <div className="mt-4 space-y-3 border-t border-border pt-4">
+                          <div className="flex items-end justify-between gap-4">
+                            <div className="min-w-0">
+                              <p className="text-xs uppercase tracking-wide text-muted-foreground">Progress</p>
+                              <div className="mt-2 h-2 w-28 rounded-full bg-secondary">
+                                <div className="h-full w-1/3 rounded-full bg-primary" />
+                              </div>
                             </div>
+                            <p className="text-xs text-muted-foreground">{student.last_active ? 'Recently active' : 'Waiting for fresh activity'}</p>
                           </div>
-                          <div className="flex items-center gap-1">
-                            <Button variant="ghost" size="sm" onClick={() => openGuardianEditor(student)}>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Button variant="outline" size="sm" className="rounded-md" onClick={() => openGuardianEditor(student)}>
                               Report Email
                             </Button>
-                            <Button variant="ghost" size="sm" className="text-red-500" onClick={() => handleRemoveStudent(student.id)}>
+                            <Button variant="ghost" size="sm" className="rounded-md text-destructive hover:bg-destructive/10" onClick={() => handleRemoveStudent(student.id)}>
                               Remove
                             </Button>
                           </div>
@@ -283,7 +292,7 @@ export const StudentManagementView = () => {
                     </Card>
                   ))}
                 </div>
-              </div>
+              </section>
             ))}
         </div>
       )}
@@ -370,7 +379,7 @@ export const StudentManagementView = () => {
                     placeholder="e.g., Data Science, Agile Master, AWS Architect"
                     required
                   />
-                  <p className="text-xs text-teal-600 font-medium">✨ We will generate a comprehensive curriculum based on this course.</p>
+                  <p className="text-xs font-medium text-primary">We will generate a comprehensive curriculum based on this course.</p>
                 </div>
               )}
             </div>
@@ -433,7 +442,7 @@ export const StudentManagementView = () => {
               />
             </div>
 
-            <Button onClick={handleAddStudent} disabled={addingStudent} className="w-full btn-primary">
+            <Button onClick={handleAddStudent} disabled={addingStudent} className="w-full rounded-lg bg-primary hover:bg-primary/90">
               {addingStudent ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
               {addingStudent ? 'Registering...' : 'Complete Registration'}
             </Button>
@@ -467,7 +476,7 @@ export const StudentManagementView = () => {
                 placeholder="parent@example.com"
               />
             </div>
-            <Button onClick={handleUpdateGuardianContact} className="w-full btn-primary">
+            <Button onClick={handleUpdateGuardianContact} className="w-full rounded-lg bg-primary hover:bg-primary/90">
               Save Report Contact
             </Button>
           </div>
@@ -489,7 +498,7 @@ export const StudentManagementView = () => {
                 placeholder="EDU-2026-XXXXXX"
               />
             </div>
-            <Button onClick={handleAddStudentById} disabled={addingStudent} className="w-full btn-primary">
+            <Button onClick={handleAddStudentById} disabled={addingStudent} className="w-full rounded-lg bg-primary hover:bg-primary/90">
               {addingStudent ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
               {addingStudent ? 'Adding...' : 'Add Student'}
             </Button>

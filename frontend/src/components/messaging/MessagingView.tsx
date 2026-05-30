@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Send, Search, User, MoreVertical, Phone, Video, Info, Paperclip, Smile, Shield, Trash2, CheckCircle2, Clock, MessageSquare } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Send, Search, User, Paperclip, Smile, Shield, CheckCircle2, Clock, MessageSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 interface Contact {
     user_id: string;
     name: string;
+    email?: string;
     role: string;
     last_message: string;
     last_message_time: string;
@@ -36,18 +37,34 @@ export const MessagingView = ({ currentUser }: { currentUser: any }) => {
     const [loading, setLoading] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState<any[]>([]);
-    const scrollRef = useRef<HTMLDivElement>(null);
+    const messagesEndRef = useRef<HTMLDivElement>(null);
+    const conversationsLoadingRef = useRef(false);
+    const messagesLoadingRef = useRef(false);
 
-    const loadConversations = async () => {
+    const formatRole = (role?: string) => {
+        const value = String(role || '').replace(/_/g, ' ').trim();
+        if (!value) return 'Contact';
+        return value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
+    };
+
+    const loadConversations = useCallback(async () => {
+        if (document.visibilityState === 'hidden') return;
+        if (conversationsLoadingRef.current) return;
+        conversationsLoadingRef.current = true;
         try {
             const data = await messageAPI.getConversations();
             setContacts(data);
         } catch (error) {
             console.error('Failed to load conversations:', error);
+        } finally {
+            conversationsLoadingRef.current = false;
         }
-    };
+    }, []);
 
-    const loadMessages = async (userId: string) => {
+    const loadMessages = useCallback(async (userId: string) => {
+        if (document.visibilityState === 'hidden') return;
+        if (messagesLoadingRef.current) return;
+        messagesLoadingRef.current = true;
         setLoading(true);
         try {
             const data = await messageAPI.getMessages(userId);
@@ -55,28 +72,35 @@ export const MessagingView = ({ currentUser }: { currentUser: any }) => {
         } catch (error) {
             console.error('Failed to load messages:', error);
         } finally {
+            messagesLoadingRef.current = false;
             setLoading(false);
         }
-    };
+    }, []);
 
     useEffect(() => {
         loadConversations();
-        const interval = setInterval(loadConversations, 10000);
+        const interval = setInterval(() => {
+            if (document.visibilityState === 'visible') {
+                loadConversations();
+            }
+        }, 30000);
         return () => clearInterval(interval);
-    }, []);
+    }, [loadConversations]);
 
     useEffect(() => {
         if (selectedContact) {
             loadMessages(selectedContact.user_id);
-            const interval = setInterval(() => loadMessages(selectedContact.user_id), 5000);
+            const interval = setInterval(() => {
+                if (document.visibilityState === 'visible') {
+                    loadMessages(selectedContact.user_id);
+                }
+            }, 15000);
             return () => clearInterval(interval);
         }
-    }, [selectedContact]);
+    }, [loadMessages, selectedContact]);
 
     useEffect(() => {
-        if (scrollRef.current) {
-            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-        }
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
     }, [messages]);
 
     const handleSendMessage = async (e: React.FormEvent) => {
@@ -110,13 +134,14 @@ export const MessagingView = ({ currentUser }: { currentUser: any }) => {
     };
 
     const startConversation = (user: any) => {
-        const contact: Contact = {
-            user_id: user.id,
-            name: user.name,
-            role: user.role,
-            last_message: '',
-            last_message_time: new Date().toISOString(),
-            unread_count: 0
+            const contact: Contact = {
+                user_id: user.id,
+                name: user.name,
+                email: user.email,
+                role: user.role,
+                last_message: '',
+                last_message_time: new Date().toISOString(),
+                unread_count: 0
         };
         setSelectedContact(contact);
         setSearchQuery('');
@@ -153,16 +178,25 @@ export const MessagingView = ({ currentUser }: { currentUser: any }) => {
                                     onClick={() => startConversation(user)}
                                     className="w-full flex items-center gap-3 p-3 rounded-2xl hover:bg-teal-50 dark:hover:bg-teal-900/20 transition-all text-left"
                                 >
-                                    <Avatar className="w-10 h-10 border border-slate-100 dark:border-slate-800">
-                                        <AvatarImage src={user.avatar_url} />
-                                        <AvatarFallback className="bg-teal-100 text-teal-600 font-bold">{user.name[0]}</AvatarFallback>
-                                    </Avatar>
-                                    <div>
+                                        <Avatar className="w-10 h-10 border border-slate-100 dark:border-slate-800">
+                                            <AvatarImage src={user.avatar_url} />
+                                            <AvatarFallback className="bg-teal-100 text-teal-600 font-bold">{(user.name || '?')[0]}</AvatarFallback>
+                                        </Avatar>
+                                    <div className="min-w-0">
                                         <p className="text-sm font-bold text-slate-900 dark:text-slate-100">{user.name}</p>
-                                        <p className="text-[10px] text-teal-500 font-bold uppercase tracking-tighter">{user.role}</p>
+                                        <p className="truncate text-[10px] text-slate-500 dark:text-slate-400">{user.email}</p>
+                                        <p className="text-[10px] text-teal-500 font-bold uppercase tracking-tighter">{formatRole(user.role)}</p>
                                     </div>
                                 </button>
                             ))}
+                        </div>
+                    ) : searchQuery.length > 2 ? (
+                        <div className="px-5 py-12 text-center">
+                            <Search className="mx-auto mb-3 h-8 w-8 text-slate-300" />
+                            <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">No matching contacts</p>
+                            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                                Try a teacher, student, or admin name instead.
+                            </p>
                         </div>
                     ) : (
                         <div className="p-2 space-y-1">
@@ -178,7 +212,7 @@ export const MessagingView = ({ currentUser }: { currentUser: any }) => {
                                     <Avatar className="w-12 h-12 border-2 border-white dark:border-slate-700 shadow-sm">
                                         <AvatarImage src={contact.avatar_url} />
                                         <AvatarFallback className={`${selectedContact?.user_id === contact.user_id ? 'bg-white/20 text-white' : 'bg-teal-100 text-teal-600'} font-bold`}>
-                                            {contact.name[0]}
+                                            {(contact.name || '?')[0]}
                                         </AvatarFallback>
                                     </Avatar>
                                     <div className="flex-1 min-w-0">
@@ -190,6 +224,9 @@ export const MessagingView = ({ currentUser }: { currentUser: any }) => {
                                                 {contact.last_message_time ? new Date(contact.last_message_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
                                             </span>
                                         </div>
+                                        <p className={`text-[10px] truncate ${selectedContact?.user_id === contact.user_id ? 'text-teal-100/90' : 'text-slate-400'}`}>
+                                            {contact.email || formatRole(contact.role)}
+                                        </p>
                                         <p className={`text-xs truncate ${selectedContact?.user_id === contact.user_id ? 'text-teal-100' : 'text-slate-500'}`}>
                                             {contact.last_message || "Start a conversation..."}
                                         </p>
@@ -219,33 +256,28 @@ export const MessagingView = ({ currentUser }: { currentUser: any }) => {
                         {/* Chat Header */}
                         <div className="p-6 border-b dark:border-slate-800 flex items-center justify-between bg-white/80 dark:bg-slate-900/80 backdrop-blur-md">
                             <div className="flex items-center gap-4">
-                                <Avatar className="w-12 h-12 border-2 border-teal-100 dark:border-slate-700 shadow-sm">
-                                    <AvatarImage src={selectedContact.avatar_url} />
-                                    <AvatarFallback className="bg-teal-600 text-white font-bold">{selectedContact.name[0]}</AvatarFallback>
+                                    <Avatar className="w-12 h-12 border-2 border-teal-100 dark:border-slate-700 shadow-sm">
+                                        <AvatarImage src={selectedContact.avatar_url} />
+                                    <AvatarFallback className="bg-teal-600 text-white font-bold">{(selectedContact.name || '?')[0]}</AvatarFallback>
                                 </Avatar>
                                 <div>
-                                    <h3 className="text-lg font-black text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                                <h3 className="text-lg font-black text-slate-900 dark:text-slate-100 flex items-center gap-2">
                                         {selectedContact.name}
                                         <Badge variant="secondary" className="text-[10px] h-4 font-bold bg-teal-50 text-teal-600 dark:bg-teal-900/30 uppercase tracking-tighter">
-                                            {selectedContact.role}
+                                            {formatRole(selectedContact.role)}
                                         </Badge>
                                     </h3>
                                     <div className="flex items-center gap-1.5 mt-0.5">
                                         <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                                        <span className="text-xs text-slate-400 font-medium">Online now</span>
+                                        <span className="text-xs text-slate-400 font-medium">{selectedContact.email || formatRole(selectedContact.role)}</span>
                                     </div>
                                 </div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <Button variant="ghost" size="icon" className="rounded-full text-slate-400 hover:text-teal-600 hover:bg-teal-50"><Phone className="w-5 h-5" /></Button>
-                                <Button variant="ghost" size="icon" className="rounded-full text-slate-400 hover:text-teal-600 hover:bg-teal-50"><Video className="w-5 h-5" /></Button>
-                                <Button variant="ghost" size="icon" className="rounded-full text-slate-400 hover:text-teal-600 hover:bg-teal-50"><Info className="w-5 h-5" /></Button>
                             </div>
                         </div>
 
                         {/* Messages Area */}
                         <div className="flex-1 p-6 overflow-hidden relative">
-                            <ScrollArea className="h-full pr-4" ref={scrollRef}>
+                            <ScrollArea className="h-full pr-4">
                                 <div className="space-y-6">
                                     {messages.map((m, i) => {
                                         const isMe = m.sender_id === currentUser.id;
@@ -288,6 +320,7 @@ export const MessagingView = ({ currentUser }: { currentUser: any }) => {
                                             <Clock className="w-5 h-5 text-teal-500 animate-spin" />
                                         </div>
                                     )}
+                                    <div ref={messagesEndRef} />
                                 </div>
                             </ScrollArea>
                         </div>
@@ -320,14 +353,14 @@ export const MessagingView = ({ currentUser }: { currentUser: any }) => {
                                 </div>
                             </div>
                             <div className="space-y-2">
-                                <h2 className="text-3xl font-black italic text-slate-900 dark:text-slate-100">Select a Conversation</h2>
+                                <h2 className="text-3xl font-black italic text-slate-900 dark:text-slate-100">Select a conversation</h2>
                                 <p className="text-slate-500 leading-relaxed">
-                                    Start a direct chat with students, teachers, or administrators to share updates, ask questions, or provide feedback.
+                                    Start a direct chat with a learner, teacher, or administrator to share updates, ask questions, or follow up on support.
                                 </p>
                             </div>
                             <div className="flex justify-center gap-6 pt-4 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
                                 <span className="flex items-center gap-2"><Shield className="w-3 h-3 text-teal-500" /> Secure Chat</span>
-                                <span className="flex items-center gap-2"><Trash2 className="w-3 h-3 text-teal-500" /> Auto Archive</span>
+                                <span className="flex items-center gap-2"><MessageSquare className="w-3 h-3 text-teal-500" /> Direct Messaging</span>
                             </div>
                         </div>
                     </div>

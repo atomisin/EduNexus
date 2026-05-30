@@ -8,6 +8,16 @@ interface MathTextProps {
   className?: string;
 }
 
+const reactNodeToText = (node: React.ReactNode): string => {
+  if (node === null || node === undefined || typeof node === 'boolean') return '';
+  if (typeof node === 'string' || typeof node === 'number') return String(node);
+  if (Array.isArray(node)) return node.map(reactNodeToText).join('');
+  if (React.isValidElement<{ children?: React.ReactNode }>(node)) {
+    return reactNodeToText(node.props.children);
+  }
+  return '';
+};
+
 /**
  * Renders text with inline LaTeX math expressions.
  * Supports both $...$ and \(...\) delimiters for inline math,
@@ -15,14 +25,7 @@ interface MathTextProps {
  */
 const MathText: React.FC<MathTextProps> = ({ children, className }) => {
   const text = useMemo(() => {
-    if (children === null || children === undefined) return '';
-    if (typeof children === 'string' || typeof children === 'number') return String(children);
-    if (Array.isArray(children)) {
-      return children
-        .map((child) => (typeof child === 'string' || typeof child === 'number' ? String(child) : ''))
-        .join('');
-    }
-    return '';
+    return reactNodeToText(children);
   }, [children]);
 
   const rendered = useMemo(() => {

@@ -19,9 +19,11 @@ ASYNC_DATABASE_URL = settings.DATABASE_URL\
 engine = create_async_engine(
     ASYNC_DATABASE_URL,
     pool_size=int(os.getenv("DB_POOL_SIZE", "5")),
-    max_overflow=int(os.getenv("DB_MAX_OVERFLOW", "0")),
+    max_overflow=int(os.getenv("DB_MAX_OVERFLOW", "2")),
+    pool_timeout=int(os.getenv("DB_POOL_TIMEOUT", "10")),
     pool_pre_ping=True,
     pool_recycle=3600,
+    pool_use_lifo=True,
     echo=False,
     # CRITICAL: Disable prepared statements for PgBouncer compatibility
     connect_args={"statement_cache_size": 0}

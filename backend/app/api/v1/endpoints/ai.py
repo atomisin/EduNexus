@@ -25,6 +25,10 @@ from app.core.config import settings
 from app.services.ai_coordinator import ai_coordinator
 from app.services.revision_context import get_revision_context, get_subject_and_topic
 from app.services.lesson_plan_service import get_or_create_lesson_teaching_plan
+from app.services.academic_agent_service import (
+    ASSESSMENT_VALIDATOR_AGENT,
+    review_structured_academic_output,
+)
 from app.services.brain_power import (
     brain_power_cost_for_tokens,
     current_brain_power_date,
@@ -129,19 +133,485 @@ async def ensure_ai_topic_unlocked(
     )
 
 
+def _question(
+    idx: int,
+    text: str,
+    options: Dict[str, str],
+    correct_option: str,
+    explanation: str,
+    difficulty: str = "medium",
+) -> Dict[str, Any]:
+    return {
+        "id": f"fallback-{idx}",
+        "text": text,
+        "options": options,
+        "correct_option": correct_option,
+        "explanation": explanation,
+        "difficulty": difficulty,
+    }
+
+
+def _place_value_questions(topic_label: str) -> List[Dict[str, Any]]:
+    return [
+        _question(
+            1,
+            "In 482,315, what is the value of the digit 4?",
+            {"A": "400,000", "B": "40,000", "C": "4,000", "D": "400"},
+            "A",
+            "The digit 4 is in the hundred thousands place, so its value is 400,000.",
+            "easy",
+        ),
+        _question(
+            2,
+            "In 760,124, which digit is in the ten thousands place?",
+            {"A": "7", "B": "6", "C": "1", "D": "2"},
+            "B",
+            "Reading from the right gives ones, tens, hundreds, thousands, ten thousands; the digit 6 is in that place.",
+            "easy",
+        ),
+        _question(
+            3,
+            "What is the word form of 305,018?",
+            {
+                "A": "Three hundred five thousand, eighteen",
+                "B": "Three hundred fifty thousand, eighteen",
+                "C": "Thirty-five thousand, eighteen",
+                "D": "Three million, five thousand, eighteen",
+            },
+            "A",
+            "305,018 has 305 thousands and 18 ones, so it is three hundred five thousand, eighteen.",
+            "easy",
+        ),
+        _question(
+            4,
+            "Which number has 9 in the hundred thousands place?",
+            {"A": "934,210", "B": "394,210", "C": "49,321", "D": "4,932"},
+            "A",
+            "In 934,210, the leftmost digit 9 is in the hundred thousands place.",
+            "medium",
+        ),
+        _question(
+            5,
+            "In 1,204,673, what is the place value of the digit 2?",
+            {"A": "Millions", "B": "Hundred thousands", "C": "Ten thousands", "D": "Thousands"},
+            "B",
+            "The digit 2 is in the hundred thousands place in 1,204,673.",
+            "medium",
+        ),
+        _question(
+            6,
+            "Write a number with 6 in the millions place, 3 in the ten thousands place, and 8 in the hundreds place.",
+            {"A": "6,030,800", "B": "630,800", "C": "6,300,080", "D": "6,003,800"},
+            "A",
+            "6,030,800 has 6 in the millions place, 3 in the ten thousands place, and 8 in the hundreds place.",
+            "medium",
+        ),
+        _question(
+            7,
+            "Which expanded form matches 740,506?",
+            {
+                "A": "700,000 + 40,000 + 500 + 6",
+                "B": "700,000 + 4,000 + 500 + 6",
+                "C": "70,000 + 40,000 + 500 + 6",
+                "D": "700,000 + 40,000 + 5,000 + 6",
+            },
+            "A",
+            "740,506 separates into 700,000, 40,000, 500, and 6.",
+            "medium",
+        ),
+        _question(
+            8,
+            "A number is written as 5,000,000 + 200,000 + 40,000 + 9. What is the number?",
+            {"A": "5,240,009", "B": "5,204,009", "C": "5,024,009", "D": "524,009"},
+            "A",
+            "Combining the place values gives 5,240,009.",
+            "hard",
+        ),
+        _question(
+            9,
+            "In 5,500,000, what is the place value of the leftmost digit 5?",
+            {"A": "Millions", "B": "Hundred thousands", "C": "Ten thousands", "D": "Thousands"},
+            "A",
+            "The question names the leftmost 5, which is in the millions place.",
+            "hard",
+        ),
+        _question(
+            10,
+            "In 5,500,000, what is the place value of the second digit 5 from the left?",
+            {"A": "Millions", "B": "Hundred thousands", "C": "Ten thousands", "D": "Thousands"},
+            "B",
+            "The second 5 from the left is in the hundred thousands place.",
+            "hard",
+        ),
+    ]
+
+
+def _math_log_standard_form_questions(topic_label: str) -> List[Dict[str, Any]]:
+    return [
+        _question(
+            1,
+            "Write 3500 in standard form.",
+            {"A": "3.5 x 10^3", "B": "35 x 10^2", "C": "0.35 x 10^4", "D": "350 x 10^1"},
+            "A",
+            "In standard form the first factor must be at least 1 and less than 10, so 3500 = 3.5 x 10^3.",
+            "easy",
+        ),
+        _question(
+            2,
+            "If N = 4.2 x 10^2, what is the characteristic of log10(N)?",
+            {"A": "2", "B": "4.2", "C": "0.2", "D": "log10(4.2)"},
+            "A",
+            "For N = a x 10^n, log10(N) = n + log10(a). The characteristic is the integer n.",
+            "easy",
+        ),
+        _question(
+            3,
+            "Complete this correctly: log10(2.5 x 10^4) =",
+            {"A": "4 + log10(2.5)", "B": "2.5 + log10(4)", "C": "4 x log10(2.5)", "D": "log10(6.5)"},
+            "A",
+            "Use log10(a x 10^n) = log10(a) + n, so the expression becomes 4 + log10(2.5).",
+            "medium",
+        ),
+        _question(
+            4,
+            "Which number is written in valid standard form?",
+            {"A": "6.02 x 10^5", "B": "60.2 x 10^4", "C": "0.602 x 10^6", "D": "602 x 10^3"},
+            "A",
+            "Valid standard form has 1 <= a < 10 in a x 10^n. Only 6.02 satisfies that rule.",
+            "medium",
+        ),
+        _question(
+            5,
+            "A learner says log10(7000) has characteristic 7 because the first digit is 7. What is the correction?",
+            {
+                "A": "7000 = 7 x 10^3, so the characteristic is 3",
+                "B": "7000 = 7 x 10^3, so the characteristic is 7",
+                "C": "7000 = 0.7 x 10^4, so the characteristic is 0.7",
+                "D": "The characteristic cannot be found from standard form",
+            },
+            "A",
+            "The characteristic comes from the power of 10 in standard form, not from the leading digit.",
+            "hard",
+        ),
+        _question(
+            6,
+            "If log10(5.6 x 10^6) = 6 + log10(5.6), what part is the mantissa?",
+            {"A": "log10(5.6)", "B": "6", "C": "5.6 x 10^6", "D": "10^6"},
+            "A",
+            "The mantissa is the fractional logarithmic part, log10(a), while the characteristic is the integer power n.",
+            "medium",
+        ),
+        _question(
+            7,
+            "Which step is best before using a log table for log10(82,000)?",
+            {"A": "Write 82,000 as 8.2 x 10^4", "B": "Write 82,000 as 82 x 10^3", "C": "Divide 82,000 by 10", "D": "Use 82 as the characteristic"},
+            "A",
+            "Standard form isolates the power of 10 first: 82,000 = 8.2 x 10^4, so the characteristic is 4.",
+            "hard",
+        ),
+        _question(
+            8,
+            "For a number greater than 1 written as a x 10^n, what must be true about log10(a)?",
+            {"A": "It is the mantissa and lies between 0 and 1 when 1 <= a < 10", "B": "It is always equal to n", "C": "It is always a whole number", "D": "It replaces the characteristic"},
+            "A",
+            "When 1 <= a < 10, log10(a) is between 0 and 1; this is why it works as the mantissa.",
+            "hard",
+        ),
+        _question(
+            9,
+            "Which expression correctly separates log10(63,000) into characteristic and mantissa?",
+            {"A": "4 + log10(6.3)", "B": "6.3 + log10(4)", "C": "5 + log10(0.63)", "D": "log10(63) + 3"},
+            "A",
+            "63,000 = 6.3 x 10^4, so log10(63,000) = 4 + log10(6.3).",
+            "hard",
+        ),
+        _question(
+            10,
+            "If a log-table question gives log10(3.2) = 0.5051, what is log10(3200)?",
+            {"A": "3.5051", "B": "2.5051", "C": "0.5051", "D": "3200.5051"},
+            "A",
+            "3200 = 3.2 x 10^3, so log10(3200) = 3 + log10(3.2) = 3.5051.",
+            "hard",
+        ),
+    ]
+
+
+def _equivalent_fraction_questions(topic_label: str) -> List[Dict[str, Any]]:
+    return [
+        _question(
+            1,
+            "Which fraction is equivalent to 1/2?",
+            {"A": "2/4", "B": "2/3", "C": "3/5", "D": "1/3"},
+            "A",
+            "1/2 and 2/4 have the same value because multiplying the top and bottom of 1/2 by 2 gives 2/4.",
+            "easy",
+        ),
+        _question(
+            2,
+            "To make an equivalent fraction, what must you do?",
+            {
+                "A": "Multiply or divide the numerator and denominator by the same non-zero number",
+                "B": "Multiply only the numerator",
+                "C": "Add the same number to the numerator only",
+                "D": "Change the denominator randomly",
+            },
+            "A",
+            "The fraction keeps the same value only when the numerator and denominator are changed by the same factor.",
+            "easy",
+        ),
+        _question(
+            3,
+            "Which fraction is equivalent to 3/5?",
+            {"A": "6/10", "B": "6/5", "C": "3/10", "D": "5/3"},
+            "A",
+            "Multiplying 3 and 5 by 2 gives 6/10, so 3/5 = 6/10.",
+            "medium",
+        ),
+        _question(
+            4,
+            "Complete the equivalent fraction: 2/3 = ?/12",
+            {"A": "8", "B": "6", "C": "4", "D": "10"},
+            "A",
+            "The denominator 3 was multiplied by 4 to get 12, so the numerator 2 must also be multiplied by 4 to get 8.",
+            "medium",
+        ),
+        _question(
+            5,
+            "Which pair shows equivalent fractions?",
+            {"A": "4/6 and 2/3", "B": "4/6 and 3/4", "C": "2/5 and 3/5", "D": "1/4 and 1/5"},
+            "A",
+            "4/6 can be simplified by dividing top and bottom by 2, giving 2/3.",
+            "medium",
+        ),
+        _question(
+            6,
+            "A learner says 1/3 = 2/3 because both denominators are 3. What is the correction?",
+            {
+                "A": "They are not equal because the numerators show different numbers of the same-sized parts",
+                "B": "They are equal because the denominators match",
+                "C": "They are equal because both are fractions",
+                "D": "They cannot be compared",
+            },
+            "A",
+            "When denominators are the same, the numerator tells how many equal parts are taken; 1 part is not the same as 2 parts.",
+            "medium",
+        ),
+        _question(
+            7,
+            "Which method proves that 5/10 is equivalent to 1/2?",
+            {
+                "A": "Divide the numerator and denominator of 5/10 by 5",
+                "B": "Add 5 to the numerator only",
+                "C": "Change 10 to 2 without changing 5",
+                "D": "Multiply the denominator only",
+            },
+            "A",
+            "Dividing 5 and 10 by 5 gives 1/2, so the two fractions are equivalent.",
+            "hard",
+        ),
+        _question(
+            8,
+            "Tobi shades 3 out of 6 equal parts of a shape. Which statement is correct?",
+            {
+                "A": "3/6 is equivalent to 1/2",
+                "B": "3/6 is equivalent to 1/3",
+                "C": "3/6 is greater than 1 whole",
+                "D": "3/6 cannot be simplified",
+            },
+            "A",
+            "3/6 simplifies to 1/2 because both 3 and 6 can be divided by 3.",
+            "hard",
+        ),
+        _question(
+            9,
+            "Complete the equivalent fraction: 5/8 = 20/?",
+            {"A": "32", "B": "24", "C": "28", "D": "40"},
+            "A",
+            "The numerator 5 was multiplied by 4 to get 20, so the denominator 8 must also be multiplied by 4 to get 32.",
+            "hard",
+        ),
+        _question(
+            10,
+            "Which explanation best proves that 6/9 and 2/3 are equivalent?",
+            {
+                "A": "Divide both 6 and 9 by 3 to get 2/3",
+                "B": "The numerators are both even",
+                "C": "Both fractions have a 3 somewhere",
+                "D": "The denominators are different",
+            },
+            "A",
+            "Equivalent fractions keep the same value; simplifying 6/9 by the same factor 3 gives 2/3.",
+            "hard",
+        ),
+    ]
+
+
+def _database_normalization_questions(topic_label: str) -> List[Dict[str, Any]]:
+    return [
+        _question(
+            1,
+            "A table stores StudentID, StudentName, CourseID, CourseName, and Grade. What is the main design problem?",
+            {
+                "A": "Student and course details repeat across many rows",
+                "B": "The table has too few columns",
+                "C": "Grades should never be stored",
+                "D": "CourseID should be removed from every table",
+            },
+            "A",
+            "Normalization starts by spotting repeated facts that can create update, insert, and delete problems.",
+            "easy",
+        ),
+        _question(
+            2,
+            "Which split best reduces redundancy while preserving the relationship between students and courses?",
+            {
+                "A": "Students, Courses, and Enrollments/Grades tables",
+                "B": "One table for all names and one table for all IDs",
+                "C": "A separate table for every grade value",
+                "D": "Remove CourseName and keep only Grade",
+            },
+            "A",
+            "Students and Courses store stable facts; Enrollments/Grades links a student to a course and stores the grade for that relationship.",
+            "medium",
+        ),
+        _question(
+            3,
+            "In an Enrollments table, why might StudentID + CourseID be a useful key?",
+            {
+                "A": "Together they identify one student's record in one course",
+                "B": "They make StudentName unnecessary in the Students table",
+                "C": "They prove every student has the same grade",
+                "D": "They remove the need for a Courses table",
+            },
+            "A",
+            "The pair identifies the relationship row: one student taking one course.",
+            "medium",
+        ),
+        _question(
+            4,
+            "If a CourseName changes and it appears in many enrollment rows, which anomaly can happen?",
+            {
+                "A": "Some rows may be updated while others keep the old name",
+                "B": "The database automatically becomes faster",
+                "C": "All grades are deleted",
+                "D": "StudentID becomes meaningless",
+            },
+            "A",
+            "Repeated facts can become inconsistent when an update is applied in only some places.",
+            "hard",
+        ),
+        _question(
+            5,
+            "What is the best evidence that a learner understands normalization?",
+            {
+                "A": "They can redesign a flawed table and explain the keys",
+                "B": "They can recite the word normalization",
+                "C": "They always split every column into its own table",
+                "D": "They avoid using foreign keys",
+            },
+            "A",
+            "Real mastery is shown by applying the rule to a table design and defending the relationships.",
+            "hard",
+        ),
+        _question(
+            6,
+            "A StudentName column appears in both Students and Enrollments tables. What should you check first?",
+            {
+                "A": "Whether StudentName belongs only in Students and Enrollments should reference StudentID",
+                "B": "Whether StudentName should become the primary key in every table",
+                "C": "Whether Enrollments should be deleted",
+                "D": "Whether CourseID should store the student name",
+            },
+            "A",
+            "A fact about a student should be stored once in Students; relationship rows should reference the student by key.",
+            "medium",
+        ),
+        _question(
+            7,
+            "Which dependency suggests the original table is not well normalized: StudentID, StudentName, CourseID, CourseName, Grade?",
+            {
+                "A": "StudentID determines StudentName, and CourseID determines CourseName",
+                "B": "Grade determines StudentName",
+                "C": "CourseName determines every StudentID",
+                "D": "StudentName determines every CourseID",
+            },
+            "A",
+            "Student and course facts depend on different keys, so they should not all live as repeated columns in one enrollment table.",
+            "hard",
+        ),
+        _question(
+            8,
+            "After normalization, where should a student's grade for a course usually be stored?",
+            {
+                "A": "In the Enrollments/Grades table that links StudentID and CourseID",
+                "B": "Only in the Students table",
+                "C": "Only in the Courses table",
+                "D": "In every table for easier searching",
+            },
+            "A",
+            "The grade belongs to the relationship between one student and one course, so it fits the junction table.",
+            "hard",
+        ),
+        _question(
+            9,
+            "Which update shows that normalization has improved the design?",
+            {
+                "A": "Changing one CourseName in Courses updates the name used by all related enrollments",
+                "B": "Typing CourseName again in every enrollment row",
+                "C": "Deleting the Students table",
+                "D": "Putting all grades into the Courses table",
+            },
+            "A",
+            "A normalized design stores each stable fact once and links to it, so one update prevents inconsistent copies.",
+            "hard",
+        ),
+        _question(
+            10,
+            "A report needs StudentName, CourseName, and Grade after normalization. How should the data be produced?",
+            {
+                "A": "Join Students, Courses, and Enrollments using their keys",
+                "B": "Store all report text in one repeated column",
+                "C": "Remove IDs and match names manually",
+                "D": "Duplicate every course row inside Students",
+            },
+            "A",
+            "Normalization separates storage, but queries can join related tables through primary and foreign keys.",
+            "hard",
+        ),
+    ]
+
+
 def build_fallback_mastery_questions(topic: str, subject: str) -> List[Dict[str, Any]]:
-    """Small deterministic fallback so the mastery modal never dead-ends."""
+    """Deterministic fallback so the mastery modal never dead-ends with generic recall."""
     topic_label = topic or "this topic"
     subject_label = subject or "this subject"
+    topic_key = topic_label.lower()
+    subject_key = subject_label.lower()
+
+    if (
+        "math" in subject_key
+        and any(marker in topic_key for marker in ["log", "standard form", "scientific notation"])
+    ):
+        return _math_log_standard_form_questions(topic_label)
+
+    if "math" in subject_key and any(marker in topic_key for marker in ["equivalent fraction", "equivalent fractions"]):
+        return _equivalent_fraction_questions(topic_label)
+
+    if "math" in subject_key and "place value" in topic_key:
+        return _place_value_questions(topic_label)
+
+    if any(marker in topic_key for marker in ["normalization", "normalisation", "database design"]):
+        return _database_normalization_questions(topic_label)
+
     return [
-        {
-            "id": f"fallback-{idx}",
-            "text": text.format(topic=topic_label, subject=subject_label),
-            "options": options,
-            "correct_option": "A",
-            "explanation": explanation.format(topic=topic_label, subject=subject_label),
-            "difficulty": difficulty,
-        }
+        _question(
+            idx,
+            text.format(topic=topic_label, subject=subject_label),
+            options,
+            "A",
+            explanation.format(topic=topic_label, subject=subject_label),
+            difficulty,
+        )
         for idx, (text, options, explanation, difficulty) in enumerate(
             [
                 (
@@ -199,10 +669,115 @@ def build_fallback_mastery_questions(topic: str, subject: str) -> List[Dict[str,
                     "The best evidence of mastery is transfer: using the idea correctly in a new situation.",
                     "hard",
                 ),
+                (
+                    "Which answer would be strongest in a {topic} mastery test?",
+                    {
+                        "A": "An answer that gives the method, applies it, and checks the result",
+                        "B": "An answer that only repeats the topic title",
+                        "C": "An answer that skips the evidence",
+                        "D": "An answer that changes the topic",
+                    },
+                    "Strong mastery includes method, application, and a check against the question.",
+                    "medium",
+                ),
+                (
+                    "When a {topic} question includes several facts, what should you do before answering?",
+                    {
+                        "A": "Separate the given facts from what the question asks you to find",
+                        "B": "Ignore the facts and guess",
+                        "C": "Use only the longest option",
+                        "D": "Answer before reading the question fully",
+                    },
+                    "Separating given information from the target helps you choose the right method.",
+                    "medium",
+                ),
+                (
+                    "Why should you check your answer after solving a {topic} problem?",
+                    {
+                        "A": "To confirm the answer fits the question, method, and available evidence",
+                        "B": "To make the work longer",
+                        "C": "To avoid explaining the method",
+                        "D": "To change a correct answer randomly",
+                    },
+                    "A final check catches method errors and confirms the answer actually solves the problem.",
+                    "hard",
+                ),
+                (
+                    "What should a strong final answer on {topic} include?",
+                    {
+                        "A": "The answer, the method used, and a quick reason it fits the question",
+                        "B": "Only the shortest option",
+                        "C": "A new unrelated topic",
+                        "D": "A guess without checking",
+                    },
+                    "A strong answer shows both the result and the reasoning that makes it reliable.",
+                    "hard",
+                ),
+                (
+                    "How can you show you are ready to move beyond {topic}?",
+                    {
+                        "A": "Apply the idea correctly to a new example without being led",
+                        "B": "Say the topic name once",
+                        "C": "Avoid practice questions",
+                        "D": "Copy only one worked answer",
+                    },
+                    "Readiness means transfer: using the idea accurately in a fresh situation.",
+                    "hard",
+                ),
             ],
             start=1,
         )
     ]
+
+
+def mastery_questions_need_academic_fallback(
+    questions: List[Dict[str, Any]],
+    subject: str,
+    education_level: Optional[str],
+) -> bool:
+    subject_key = (subject or "").lower()
+    level_key = (education_level or "").lower()
+    rigorous_subject = any(
+        marker in subject_key
+        for marker in [
+            "math",
+            "physics",
+            "chemistry",
+            "biology",
+            "accounting",
+            "economics",
+            "data processing",
+            "computer",
+            "statistics",
+            "finance",
+        ]
+    ) or any(marker in level_key for marker in ["ss", "waec", "neco", "jamb", "professional"])
+    if not rigorous_subject:
+        return False
+
+    analogy_markers = [
+        "imagine",
+        "like a",
+        "like an",
+        "jollof",
+        "traffic",
+        "market",
+        "house",
+        "ladder",
+        "recipe",
+        "blueprint",
+        "unlock",
+    ]
+    analogy_only_count = 0
+    for question in questions:
+        explanation = str(question.get("explanation") or "").lower()
+        if not explanation:
+            analogy_only_count += 1
+            continue
+        has_analogy = any(marker in explanation for marker in analogy_markers)
+        if has_analogy:
+            analogy_only_count += 1
+    return analogy_only_count >= 2
 
 
 def option_matching_number(options: Dict[str, Any], expected: float) -> Optional[str]:
@@ -291,6 +866,7 @@ def is_ambiguous_mastery_question(question: Dict[str, Any]) -> bool:
     """Reject generated questions that are mathematically ambiguous or misleading."""
     text = str(question.get("text") or "")
     lower_text = text.lower()
+    options = question.get("options") or {}
     if "middle number" in lower_text:
         range_match = re.search(r"\bfrom\s+(\d+)\s+to\s+(\d+)\b", lower_text)
         if range_match:
@@ -303,7 +879,43 @@ def is_ambiguous_mastery_question(question: Dict[str, Any]) -> bool:
                 expected_average = (start + end) / 2
                 return option_matching_number(question.get("options") or {}, expected_average) is None
         return True
+
+    if "place value" in lower_text and re.search(r"\bdigit\s+(\d)\b", lower_text):
+        digit = re.search(r"\bdigit\s+(\d)\b", lower_text).group(1)
+        number_matches = re.findall(r"\b\d[\d,]*\b", text)
+        target_number = max(number_matches, key=lambda value: len(value.replace(",", ""))) if number_matches else ""
+        if target_number:
+            digits_only = target_number.replace(",", "")
+            if digits_only.count(digit) > 1 and not re.search(
+                r"\b(leftmost|rightmost|first|second|third|fourth|from the left|from the right)\b",
+                lower_text,
+            ):
+                return True
+
+    if "word form" in lower_text and isinstance(options, dict):
+        canonical_options = [
+            canonical_number_word_option(value)
+            for value in options.values()
+            if str(value).strip()
+        ]
+        canonical_options = [value for value in canonical_options if value]
+        if len(set(canonical_options)) != len(canonical_options):
+            return True
     return False
+
+
+def canonical_number_word_option(value: Any) -> str:
+    """Normalize accepted number-word variants so duplicate correct options are rejected."""
+    text = str(value or "").lower().strip()
+    if not text:
+        return ""
+    text = text.replace("-", " ")
+    text = re.sub(r"[^\w\s]", "", text)
+    text = re.sub(r"\band\b", " ", text)
+    text = re.sub(r"\bthousands\b", "thousand", text)
+    text = re.sub(r"\bhundreds\b", "hundred", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
 
 
 def normalize_mastery_questions(questions: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -966,7 +1578,7 @@ async def generate_mastery_test(
     mastery_input_tokens = estimate_text_tokens(test_req.topic) + estimate_text_tokens(test_req.subject) + estimate_message_tokens(test_req.chat_history)
     brain_power_cost = brain_power_cost_for_tokens(
         mastery_input_tokens,
-        1600,
+        2600,
         student_profile.education_level if student_profile else None,
     )
     if not await deduct_brain_power(current_user.id, brain_power_cost, db):
@@ -990,7 +1602,48 @@ async def generate_mastery_test(
                 sanitize_user_input(test_req.subject),
             )
         normalized_questions = normalize_mastery_questions(questions)
-        if len(normalized_questions) < 5:
+        minimum_mastery_questions = 10
+        if len(normalized_questions) >= minimum_mastery_questions:
+            review = await review_structured_academic_output(
+                agent_name=ASSESSMENT_VALIDATOR_AGENT,
+                output_kind="mastery test questions",
+                output=normalized_questions,
+                context={
+                    "topic": sanitize_user_input(test_req.topic),
+                    "subject": sanitize_user_input(test_req.subject),
+                    "education_level": student_profile.education_level if student_profile else "secondary",
+                    "student_context": student_context,
+                },
+                review_focus=[
+                    "topic boundary alignment",
+                    "class-level difficulty progression",
+                    "answer key correctness",
+                    "option clarity and distinctness",
+                    "explanation quality",
+                    "professional workplace judgement" if student_profile and student_profile.education_level == "professional" else "age-appropriate academic rigor",
+                ],
+                user_id=current_user.id,
+                max_tokens=1800,
+            )
+            revised_questions = review.get("revised_output")
+            if isinstance(revised_questions, list):
+                revised_normalized = normalize_mastery_questions(revised_questions)
+                if len(revised_normalized) >= minimum_mastery_questions:
+                    normalized_questions = revised_normalized
+        if mastery_questions_need_academic_fallback(
+            normalized_questions,
+            sanitize_user_input(test_req.subject),
+            student_profile.education_level if student_profile else "secondary",
+        ):
+            logger.warning(
+                "[mastery-test] Generated questions used analogy-heavy explanations; using academic fallback for topic %s",
+                test_req.topic,
+            )
+            normalized_questions = normalize_mastery_questions(build_fallback_mastery_questions(
+                sanitize_user_input(test_req.topic),
+                sanitize_user_input(test_req.subject),
+            ))
+        if len(normalized_questions) < minimum_mastery_questions:
             logger.warning("[mastery-test] Generated questions failed validation; using fallback for topic %s", test_req.topic)
             normalized_questions = normalize_mastery_questions(build_fallback_mastery_questions(
                 sanitize_user_input(test_req.topic),
@@ -1507,6 +2160,7 @@ async def suggest_videos_for_topic(
     education_level: Optional[str] = None,
     limit: int = Query(6, ge=1, le=12),
     current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Get YouTube video suggestions for a topic.
@@ -1517,7 +2171,7 @@ async def suggest_videos_for_topic(
 
         # Build query focused on Nigeria as per instructions
         videos = await search_educational_videos(
-            query=topic, subject=subject, level=education_level, limit=limit
+            query=topic, subject=subject, level=education_level, limit=limit, db=db
         )
 
         return {"videos": videos, "topic": topic}

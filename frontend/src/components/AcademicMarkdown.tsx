@@ -6,6 +6,13 @@ import { normalizeAcademicTextForDisplay } from '@/utils/academicText';
 const normalizeMarkdownStructure = (text: string) =>
   text
     .replace(/\r\n/g, '\n')
+    .replace(/:\s+-\s+\*\*/g, ':\n- **')
+    .replace(/\s+-\s+\*\*(?=[A-Z0-9])/g, '\n- **')
+    .replace(/(\*\*[^*\n]+\*\*:\s[^-\n][^\n]*?)(?=\s+-\s+\*\*|\n|$)/g, '$1\n')
+    .replace(
+      /(^|\n)\s*(Goal|Core idea|Try this|Example|Practice|Summary|Watch out|Key points|Key items|Key units|Steps|What the examiner is testing|Exam distinction|Key units of storage)\.(?=\s|$)/gim,
+      '$1### $2.'
+    )
     .replace(/^(Introduction to [A-Z][A-Za-z0-9 ,&()/-]{3,80}?)\s+(?=(?:A|An|The|This|In)\s)/, '# $1\n\n')
     .replace(/([^\n])\s+(#{1,6}\s+)/g, '$1\n\n$2')
     .replace(/(^|\n)(#{1,6}\s+[^\n]+?)\s+(?=[A-Z][A-Za-z ]{2,}:)/g, '$1$2\n\n')
@@ -59,28 +66,51 @@ const renderMathChildren = (children: React.ReactNode): React.ReactNode =>
 interface AcademicMarkdownProps {
   children: string;
   className?: string;
+  variant?: 'default' | 'teacher-prep';
 }
 
-export const AcademicMarkdown = ({ children, className = '' }: AcademicMarkdownProps) => (
-  <div className={`prose prose-sm max-w-none dark:prose-invert prose-headings:font-semibold prose-headings:text-primary prose-p:leading-7 prose-li:leading-7 prose-pre:max-w-full prose-pre:overflow-x-auto prose-code:break-words ${className}`}>
-    <ReactMarkdown
-      components={{
-        p: ({ children }: any) => <p>{renderMathChildren(children)}</p>,
-        li: ({ children }: any) => <li>{renderMathChildren(children)}</li>,
-        h1: ({ children }: any) => <h2>{renderMathChildren(children)}</h2>,
-        h2: ({ children }: any) => <h2>{renderMathChildren(children)}</h2>,
-        h3: ({ children }: any) => <h3>{renderMathChildren(children)}</h3>,
-        h4: ({ children }: any) => <h4>{renderMathChildren(children)}</h4>,
-        strong: ({ children }: any) => <strong>{renderMathChildren(children)}</strong>,
-        em: ({ children }: any) => <em>{renderMathChildren(children)}</em>,
-        code: ({ className, children }: any) => (
-          <code className={className}>{children}</code>
-        ),
-      }}
-    >
-      {normalizeAcademicMarkdown(String(children || ''))}
-    </ReactMarkdown>
-  </div>
-);
+export const AcademicMarkdown = ({ children, className = '', variant = 'default' }: AcademicMarkdownProps) => {
+  const isTeacherPrep = variant === 'teacher-prep';
+
+  return (
+    <div className={`prose prose-sm max-w-none dark:prose-invert prose-headings:font-bold prose-headings:text-primary prose-p:leading-7 prose-li:leading-7 prose-pre:max-w-full prose-pre:overflow-x-auto prose-code:break-words ${className}`}>
+      <ReactMarkdown
+        components={{
+          p: ({ children }: any) => <p>{renderMathChildren(children)}</p>,
+          ul: ({ children }: any) => (
+            <ul className={isTeacherPrep ? 'my-4 space-y-3 pl-0 list-none' : undefined}>{children}</ul>
+          ),
+          ol: ({ children }: any) => (
+            <ol className={isTeacherPrep ? 'my-4 space-y-3 pl-0 list-none' : undefined}>{children}</ol>
+          ),
+          li: ({ children, index }: any) => (
+            isTeacherPrep ? (
+              <li className="rounded-lg border border-primary/15 bg-background px-4 py-3 shadow-sm">
+                <div className="text-sm leading-7 text-foreground">{renderMathChildren(children)}</div>
+              </li>
+            ) : (
+              <li>{renderMathChildren(children)}</li>
+            )
+          ),
+          h1: ({ children }: any) => <h2>{renderMathChildren(children)}</h2>,
+          h2: ({ children }: any) => <h2>{renderMathChildren(children)}</h2>,
+          h3: ({ children }: any) => <h3>{renderMathChildren(children)}</h3>,
+          h4: ({ children }: any) => <h4>{renderMathChildren(children)}</h4>,
+          strong: ({ children }: any) => (
+            <strong className={isTeacherPrep ? 'font-semibold text-primary' : undefined}>
+              {renderMathChildren(children)}
+            </strong>
+          ),
+          em: ({ children }: any) => <em>{renderMathChildren(children)}</em>,
+          code: ({ className, children }: any) => (
+            <code className={className}>{children}</code>
+          ),
+        }}
+      >
+        {normalizeAcademicMarkdown(String(children || ''))}
+      </ReactMarkdown>
+    </div>
+  );
+};
 
 export default AcademicMarkdown;

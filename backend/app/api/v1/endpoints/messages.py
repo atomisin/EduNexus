@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, or_, and_, update, func
-from sqlalchemy.orm import selectinload
+from sqlalchemy import select, or_, and_, update, func, case
+from sqlalchemy.orm import noload
 from typing import List
 import uuid
 from datetime import datetime, timezone
@@ -92,62 +92,79 @@ async def get_conversations(
     allowed_contact_ids = await get_allowed_contact_ids(db, current_user)
     user_ids.update(allowed_contact_ids)
 
-    # 3. Add linked contacts: Teachers for students, Students for teachers
-    if current_user.role == UserRole.STUDENT:
-        res_links = await db.execute(
-            select(TeacherStudent.teacher_id).filter(
-                TeacherStudent.student_id == current_user.id,
-                TeacherStudent.status == "active",
-            )
-        )
-    elif current_user.role == UserRole.TEACHER:
-        res_links = await db.execute(
-            select(TeacherStudent.student_id).filter(
-                TeacherStudent.teacher_id == current_user.id,
-                TeacherStudent.status == "active",
-            )
-        )
-    else:
-        res_links = None
-        
-    if res_links:
-        for link_id in res_links.scalars().all():
-            user_ids.add(link_id)
-    
     user_ids = {uid for uid in user_ids if uid in allowed_contact_ids}
     contacts = []
-    for uid in user_ids:
-        # Optimization: Fetch user info
-        res_user = await db.execute(select(User).filter(User.id == uid))
-        user = res_user.scalars().first()
-        if user:
-            # 4. Get last message for this conversation
-            stmt_last = select(Message).filter(
-                or_(
-                    and_(Message.sender_id == current_user.id, Message.recipient_id == uid),
-                    and_(Message.sender_id == uid, Message.recipient_id == current_user.id)
-                )
-            ).order_by(Message.created_at.desc()).limit(1)
-            
-            res_last = await db.execute(stmt_last)
-            last_msg = res_last.scalars().first()
-            
-            # 5. Get unread count
-            stmt_unread = select(func.count(Message.id)).filter(
-                Message.sender_id == uid,
-                Message.recipient_id == current_user.id,
-                Message.is_read == False
+    if user_ids:
+        res_users = await db.execute(
+            select(User.id, User.full_name, User.role, User.avatar_url)
+            .filter(User.id.in_(user_ids))
+        )
+        users_by_id = {row.id: row for row in res_users.all()}
+
+        partner_id = case(
+            (Message.sender_id == current_user.id, Message.recipient_id),
+            else_=Message.sender_id,
+        ).label("partner_id")
+        ranked_messages = (
+            select(
+                partner_id,
+                Message.content,
+                Message.created_at,
+                func.row_number()
+                .over(partition_by=partner_id, order_by=Message.created_at.desc())
+                .label("row_number"),
             )
-            res_unread = await db.execute(stmt_unread)
-            unread_count = res_unread.scalar_one()
+            .filter(
+                or_(
+                    and_(
+                        Message.sender_id == current_user.id,
+                        Message.recipient_id.in_(user_ids),
+                    ),
+                    and_(
+                        Message.sender_id.in_(user_ids),
+                        Message.recipient_id == current_user.id,
+                    ),
+                )
+            )
+            .subquery()
+        )
+        res_last_messages = await db.execute(
+            select(
+                ranked_messages.c.partner_id,
+                ranked_messages.c.content,
+                ranked_messages.c.created_at,
+            ).filter(ranked_messages.c.row_number == 1)
+        )
+        last_messages = {
+            row.partner_id: row
+            for row in res_last_messages.all()
+        }
+
+        res_unread_counts = await db.execute(
+            select(Message.sender_id, func.count(Message.id).label("unread_count"))
+            .filter(
+                Message.sender_id.in_(user_ids),
+                Message.recipient_id == current_user.id,
+                Message.is_read == False,
+            )
+            .group_by(Message.sender_id)
+        )
+        unread_counts = {
+            row.sender_id: row.unread_count
+            for row in res_unread_counts.all()
+        }
+
+        for uid, user in users_by_id.items():
+            last_msg = last_messages.get(uid)
+            role_value = user.role.value if hasattr(user.role, "value") else user.role
             
             contacts.append({
                 "user_id": str(user.id),
                 "name": user.full_name,
-                "role": user.role,
+                "role": role_value,
                 "last_message": last_msg.content if last_msg else "",
                 "last_message_time": last_msg.created_at.isoformat() if last_msg else None,
-                "unread_count": unread_count,
+                "unread_count": unread_counts.get(uid, 0),
                 "avatar_url": storage_service.resolve_url(user.avatar_url)
             })
             
@@ -166,17 +183,27 @@ async def get_messages(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid user ID format")
 
-    res_other = await db.execute(select(User).filter(User.id == other_uuid))
+    res_other = await db.execute(
+        select(User)
+        .options(noload("*"))
+        .filter(User.id == other_uuid)
+    )
     other_user = res_other.scalars().first()
     if not other_user or not await can_message_user(db, current_user, other_user):
         raise HTTPException(status_code=403, detail="You cannot message this user")
 
-    stmt = select(Message).filter(
-        or_(
-            and_(Message.sender_id == current_user.id, Message.recipient_id == other_uuid),
-            and_(Message.sender_id == other_uuid, Message.recipient_id == current_user.id)
+    stmt = (
+        select(Message)
+        .options(noload("*"))
+        .filter(
+            or_(
+                and_(Message.sender_id == current_user.id, Message.recipient_id == other_uuid),
+                and_(Message.sender_id == other_uuid, Message.recipient_id == current_user.id)
+            )
         )
-    ).order_by(Message.created_at.desc()).limit(limit)
+        .order_by(Message.created_at.desc())
+        .limit(limit)
+    )
     
     res = await db.execute(stmt)
     messages = res.scalars().all()
@@ -207,7 +234,11 @@ async def send_message(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid recipient ID format")
 
-    res_recipient = await db.execute(select(User).filter(User.id == recipient_uuid))
+    res_recipient = await db.execute(
+        select(User)
+        .options(noload("*"))
+        .filter(User.id == recipient_uuid)
+    )
     recipient = res_recipient.scalars().first()
     if not recipient or not await can_message_user(db, current_user, recipient):
         raise HTTPException(status_code=403, detail="You cannot message this user")
@@ -237,7 +268,7 @@ async def search_contacts(
     if not allowed_contact_ids:
         return []
 
-    stmt = select(User).filter(
+    stmt = select(User.id, User.full_name, User.role, User.avatar_url).filter(
         User.id.in_(allowed_contact_ids),
         User.id != current_user.id,
         or_(
@@ -247,13 +278,13 @@ async def search_contacts(
     ).limit(10)
     
     res = await db.execute(stmt)
-    users = res.scalars().all()
+    users = res.all()
     
     return [
         {
             "id": str(u.id), 
             "name": u.full_name, 
-            "role": u.role, 
+            "role": u.role.value if hasattr(u.role, "value") else u.role, 
             "avatar_url": storage_service.resolve_url(u.avatar_url)
         } for u in users
     ]

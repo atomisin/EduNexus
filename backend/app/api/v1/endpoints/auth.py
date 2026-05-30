@@ -2,6 +2,7 @@ from fastapi import APIRouter, Request, Depends, HTTPException, status, Response
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.orm import noload
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import Optional, List, Literal
 import uuid
@@ -14,6 +15,7 @@ from app.db.database import get_db, get_async_db
 from app.models.user import User, UserRole, UserStatus, TeacherProfile
 from app.models.student import StudentProfile
 from app.core.config import settings
+from app.core.limiter import limiter
 from app.core.security import verify_password
 from app.utils.validators import validate_email_registration, validate_password
 from app.services.email_service import email_service
@@ -220,7 +222,9 @@ class UserResponse(BaseModel):
 
 
 @router.post("/register", response_model=dict)
+@limiter.limit("5/minute")
 async def register(
+    request: Request,
     user_data: UserCreate,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_async_db),
@@ -323,7 +327,9 @@ async def register(
 @router.post(
     "/register/teacher", response_model=dict, status_code=status.HTTP_201_CREATED
 )
+@limiter.limit("5/minute")
 async def register_teacher(
+    request: Request,
     teacher_data: TeacherRegistration,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_async_db),
@@ -436,7 +442,9 @@ async def register_teacher(
 @router.post(
     "/register/student", response_model=dict, status_code=status.HTTP_201_CREATED
 )
+@limiter.limit("5/minute")
 async def register_student(
+    request: Request,
     student_data: StudentRegistration,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_async_db)
@@ -608,6 +616,7 @@ async def register_student(
 
 
 @router.post("/login", response_model=dict)
+@limiter.limit("10/minute")
 async def login(
     request: Request,
     response: Response,
@@ -773,7 +782,11 @@ async def refresh_token_endpoint(
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid refresh token")
 
-    result = await db.execute(select(User).filter(User.id == uuid.UUID(user_id)))
+    result = await db.execute(
+        select(User)
+        .options(noload("*"))
+        .filter(User.id == uuid.UUID(user_id))
+    )
     user = result.scalars().first()
     if user is None:
         raise HTTPException(status_code=401, detail="Invalid email or password")
@@ -835,7 +848,7 @@ async def get_current_user(
 ) -> User:
     """Validate access token from cookie OR authorization header (C-05 fallback)"""
     token = access_token
-    if not token and request:
+    if not token and request and settings.ALLOW_BEARER_AUTH:
         auth_header = request.headers.get("Authorization")
         if auth_header and auth_header.startswith("Bearer "):
             token = auth_header.split(" ")[1]
@@ -854,10 +867,15 @@ async def get_current_user(
         user_id: str = payload.get("sub")
         if user_id is None:
             raise HTTPException(status_code=401, detail="Invalid token")
-    except JWTError:
+        user_uuid = uuid.UUID(user_id)
+    except (JWTError, ValueError):
         raise HTTPException(status_code=401, detail="Invalid or expired token")
 
-    result = await db.execute(select(User).filter(User.id == uuid.UUID(user_id)))
+    result = await db.execute(
+        select(User)
+        .options(noload("*"))
+        .filter(User.id == user_uuid)
+    )
     user = result.scalars().first()
     if user is None:
         raise HTTPException(status_code=401, detail="Invalid email or password")
@@ -887,7 +905,7 @@ async def get_current_user_allow_password_change(
 ) -> User:
     """Token validation ONLY, bypasses force_password_change check (GAP 4)"""
     token = access_token
-    if not token and request:
+    if not token and request and settings.ALLOW_BEARER_AUTH:
         auth_header = request.headers.get("Authorization")
         if auth_header and auth_header.startswith("Bearer "):
             token = auth_header.split(" ")[1]
@@ -902,10 +920,15 @@ async def get_current_user_allow_password_change(
             token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
         )
         user_id = payload.get("sub")
-    except JWTError:
+        user_uuid = uuid.UUID(user_id)
+    except (JWTError, ValueError, TypeError):
         raise HTTPException(status_code=401, detail="Invalid token")
 
-    result = await db.execute(select(User).filter(User.id == uuid.UUID(user_id)))
+    result = await db.execute(
+        select(User)
+        .options(noload("*"))
+        .filter(User.id == user_uuid)
+    )
     user = result.scalars().first()
     if user is None:
         raise HTTPException(status_code=401, detail="Invalid email or password")
@@ -994,11 +1017,14 @@ async def change_password(
 
 
 @router.post("/forgot-password", response_model=dict)
+@limiter.limit("5/minute")
 async def forgot_password(
-    request: ForgotPasswordRequest, db: AsyncSession = Depends(get_async_db)
+    request: Request,
+    payload: ForgotPasswordRequest,
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Send a signed password reset link if the account exists."""
-    result = await db.execute(select(User).filter(User.email == request.email))
+    result = await db.execute(select(User).filter(User.email == payload.email))
     user = result.scalars().first()
 
     if user:
@@ -1025,11 +1051,14 @@ async def forgot_password(
 
 
 @router.post("/reset-password", response_model=dict)
+@limiter.limit("5/minute")
 async def reset_password(
-    request: ResetPasswordRequest, db: AsyncSession = Depends(get_async_db)
+    request: Request,
+    reset_data: ResetPasswordRequest,
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Reset a password with a signed password reset token."""
-    is_pwd_valid, pwd_error = validate_password(request.new_password)
+    is_pwd_valid, pwd_error = validate_password(reset_data.new_password)
     if not is_pwd_valid:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=pwd_error)
 
@@ -1037,8 +1066,8 @@ async def reset_password(
     from app.core.security import pwd_context
 
     try:
-        payload = jwt.decode(
-            request.token,
+        token_payload = jwt.decode(
+            reset_data.token,
             settings.SECRET_KEY,
             algorithms=[settings.ALGORITHM],
         )
@@ -1048,14 +1077,14 @@ async def reset_password(
             detail="This password reset link is invalid or has expired.",
         )
 
-    if payload.get("type") != "password_reset" or not payload.get("sub"):
+    if token_payload.get("type") != "password_reset" or not token_payload.get("sub"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="This password reset link is invalid or has expired.",
         )
 
     try:
-        user_id = uuid.UUID(payload["sub"])
+        user_id = uuid.UUID(token_payload["sub"])
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -1070,7 +1099,7 @@ async def reset_password(
             detail="This password reset link is invalid or has expired.",
         )
 
-    user.hashed_password = pwd_context.hash(request.new_password)
+    user.hashed_password = pwd_context.hash(reset_data.new_password)
     user.force_password_change = False
     await db.commit()
 
@@ -1078,11 +1107,14 @@ async def reset_password(
 
 
 @router.post("/verify-email", response_model=dict)
+@limiter.limit("8/minute")
 async def verify_email(
-    request: VerifyEmailRequest, db: AsyncSession = Depends(get_async_db)
+    request: Request,
+    payload: VerifyEmailRequest,
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Verify user's email address with verification code (C-02: Async)"""
-    result = await db.execute(select(User).filter(User.email == request.email))
+    result = await db.execute(select(User).filter(User.email == payload.email))
     user = result.scalars().first()
     if user is None:
         raise HTTPException(status_code=401, detail="Invalid email or password")
@@ -1103,7 +1135,7 @@ async def verify_email(
             detail="No verification code found. Please request a new one.",
         )
 
-    if user.verification_code != request.code:
+    if user.verification_code != payload.code:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid verification code"
         )
@@ -1145,16 +1177,16 @@ async def verify_email(
 
 
 @router.post("/resend-verification", response_model=dict)
+@limiter.limit("3/minute")
 async def resend_verification(
-    request: ResendVerificationRequest, db: AsyncSession = Depends(get_async_db)
+    request: Request,
+    payload: ResendVerificationRequest,
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Resend verification email (C-02: Async)"""
-    result = await db.execute(select(User).filter(User.email == request.email))
+    result = await db.execute(select(User).filter(User.email == payload.email))
     user = result.scalars().first()
     if user is None:
-        raise HTTPException(status_code=401, detail="Invalid email or password")
-
-    if not user:
         return {
             "success": True,
             "detail": "If an account exists with this email, a verification code has been sent.",

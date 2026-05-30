@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+﻿import { useState, useRef, useEffect, useCallback } from 'react';
 import { Brain, Send, Bot, User, Volume2, VolumeX, Copy, Check, Sparkles, X, Mic, MicOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -42,7 +42,7 @@ const prepareHelperMarkdown = (content: string) =>
     .replace(/\[object Object\]/g, '');
 
 const GUIDE_WELCOME =
-  "Welcome to EduNexus. I can help you choose the right access path for learning, teaching, or school use. What would you like to do first?";
+  "Welcome to EduNexus. I can help you find the right starting point for learning, teaching, or school use. What would you like to do first?";
 
 export function SmartHelper({ isOpen, onClose, subject, topic, enableHistory = true }: SmartHelperProps) {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -391,7 +391,7 @@ export function SmartHelper({ isOpen, onClose, subject, topic, enableHistory = t
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyPress={handleKeyPress}
-                placeholder={isListening ? "Listening... Speak now" : "Ask about EduNexus..."}
+                placeholder={isListening ? "Listening... Speak now" : "Ask a quick question about EduNexus..."}
                 className="flex-1"
                 disabled={isLoading || isListening}
               />
@@ -420,3 +420,6 @@ export function SmartHelper({ isOpen, onClose, subject, topic, enableHistory = t
     </>
   );
 }
+
+
+

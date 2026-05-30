@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Settings } from 'lucide-react';
 import { toast } from 'sonner';
 import { adminAPI } from '@/services/api';
@@ -37,11 +38,39 @@ export const TeacherLicensesPanel: React.FC<TeacherLicensesPanelProps> = ({ teac
 
   return (
     <div className="space-y-4">
+      <Card className="rounded-lg border border-border bg-background shadow-none">
+        <CardContent className="grid gap-4 p-4 sm:grid-cols-[1.2fr_1fr]">
+          <div className="space-y-2">
+            <Badge variant="outline" className="rounded-full border-primary/25 bg-primary/5 px-3 py-1 text-primary">
+              License brief
+            </Badge>
+            <div className="space-y-1.5">
+              <h3 className="text-lg font-semibold text-foreground">Manage teaching capacity with care</h3>
+              <p className="text-sm leading-6 text-muted-foreground">
+                Keep teacher plans, learner limits, and room to grow visible before class demand becomes a problem.
+              </p>
+            </div>
+          </div>
+          <div className="grid gap-2 rounded-lg border border-border bg-subtle p-3 text-sm">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Teacher profiles</p>
+              <p className="mt-1 text-lg font-semibold text-foreground">{teachers.length}</p>
+            </div>
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Capacity in use</p>
+              <p className="mt-1 text-lg font-semibold text-foreground">
+                {teachers.reduce((sum, teacher) => sum + (teacher.teacher_profile?.current_student_count || 0), 0)} learners
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {editingTeacher ? (
-        <Card className="rounded-lg border-border shadow-none">
+        <Card className="rounded-lg border-border bg-background shadow-none">
           <CardHeader>
             <CardTitle className="text-lg">Edit License: {editingTeacher.full_name || editingTeacher.email || 'Teacher'}</CardTitle>
-            <CardDescription>Manage student limits and plan tier</CardDescription>
+            <CardDescription>Adjust learner capacity and plan access for this teacher.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
@@ -55,18 +84,19 @@ export const TeacherLicensesPanel: React.FC<TeacherLicensesPanelProps> = ({ teac
             </div>
             <div className="space-y-2">
               <Label>Plan Type</Label>
-              <select
-                className="w-full p-2 rounded border bg-white dark:bg-slate-900"
-                value={newPlan}
-                onChange={(e) => setNewPlan(e.target.value)}
-              >
-                <option value="basic">Basic (Free)</option>
-                <option value="premium">Premium</option>
-                <option value="enterprise">Enterprise</option>
-              </select>
+              <Select value={newPlan} onValueChange={setNewPlan}>
+                <SelectTrigger className="rounded-lg border-border bg-background">
+                  <SelectValue placeholder="Select plan" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="basic">Basic (Free)</SelectItem>
+                  <SelectItem value="premium">Premium</SelectItem>
+                  <SelectItem value="enterprise">Enterprise</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="flex gap-2">
-              <Button className="rounded-lg" onClick={handleUpdateTeacherLimits}>Save Changes</Button>
+              <Button className="rounded-lg bg-primary text-primary-foreground hover:bg-primary/90" onClick={handleUpdateTeacherLimits}>Save Changes</Button>
               <Button className="rounded-lg" variant="outline" onClick={() => setEditingTeacher(null)}>Cancel</Button>
             </div>
           </CardContent>
@@ -75,7 +105,7 @@ export const TeacherLicensesPanel: React.FC<TeacherLicensesPanelProps> = ({ teac
 
       <div className="grid grid-cols-1 gap-3">
         {teachers.map((teacher) => (
-          <Card key={teacher.id} className="rounded-lg border-border shadow-none">
+          <Card key={teacher.id} className="rounded-lg border-border bg-background shadow-none">
             <CardContent className="p-4">
               <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <div className="min-w-0 flex items-center gap-3">
@@ -92,7 +122,7 @@ export const TeacherLicensesPanel: React.FC<TeacherLicensesPanelProps> = ({ teac
                 <div className="flex flex-wrap items-center gap-4 md:gap-8">
                   <div>
                     <p className="text-xs text-muted-foreground uppercase">Plan</p>
-                    <Badge variant="secondary" className="capitalize">
+                    <Badge variant="secondary" className="capitalize border-primary/15 bg-primary/10 text-primary">
                       {teacher.teacher_profile?.plan_type || 'basic'}
                     </Badge>
                   </div>

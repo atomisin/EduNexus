@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, BookOpen, Loader2, Upload } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { Plus, BookOpen, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -9,20 +9,16 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { subjectsAPI, materialsAPI } from '@/services/api';
+import { subjectsAPI } from '@/services/api';
 import { toast } from 'sonner';
-import { MaterialManager } from '../materials/MaterialManager';
 import { EDUCATION_LEVELS } from '../../../constants/educationLevels';
 
 export const SubjectManager = () => {
   const [subjects, setSubjects] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
-  const [showUploadModal, setShowUploadModal] = useState(false);
-  const [selectedSubject, setSelectedSubject] = useState<any | null>(null);
-  const [uploadFile, setUploadFile] = useState<File | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [globalSubjects, setGlobalSubjects] = useState<any[]>([]);
+  const [catalogSubjects, setCatalogSubjects] = useState<any[]>([]);
+  const catalogCacheRef = useRef<Record<string, any[]>>({});
   const [newSubject, setNewSubject] = useState({
     id: '',
     name: '',
@@ -31,12 +27,62 @@ export const SubjectManager = () => {
     description: '',
     autoGenerateTopics: true
   });
-  const [managingSubject, setManagingSubject] = useState<{ id: string, name: string } | null>(null);
   const [selectedLevel, setSelectedLevel] = useState('all');
 
   useEffect(() => {
     loadSubjects();
   }, []);
+
+  useEffect(() => {
+    if (!showCreateDialog || newSubject.educationLevel === 'professional') {
+      if (newSubject.educationLevel === 'professional') {
+        setCatalogSubjects([]);
+      }
+      return;
+    }
+
+    const loadCatalogSubjects = async () => {
+      try {
+        if (catalogCacheRef.current[newSubject.educationLevel]) {
+          setCatalogSubjects(catalogCacheRef.current[newSubject.educationLevel]);
+          return;
+        }
+        const gradeLevel = gradeFromEducationLevel(newSubject.educationLevel);
+        const data = await subjectsAPI.getAll({
+          education_level: newSubject.educationLevel,
+          grade_level: gradeLevel,
+          light: true,
+          exact_grade: Boolean(gradeLevel),
+        });
+        const subjectList = Array.isArray(data) ? data : (Array.isArray(data?.subjects) ? data.subjects : []);
+        catalogCacheRef.current[newSubject.educationLevel] = subjectList;
+        setCatalogSubjects(subjectList);
+      } catch (error) {
+        console.error('Failed to load catalog subjects:', error);
+        setCatalogSubjects([]);
+      }
+    };
+
+    void loadCatalogSubjects();
+  }, [showCreateDialog, newSubject.educationLevel]);
+
+  const gradeFromEducationLevel = (level?: string) => {
+    const gradeMap: Record<string, string> = {
+      primary_1: 'P1',
+      primary_2: 'P2',
+      primary_3: 'P3',
+      primary_4: 'P4',
+      primary_5: 'P5',
+      primary_6: 'P6',
+      jss_1: 'JSS1',
+      jss_2: 'JSS2',
+      jss_3: 'JSS3',
+      ss_1: 'SS1',
+      ss_2: 'SS2',
+      ss_3: 'SS3',
+    };
+    return level ? gradeMap[level] : undefined;
+  };
 
   // Sync newSubject defaults when selectedLevel changes
   useEffect(() => {
@@ -54,18 +100,20 @@ export const SubjectManager = () => {
     setLoading(true);
     try {
       const data = await subjectsAPI.getAll({ mine: true });
-      setSubjects(data.subjects || []);
-
-      const globalData = await subjectsAPI.getAll();
-      setGlobalSubjects(globalData.subjects || []);
+      const subjectList = Array.isArray(data) ? data : (Array.isArray(data?.subjects) ? data.subjects : []);
+      setSubjects(subjectList);
     } catch (error) {
       console.error('Failed to load subjects:', error);
       setSubjects([]);
-      setGlobalSubjects([]);
     } finally {
       setLoading(false);
     }
   };
+
+  const visibleSubjects = useMemo(
+    () => (selectedLevel === 'all' ? subjects : subjects.filter((s: any) => s.education_level === selectedLevel)),
+    [selectedLevel, subjects]
+  );
 
   const handleCreateSubject = async () => {
     if (!newSubject.name && newSubject.educationLevel === 'professional') {
@@ -79,7 +127,7 @@ export const SubjectManager = () => {
     try {
       await subjectsAPI.create({
         id: newSubject.educationLevel !== 'professional' ? newSubject.id : undefined,
-        name: newSubject.name || globalSubjects.find(s => s.id === newSubject.id)?.name || 'Unknown',
+        name: newSubject.name || catalogSubjects.find(s => s.id === newSubject.id)?.name || 'Unknown',
         education_level: newSubject.educationLevel,
         curriculum_type: newSubject.curriculumType,
         description: newSubject.description,
@@ -91,29 +139,6 @@ export const SubjectManager = () => {
       loadSubjects();
     } catch (error: any) {
       toast.error(error.message || 'Failed to add subject');
-    }
-  };
-
-  const handleFileUpload = async () => {
-    if (!uploadFile || !selectedSubject) return;
-    setUploading(true);
-    try {
-      const formData = new FormData();
-      formData.append('title', uploadFile.name);
-      formData.append('subject', selectedSubject.name);
-      formData.append('subject_id', selectedSubject.id);
-      formData.append('education_level', selectedSubject.education_level);
-      formData.append('file', uploadFile);
-      formData.append('is_public', 'false');
-
-      await materialsAPI.upload(formData);
-      toast.success('Material uploaded and linked to ' + selectedSubject.name);
-      setShowUploadModal(false);
-      setUploadFile(null);
-    } catch (error: any) {
-      toast.error(error.message || 'Upload failed');
-    } finally {
-      setUploading(false);
     }
   };
 
@@ -191,7 +216,7 @@ export const SubjectManager = () => {
             <div className="col-span-2 flex justify-center py-12">
               <Loader2 className="w-8 h-8 animate-spin text-primary" />
             </div>
-          ) : (selectedLevel === 'all' ? subjects : subjects.filter((s: any) => s.education_level === selectedLevel)).map((subject: any) => {
+          ) : visibleSubjects.map((subject: any) => {
             const eduCategory = subject.education_level?.split('_')[0] || 'secondary';
             const config = educationConfig[eduCategory as keyof typeof educationConfig] || educationConfig.secondary;
             return (
@@ -213,27 +238,9 @@ export const SubjectManager = () => {
                         </div>
                         <p className="text-sm text-muted-foreground mt-3 line-clamp-2">{subject.description || 'No description'}</p>
 
-                        <div className="flex flex-wrap items-center gap-2 mt-4">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="rounded-lg gap-2"
-                            onClick={() => {
-                              setSelectedSubject(subject);
-                              setShowUploadModal(true);
-                            }}
-                          >
-                            <Upload className="w-4 h-4" /> Upload Material
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="rounded-lg"
-                            onClick={() => setManagingSubject({ id: subject.id, name: subject.name })}
-                          >
-                            Manage
-                          </Button>
-                        </div>
+                        <p className="mt-4 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                          Ready for session planning
+                        </p>
                       </div>
                     </div>
                   </div>
@@ -241,7 +248,7 @@ export const SubjectManager = () => {
               </Card>
             );
           })}
-          {((selectedLevel === 'all' ? subjects : subjects.filter((s: any) => s.education_level === selectedLevel)).length === 0) && !loading && (
+          {(visibleSubjects.length === 0) && !loading && (
             <div className="col-span-2 text-center py-12 bg-card rounded-lg border border-dashed">
               <BookOpen className="w-12 h-12 text-slate-300 mx-auto mb-4" />
               <p className="text-slate-500">No subjects found for {ALL_LEVELS.find(l => l.id === selectedLevel)?.label || 'All Subjects'}</p>
@@ -275,7 +282,7 @@ export const SubjectManager = () => {
                   modal={false}
                   value={newSubject.id}
                   onValueChange={(v) => {
-                    const subj = globalSubjects.find(s => s.id === v);
+                    const subj = catalogSubjects.find(s => s.id === v);
                     setNewSubject({ ...newSubject, id: v, name: subj?.name || '' });
                   }}
                 >
@@ -283,15 +290,13 @@ export const SubjectManager = () => {
                     <SelectValue placeholder="Select an existing subject..." />
                   </SelectTrigger>
                   <SelectContent>
-                    {globalSubjects
-                      .filter(s => s.education_level === newSubject.educationLevel && s.curriculum_type === newSubject.curriculumType)
-                      .map(subject => (
+                    {catalogSubjects.map(subject => (
                         <SelectItem key={subject.id} value={subject.id}>
-                          {subject.name}
+                          {subject.name}{subject.curriculum_type ? ` · ${subject.curriculum_type}` : ''}
                         </SelectItem>
                       ))
                     }
-                    {globalSubjects.filter(s => s.education_level === newSubject.educationLevel && s.curriculum_type === newSubject.curriculumType).length === 0 && (
+                    {catalogSubjects.length === 0 && (
                       <SelectItem value="none" disabled>No subjects available for this level</SelectItem>
                     )}
                   </SelectContent>
@@ -307,6 +312,8 @@ export const SubjectManager = () => {
                   onValueChange={(v) => {
                     setNewSubject({
                       ...newSubject,
+                      id: '',
+                      name: '',
                       educationLevel: v,
                       curriculumType: v === 'professional' ? 'Custom' : newSubject.curriculumType
                     });
@@ -381,57 +388,6 @@ export const SubjectManager = () => {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={showUploadModal} onOpenChange={setShowUploadModal}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Upload className="w-5 h-5 text-teal-600" />
-              Upload Material: {selectedSubject?.name}
-            </DialogTitle>
-            <DialogDescription>
-              Add documents or resources to this subject for AI processing.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-6 py-4">
-             <div
-              className="border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl p-8 text-center hover:border-teal-500 transition-colors cursor-pointer bg-slate-50 dark:bg-slate-900/50"
-              onClick={() => document.getElementById('subject-file-upload')?.click()}
-            >
-              <input
-                id="subject-file-upload"
-                type="file"
-                className="hidden"
-                onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
-              />
-              <div className="w-12 h-12 rounded-full bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center mx-auto mb-4">
-                 <BookOpen className="w-6 h-6 text-teal-600" />
-              </div>
-              <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
-                {uploadFile ? uploadFile.name : 'Click to select or drag and drop'}
-              </p>
-              <p className="text-xs text-slate-500 mt-1">PDF, DOCX, or Image (Max 10MB)</p>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowUploadModal(false)} className="rounded-xl">Cancel</Button>
-            <Button
-              onClick={handleFileUpload}
-              disabled={!uploadFile || uploading}
-              className="btn-primary rounded-xl"
-            >
-              {uploading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Uploading...</> : 'Start Upload'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {managingSubject && (
-        <MaterialManager
-          subjectId={managingSubject.id}
-          subjectName={managingSubject.name}
-          onClose={() => setManagingSubject(null)}
-        />
-      )}
     </div>
   );
 };

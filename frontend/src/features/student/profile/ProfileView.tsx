@@ -50,6 +50,8 @@ interface ProfileViewProps {
   enrolledSubjects: string[];
   getLearningStyleLabel: (style: string | undefined) => { label: string; desc?: string };
   startAssessment: () => void;
+  handleGenerateCustomCourse?: (name?: string) => Promise<void>;
+  isGeneratingCourse?: boolean;
 }
 
 export const ProfileView = ({
@@ -66,6 +68,8 @@ export const ProfileView = ({
   enrolledSubjects,
   getLearningStyleLabel,
   startAssessment,
+  handleGenerateCustomCourse,
+  isGeneratingCourse = false,
 }: ProfileViewProps) => {
   const { logout, setUser } = useAuth();
   const [savingProfile, setSavingProfile] = useState(false);
@@ -119,7 +123,7 @@ export const ProfileView = ({
               <div className="relative group">
                 <Avatar className="h-20 w-20 overflow-hidden border border-border bg-muted shadow-sm sm:h-24 sm:w-24">
                   <AvatarImage
-                    src={avatarUrl || user.avatar || profile?.avatar_url}
+                    src={avatarUrl || user?.avatar_url || profile?.avatar_url || user?.avatar}
                     className="object-cover"
                   />
                   <AvatarFallback className="bg-primary/10 text-2xl text-primary">
@@ -155,6 +159,12 @@ export const ProfileView = ({
                     try {
                       const result = await studentAPI.uploadAvatar(file);
                       setAvatarUrl(result.avatar_url);
+                      if (profile) {
+                        setProfile({
+                          ...profile,
+                          avatar_url: result.avatar_url,
+                        });
+                      }
                       if (user) {
                         setUser({
                           ...user,
@@ -276,7 +286,16 @@ export const ProfileView = ({
                   ) : (
                     <p className="mt-1 break-words text-lg font-semibold">{profile?.course_name || 'Not set'}</p>
                   )}
-                  <p className="mt-2 text-xs text-muted-foreground">AI will curate a comprehensive curriculum based on this course.</p>
+                  <p className="mt-2 text-xs text-muted-foreground">Course creation now goes through EduNexus approval before any curriculum is generated.</p>
+                  <Button
+                    type="button"
+                    className="mt-3 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90"
+                    disabled={isGeneratingCourse || !(profileFormData.course_name || '').trim() || isEditingProfile}
+                    onClick={() => handleGenerateCustomCourse?.(profileFormData.course_name)}
+                  >
+                    {isGeneratingCourse ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                    Submit course request
+                  </Button>
                 </div>
               )}
 

@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,8 +14,11 @@ import { NotificationBell } from '@/components/NotificationBell';
 import ThemeToggle from '@/components/ThemeToggle';
 import { UserCard } from './UserCard';
 import { TeacherLicensesPanel } from './TeacherLicensesPanel';
-import { CurriculumMaterialsTab } from './CurriculumMaterialsTab';
 import { UsageAnalytics } from './UsageAnalytics';
+import { CustomCourseRequestsPanel } from './CustomCourseRequestsPanel';
+import { ReportQualityAnalytics } from './ReportQualityAnalytics';
+import { VideoCreatorProfilesPanel } from './VideoCreatorProfilesPanel';
+import { MessagingView } from '@/components/messaging/MessagingView';
 
 interface UserType {
   id: string;
@@ -51,25 +55,66 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [password, setPassword] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterRole, setFilterRole] = useState<'all' | 'teacher' | 'student'>('all');
+  const [activeTab, setActiveTab] = useState('pending');
   const [users, setUsers] = useState<UserType[]>([]);
   const [teachers, setTeachers] = useState<any[]>([]);
+  const [teachersLoading, setTeachersLoading] = useState(false);
   const [loading, setLoading] = useState(false);
+  const fetchDataPromiseRef = useRef<Promise<void> | null>(null);
+  const loadedAdminIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (authUser?.role === 'admin') {
       setIsLoggedIn(true);
-      fetchData();
+      if (loadedAdminIdRef.current !== authUser.id) {
+        loadedAdminIdRef.current = authUser.id;
+        void fetchData();
+      }
     }
   }, [authUser]);
 
-  const fetchData = async () => {
-    setLoading(true);
+  const fetchUsers = useCallback(async () => {
     try {
-      await Promise.all([fetchUsers(), fetchTeachers()]);
-    } finally {
-      setLoading(false);
+      const data = await adminAPI.getAllUsers();
+      setUsers(data);
+    } catch (error: any) {
+      toast.error('Failed to fetch users: ' + error.message);
     }
-  };
+  }, []);
+
+  const fetchTeachers = useCallback(async () => {
+    setTeachersLoading(true);
+    try {
+      const data = await adminAPI.getTeachers();
+      setTeachers(data);
+    } catch (error: any) {
+      toast.error('Failed to fetch teachers: ' + error.message);
+    } finally {
+      setTeachersLoading(false);
+    }
+  }, []);
+
+  const fetchData = useCallback(async () => {
+    if (fetchDataPromiseRef.current) {
+      return fetchDataPromiseRef.current;
+    }
+
+    setLoading(true);
+    const request = (async () => {
+      await fetchUsers();
+    })().finally(() => {
+      fetchDataPromiseRef.current = null;
+      setLoading(false);
+    });
+
+    fetchDataPromiseRef.current = request;
+    return request;
+  }, [fetchUsers]);
+
+  useEffect(() => {
+    if (!isLoggedIn || activeTab !== 'licenses' || teachers.length > 0 || teachersLoading) return;
+    void fetchTeachers();
+  }, [activeTab, fetchTeachers, isLoggedIn, teachers.length, teachersLoading]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -80,29 +125,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       if (!success) return;
       setIsLoggedIn(true);
       toast.success('Welcome, Admin!');
-      fetchData();
     } catch (error: any) {
       toast.error(error.message || 'Invalid admin credentials');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const fetchUsers = async () => {
-    try {
-      const data = await adminAPI.getAllUsers();
-      setUsers(data);
-    } catch (error: any) {
-      toast.error('Failed to fetch users: ' + error.message);
-    }
-  };
-
-  const fetchTeachers = async () => {
-    try {
-      const data = await adminAPI.getTeachers();
-      setTeachers(data);
-    } catch (error: any) {
-      toast.error('Failed to fetch teachers: ' + error.message);
     }
   };
 
@@ -164,7 +190,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         <Card className="w-full max-w-md rounded-lg border-border shadow-none">
           <CardHeader>
             <CardTitle className="text-2xl">Admin Login</CardTitle>
-            <CardDescription>Access the admin panel to manage user approvals</CardDescription>
+            <CardDescription>Sign in to review approvals and keep the platform healthy.</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleLogin} className="space-y-4">
@@ -188,7 +214,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               </div>
               <Button type="submit" className="w-full bg-primary text-primary-foreground hover:bg-primary/90" disabled={loading}>
                 {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                Login as Admin
+                Sign in as admin
               </Button>
               <Button type="button" variant="outline" className="w-full" onClick={onBack}>
                 Back to Main
@@ -222,8 +248,34 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       <main className="max-w-7xl mx-auto px-3 py-4 pb-24 sm:p-4 md:p-6 md:pb-8">
         <div className="mb-4 sm:mb-5">
           <h2 className="text-xl sm:text-2xl font-semibold tracking-tight">Platform Operations</h2>
-          <p className="text-sm text-muted-foreground">Review users, teacher licenses, curriculum materials, and AI cost trends.</p>
+          <p className="text-sm text-muted-foreground">Review users, governed custom courses, video evidence sources, teacher licenses, AI cost trends, and assessment quality health.</p>
         </div>
+
+        <Card className="mb-5 rounded-lg border border-border bg-background shadow-none">
+          <CardContent className="grid gap-4 p-4 sm:grid-cols-[1.35fr_1fr]">
+            <div className="space-y-2">
+              <Badge variant="outline" className="rounded-full border-primary/25 bg-primary/5 px-3 py-1 text-primary">
+                Operations brief
+              </Badge>
+              <div className="space-y-1.5">
+                <h3 className="text-lg font-semibold text-foreground">What to watch here</h3>
+                <p className="text-sm leading-6 text-muted-foreground">
+                  This workspace keeps approvals, course governance, evidence quality, and teacher capacity in one place so the platform stays safe, credible, and well run.
+                </p>
+              </div>
+            </div>
+            <div className="grid gap-2 rounded-lg border border-border bg-subtle p-3 text-sm">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Needs review</p>
+                <p className="mt-1 text-lg font-semibold text-foreground">{pendingUsers.length} registrations</p>
+              </div>
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Teacher capacity</p>
+                <p className="mt-1 text-lg font-semibold text-foreground">{teacherCount} active teacher profiles</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4 mb-5 sm:mb-6">
           <Card className="rounded-lg border-border shadow-none">
@@ -274,7 +326,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
         <div className="flex flex-col md:flex-row gap-3 mb-5">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
               placeholder="Search users..."
               value={searchTerm}
@@ -294,13 +346,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             <Loader2 className="w-8 h-8 animate-spin text-primary" />
           </div>
         ) : (
-          <Tabs defaultValue="pending" className="w-full min-w-0">
-            <TabsList className="mb-5 grid h-auto w-full grid-cols-2 gap-1 bg-secondary/50 p-1 sm:grid-cols-3 xl:grid-cols-6">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full min-w-0">
+            <TabsList className="mb-5 grid h-auto w-full grid-cols-2 gap-1 bg-secondary/50 p-1 sm:grid-cols-3 xl:grid-cols-9">
               <TabsTrigger value="pending" className="min-w-0 whitespace-normal rounded-md px-2 py-2 text-xs leading-tight data-[state=active]:bg-primary data-[state=active]:text-primary-foreground sm:text-sm">Pending Approval ({pendingUsers.length})</TabsTrigger>
               <TabsTrigger value="approved" className="min-w-0 whitespace-normal rounded-md px-2 py-2 text-xs leading-tight data-[state=active]:bg-primary data-[state=active]:text-primary-foreground sm:text-sm">Approved Users ({approvedUsers.length})</TabsTrigger>
               <TabsTrigger value="suspended" className="min-w-0 whitespace-normal rounded-md px-2 py-2 text-xs leading-tight data-[state=active]:bg-primary data-[state=active]:text-primary-foreground sm:text-sm">Suspended ({suspendedUsers.length})</TabsTrigger>
-              <TabsTrigger value="licenses" className="min-w-0 whitespace-normal rounded-md px-2 py-2 text-xs leading-tight data-[state=active]:bg-primary data-[state=active]:text-primary-foreground sm:text-sm">Teacher Licenses ({teachers.length})</TabsTrigger>
-              <TabsTrigger value="materials" className="min-w-0 whitespace-normal rounded-md px-2 py-2 text-xs leading-tight data-[state=active]:bg-primary data-[state=active]:text-primary-foreground sm:text-sm">Curriculum Materials</TabsTrigger>
+              <TabsTrigger value="custom-courses" className="min-w-0 whitespace-normal rounded-md px-2 py-2 text-xs leading-tight data-[state=active]:bg-primary data-[state=active]:text-primary-foreground sm:text-sm">Custom Courses</TabsTrigger>
+              <TabsTrigger value="video-evidence" className="min-w-0 whitespace-normal rounded-md px-2 py-2 text-xs leading-tight data-[state=active]:bg-primary data-[state=active]:text-primary-foreground sm:text-sm">Video Evidence</TabsTrigger>
+              <TabsTrigger value="licenses" className="min-w-0 whitespace-normal rounded-md px-2 py-2 text-xs leading-tight data-[state=active]:bg-primary data-[state=active]:text-primary-foreground sm:text-sm">Teacher Licenses ({teacherCount})</TabsTrigger>
+              <TabsTrigger value="report-quality" className="min-w-0 whitespace-normal rounded-md px-2 py-2 text-xs leading-tight data-[state=active]:bg-primary data-[state=active]:text-primary-foreground sm:text-sm">Report Quality</TabsTrigger>
+              <TabsTrigger value="messages" className="min-w-0 whitespace-normal rounded-md px-2 py-2 text-xs leading-tight data-[state=active]:bg-primary data-[state=active]:text-primary-foreground sm:text-sm">Messages</TabsTrigger>
               <TabsTrigger value="usage" className="min-w-0 whitespace-normal rounded-md px-2 py-2 text-xs leading-tight data-[state=active]:bg-primary data-[state=active]:text-primary-foreground sm:text-sm">AI Usage & Cost</TabsTrigger>
             </TabsList>
 
@@ -308,7 +363,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               {pendingUsers.length === 0 ? (
                 <Alert>
                   <CheckCircle className="w-4 h-4" />
-                  <AlertDescription>No pending users. All registrations have been approved!</AlertDescription>
+                  <AlertDescription>No registrations are waiting for review right now.</AlertDescription>
                 </Alert>
               ) : (
                 pendingUsers.map((user) => (
@@ -343,16 +398,34 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               )}
             </TabsContent>
 
-            <TabsContent value="licenses" className="space-y-4">
-              <TeacherLicensesPanel teachers={teachers} onRefreshTeachers={fetchTeachers} />
+            <TabsContent value="custom-courses" className="space-y-4">
+              {activeTab === 'custom-courses' ? <CustomCourseRequestsPanel /> : null}
             </TabsContent>
 
-            <TabsContent value="materials" className="space-y-6">
-              <CurriculumMaterialsTab isLoggedIn={isLoggedIn} />
+            <TabsContent value="video-evidence" className="space-y-4">
+              {activeTab === 'video-evidence' ? <VideoCreatorProfilesPanel /> : null}
+            </TabsContent>
+
+            <TabsContent value="licenses" className="space-y-4">
+              {activeTab !== 'licenses' ? null : teachersLoading && teachers.length === 0 ? (
+                <div className="flex justify-center py-10">
+                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                </div>
+              ) : (
+                <TeacherLicensesPanel teachers={teachers} onRefreshTeachers={fetchTeachers} />
+              )}
+            </TabsContent>
+
+            <TabsContent value="report-quality" className="space-y-6">
+              {activeTab === 'report-quality' ? <ReportQualityAnalytics /> : null}
+            </TabsContent>
+
+            <TabsContent value="messages" className="space-y-6">
+              {activeTab === 'messages' && authUser ? <MessagingView currentUser={authUser} /> : null}
             </TabsContent>
 
             <TabsContent value="usage" className="space-y-6">
-              <UsageAnalytics />
+              {activeTab === 'usage' ? <UsageAnalytics /> : null}
             </TabsContent>
           </Tabs>
         )}
@@ -362,3 +435,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 };
 
 export default AdminPanel;
+
+
+
+

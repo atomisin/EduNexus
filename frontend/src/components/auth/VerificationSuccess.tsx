@@ -29,7 +29,7 @@ export const VerificationSuccess: React.FC<VerificationSuccessProps> = ({
 
   const handleVerify = async () => {
     if (verificationCode.length < 6) {
-      setError('Please enter the complete verification code');
+      setError('Please enter the full 6-digit code.');
       return;
     }
 
@@ -38,9 +38,9 @@ export const VerificationSuccess: React.FC<VerificationSuccessProps> = ({
 
     if (success) {
       setIsVerified(true);
-      toast.success('Email verified successfully');
+      toast.success('Email confirmed successfully.');
     } else {
-      setError('Invalid verification code. Please try again.');
+      setError('That code did not match. Please check it and try again.');
     }
   };
 
@@ -52,10 +52,10 @@ export const VerificationSuccess: React.FC<VerificationSuccessProps> = ({
 
     if (success) {
       setEmailSent(true);
-      toast.success('Verification email resent. Check your inbox.');
+      toast.success('A fresh verification code is on the way.');
     } else {
       setEmailSent(false);
-      setError('We could not send the verification email. Please confirm the SMTP settings, then resend the code.');
+      setError('We could not send the code right now. Please try again in a moment.');
     }
 
     setIsResending(false);
@@ -69,21 +69,21 @@ export const VerificationSuccess: React.FC<VerificationSuccessProps> = ({
             <div className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-4">
               <CheckCircle className="w-10 h-10 text-emerald-600" />
             </div>
-            <CardTitle className="text-2xl">Email Verified</CardTitle>
+            <CardTitle className="text-2xl">Email confirmed</CardTitle>
             <CardDescription>
-              Your email is confirmed. The admin team will now complete the final account review.
+              Your email is confirmed. The final account review can now continue.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="bg-primary/5 border border-primary/20 rounded-lg p-4">
               <div className="flex items-center gap-2 text-primary mb-3">
                 <ShieldCheck className="w-5 h-5" />
-                <span className="font-semibold">What happens next?</span>
+                <span className="font-semibold">What happens next</span>
               </div>
               <div className="space-y-2 text-sm text-foreground/80">
                 <p className="flex gap-2">
                   <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
-                  Your email address has been verified.
+                  Your email address is now confirmed.
                 </p>
                 <p className="flex gap-2">
                   <Clock className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
@@ -97,7 +97,7 @@ export const VerificationSuccess: React.FC<VerificationSuccessProps> = ({
             </div>
 
             <Button onClick={onContinue} className="w-full btn-primary">
-              Continue to Login
+              Continue to sign in
             </Button>
           </CardContent>
         </Card>
@@ -113,7 +113,7 @@ export const VerificationSuccess: React.FC<VerificationSuccessProps> = ({
           <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
             <Mail className="w-9 h-9 text-primary" />
           </div>
-          <CardTitle className="text-2xl">Verify Your Email</CardTitle>
+          <CardTitle className="text-2xl">Check your email</CardTitle>
           <CardDescription>
             {emailSent ? (
               <>
@@ -121,7 +121,7 @@ export const VerificationSuccess: React.FC<VerificationSuccessProps> = ({
               </>
             ) : (
               <>
-                Your account was created, but EduNexus could not send the verification code to <strong>{email}</strong>.
+                Your account was created, but we could not send the verification code to <strong>{email}</strong> yet.
               </>
             )}
           </CardDescription>
@@ -130,7 +130,7 @@ export const VerificationSuccess: React.FC<VerificationSuccessProps> = ({
           {!emailSent && (
             <Alert>
               <AlertDescription>
-                Please check the email/SMTP configuration, then use resend. The code entry box is ready as soon as the email arrives.
+                Use resend in a moment. As soon as the code arrives, you can enter it here and continue.
               </AlertDescription>
             </Alert>
           )}
@@ -142,7 +142,7 @@ export const VerificationSuccess: React.FC<VerificationSuccessProps> = ({
           )}
 
           <div className="space-y-2">
-            <label className="text-sm font-medium">Verification Code</label>
+            <label className="text-sm font-medium">Verification code</label>
             <Input
               type="text"
               placeholder="Enter 6-digit code"
@@ -152,7 +152,7 @@ export const VerificationSuccess: React.FC<VerificationSuccessProps> = ({
               className="text-center text-2xl tracking-widest h-14"
             />
             <p className="text-xs text-muted-foreground">
-              After email verification, an administrator will review and activate the account.
+              Once your email is confirmed, the final account review can continue.
             </p>
           </div>
 
@@ -164,10 +164,10 @@ export const VerificationSuccess: React.FC<VerificationSuccessProps> = ({
             {isLoading ? (
               <>
                 <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                Verifying...
+                Confirming...
               </>
             ) : (
-              'Verify Email'
+              'Confirm email'
             )}
           </Button>
 
@@ -180,10 +180,10 @@ export const VerificationSuccess: React.FC<VerificationSuccessProps> = ({
               {isResending ? (
                 <>
                   <RefreshCw className="w-4 h-4 animate-spin" />
-                  Resending...
+                  Sending again...
                 </>
               ) : (
-                'Resend verification code'
+                'Send code again'
               )}
             </button>
           </div>
@@ -194,7 +194,7 @@ export const VerificationSuccess: React.FC<VerificationSuccessProps> = ({
             className="w-full"
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Login
+            Back to sign in
           </Button>
         </CardContent>
       </Card>

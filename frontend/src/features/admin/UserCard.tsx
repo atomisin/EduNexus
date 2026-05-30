@@ -31,11 +31,11 @@ export const UserCard: React.FC<UserCardProps> = ({ user, variant, onApprove, on
   const avatarClass = variant === 'pending'
     ? 'text-xl bg-primary text-primary-foreground'
     : variant === 'approved'
-    ? 'text-xl bg-emerald-600 text-white'
-    : 'text-xl bg-slate-400 text-white';
+    ? 'text-xl bg-primary/15 text-primary'
+    : 'text-xl bg-muted text-muted-foreground';
 
-  const nameClass = variant === 'suspended' ? 'font-semibold text-lg text-slate-500' : 'font-semibold text-lg';
-  const emailClass = variant === 'suspended' ? 'text-slate-400' : 'text-slate-500';
+  const nameClass = variant === 'suspended' ? 'font-semibold text-lg text-muted-foreground' : 'font-semibold text-lg text-foreground';
+  const emailClass = 'text-muted-foreground';
   const formatClassLevel = (value?: string | null) => {
     if (!value) return '';
     return value
@@ -53,7 +53,7 @@ export const UserCard: React.FC<UserCardProps> = ({ user, variant, onApprove, on
     : '';
 
   return (
-    <Card className="rounded-lg border-border shadow-none">
+    <Card className="rounded-lg border-border bg-background shadow-none">
       <CardContent className="p-4">
         <div className="flex flex-col gap-4 md:flex-row md:items-start">
           <Avatar className={`w-12 h-12${variant === 'suspended' ? ' opacity-50' : ''}`}>
@@ -82,17 +82,17 @@ export const UserCard: React.FC<UserCardProps> = ({ user, variant, onApprove, on
                     </Badge>
                   )}
                   {variant === 'pending' && (
-                    <Badge className="bg-amber-100 text-amber-700">Pending Approval</Badge>
+                    <Badge className="border border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/40 dark:bg-amber-900/20 dark:text-amber-300">Pending approval</Badge>
                   )}
                   {variant === 'approved' && (
-                    <Badge className="bg-emerald-100 text-emerald-700">Active</Badge>
+                    <Badge className="border border-primary/20 bg-primary/10 text-primary">Active</Badge>
                   )}
                   {variant === 'suspended' && (
-                    <Badge variant="destructive">Suspended</Badge>
+                    <Badge variant="outline" className="border-border text-muted-foreground">Suspended</Badge>
                   )}
                 </div>
                 {variant === 'pending' && user.created_at && (
-                  <p className="text-sm text-muted-foreground mt-1"> {/* Changed from slate-400 */}
+                  <p className="mt-1 text-sm text-muted-foreground">
                     Registered: {new Date(user.created_at).toLocaleDateString()}
                   </p>
                 )}
@@ -100,23 +100,23 @@ export const UserCard: React.FC<UserCardProps> = ({ user, variant, onApprove, on
               <div className="flex flex-wrap gap-2 md:justify-end">
                 {variant === 'pending' && (
                   <>
-                    <Button onClick={() => onApprove(user.id)} className="bg-emerald-600 hover:bg-emerald-700">
+                    <Button onClick={() => onApprove(user.id)} className="rounded-lg bg-primary text-primary-foreground hover:bg-primary/90">
                       <CheckCircle className="w-4 h-4 mr-2" /> Approve
                     </Button>
-                    <Button variant="destructive" onClick={() => onReject(user.id)}>
+                    <Button variant="outline" className="rounded-lg border-border" onClick={() => onReject(user.id)}>
                       <XCircle className="w-4 h-4 mr-2" /> Reject
                     </Button>
                   </>
                 )}
                 {variant === 'approved' && (
-                  <Button variant="outline" onClick={() => onReject(user.id)}>Suspend</Button>
+                  <Button variant="outline" className="rounded-lg border-border" onClick={() => onReject(user.id)}>Suspend</Button>
                 )}
                 {variant === 'suspended' && (
-                  <Button variant="default" onClick={() => onApprove(user.id)}>Reactivate</Button>
+                  <Button className="rounded-lg bg-primary text-primary-foreground hover:bg-primary/90" onClick={() => onApprove(user.id)}>Reactivate</Button>
                 )}
                 <Button
                   variant="outline"
-                  className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                  className="rounded-lg border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 dark:border-red-900/40 dark:hover:bg-red-950/30"
                   onClick={() => onDelete(user.id, user.full_name || user.name || user.email)}
                 >
                   <Trash2 className="mr-2 h-4 w-4" /> Delete

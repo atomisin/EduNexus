@@ -66,4 +66,4 @@ export interface ProgressData {
   subject_progress?: Record<string, number>;
 }
 
-export type ViewType = 'dashboard' | 'sessions' | 'subjects' | 'progress' | 'profile' | 'learn' | 'quiz' | 'messages' | 'mock-exams';
+export type ViewType = 'dashboard' | 'sessions' | 'subjects' | 'progress' | 'profile' | 'learn' | 'messages' | 'mock-exams';

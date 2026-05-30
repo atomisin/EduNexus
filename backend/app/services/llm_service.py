@@ -1,5 +1,7 @@
 import json
 import logging
+import os
+import socket
 import uuid
 from datetime import datetime, timedelta, timezone
 from fastapi import HTTPException
@@ -17,6 +19,7 @@ FALLBACK_MODEL_PRICING_USD_PER_1M = {
     "groq/llama-3.1-8b-instant": (0.05, 0.08),
     "groq/llama-3.1-70b-versatile": (0.59, 0.79),
     "groq/llama-3.3-70b-versatile": (0.59, 0.79),
+    "groq/meta-llama/llama-4-scout-17b-16e-instruct": (0.11, 0.34),
     "gpt-4o-mini": (0.15, 0.60),
 }
 
@@ -34,6 +37,16 @@ class LLMService:
         # Circuit Breaker state
         self._failure_count = 0
         self._circuit_open_until: Optional[datetime] = None
+        self._provider_health_cache: Dict[str, tuple[datetime, bool, str]] = {}
+        self._sync_provider_env()
+
+    def _sync_provider_env(self) -> None:
+        """Expose configured provider keys to LiteLLM without hardcoding them."""
+        os.environ.setdefault("LITELLM_LOCAL_MODEL_COST_MAP", "true")
+        if settings.GROQ_API_KEY and not os.environ.get("GROQ_API_KEY"):
+            os.environ["GROQ_API_KEY"] = settings.GROQ_API_KEY
+        if settings.OPENAI_API_KEY and not os.environ.get("OPENAI_API_KEY"):
+            os.environ["OPENAI_API_KEY"] = settings.OPENAI_API_KEY
 
     def _normalize_model_name(self, model: Optional[str]) -> Optional[str]:
         if not model:
@@ -56,8 +69,57 @@ class LLMService:
             return bool(settings.GROQ_API_KEY)
         return True
 
+    def _provider_host_for_model(self, model: Optional[str]) -> Optional[str]:
+        normalized = self._normalize_model_name(model)
+        if not normalized:
+            return None
+        lowered = normalized.lower()
+        if lowered.startswith("groq/"):
+            return "api.groq.com"
+        if lowered.startswith("openai/") or lowered.startswith("gpt-"):
+            return "api.openai.com"
+        return None
+
+    def _provider_reachable(self, host: Optional[str]) -> tuple[bool, str]:
+        if not host:
+            return True, "no_provider_host"
+
+        now = datetime.now(timezone.utc)
+        cached = self._provider_health_cache.get(host)
+        if cached and now < cached[0]:
+            return cached[1], cached[2]
+
+        try:
+            infos = socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM)
+            if not infos:
+                raise socket.gaierror(f"No DNS records returned for {host}")
+
+            last_error: Optional[Exception] = None
+            for info in infos[:2]:
+                family, socktype, proto, _, sockaddr = info
+                try:
+                    with socket.socket(family, socktype, proto) as sock:
+                        sock.settimeout(2)
+                        sock.connect(sockaddr)
+                    expires_at = now + timedelta(seconds=60)
+                    self._provider_health_cache[host] = (expires_at, True, "reachable")
+                    return True, "reachable"
+                except OSError as exc:
+                    last_error = exc
+
+            reason = f"connect_failed: {last_error}"
+        except socket.gaierror as exc:
+            reason = f"dns_failed: {exc}"
+        except OSError as exc:
+            reason = f"network_failed: {exc}"
+
+        expires_at = now + timedelta(seconds=20)
+        self._provider_health_cache[host] = (expires_at, False, reason)
+        return False, reason
+
     def _candidate_models(self, preferred_model: Optional[str] = None) -> List[str]:
         candidates: List[str] = []
+        skipped_hosts: set[str] = set()
         for model_name in [
             preferred_model,
             self.fast_model,
@@ -72,6 +134,17 @@ class LLMService:
             if not self._model_provider_available(normalized):
                 logger.info("Skipping unavailable fallback model %s because its provider is not configured.", normalized)
                 continue
+            host = self._provider_host_for_model(normalized)
+            reachable, reason = self._provider_reachable(host)
+            if not reachable:
+                if host not in skipped_hosts:
+                    logger.warning(
+                        "Skipping LLM provider host %s because it is unreachable (%s).",
+                        host,
+                        reason,
+                    )
+                    skipped_hosts.add(host)
+                continue
             candidates.append(normalized)
         return candidates
 
@@ -81,12 +154,13 @@ class LLMService:
         preferred_model: Optional[str],
         log_label: str,
     ):
-        import litellm
-
+        self._sync_provider_env()
         candidates = self._candidate_models(preferred_model)
         if not candidates:
             logger.error("No configured LLM providers are available for %s.", log_label)
             raise HTTPException(status_code=503, detail="AI_SERVICE_UNAVAILABLE")
+
+        import litellm
 
         last_exception: Optional[Exception] = None
         for index, candidate in enumerate(candidates):
@@ -594,8 +668,33 @@ Do NOT use casual filler, disclaimers, or emojis unless for small celebratory ma
         """Generate a 10-question adaptive mastery test"""
         
         age_group = student_context.get("age_group", "teen") if student_context else "teen"
-        
-        history_text = "\n".join([f"{msg['role'].upper()}: {msg['content']}" for msg in chat_history]) if chat_history else "No specific chat history provided."
+
+        def json_safe_academic_text(value: Any) -> str:
+            text = str(value or "")
+            replacements = {
+                "\\(": "(",
+                "\\)": ")",
+                "\\[": "[",
+                "\\]": "]",
+                "\\times": "x",
+                "\\frac": "fraction",
+                "\\log": "log",
+                "×": "x",
+                "≤": "<=",
+                "≥": ">=",
+                "≈": "approximately",
+                "−": "-",
+            }
+            for old, new in replacements.items():
+                text = text.replace(old, new)
+            return text.replace("\\", "")
+
+        history_text = "\n".join(
+            [
+                f"{json_safe_academic_text(msg.get('role')).upper()}: {json_safe_academic_text(msg.get('content'))}"
+                for msg in (chat_history or [])
+            ]
+        ) or "No specific chat history provided."
 
         prompt = f"""
         Create a 10-question Mastery Test for the topic '{topic}' in {subject} at {education_level} level.
@@ -611,9 +710,14 @@ Do NOT use casual filler, disclaimers, or emojis unless for small celebratory ma
         - CONTEXT PRIORITIZATION: Use the CHAT HISTORY RECORD above as your primary source for concepts, facts, and specific analogies discussed during the session.
         - SYLLABUS KNOWLEDGE: If the CHAT HISTORY is sparse, introductory, or insufficient to generate 10 rigorous, high-quality questions, you MUST leverage your broader academic knowledge of the official syllabus for this topic to fulfill the requirement.
         - SUBJECT RIGOUR: For Mathematics, Physics, Chemistry, Biology, Accounting, Economics, and professional subjects, use authentic subject tasks. Include calculations, equations, diagrams described in words, formula application, classification, analysis, or case scenarios where appropriate.
+        - DIRECT TECHNICAL EXPLANATIONS: For senior secondary, exam, STEM, Accounting, Economics, Data Processing, and professional topics, explanations must justify the answer using the subject method, formula, rule, calculation, definition boundary, or decision logic. Do not replace the explanation with playful analogies.
+        - JSON-SAFE MATH: Use plain ASCII math notation inside JSON strings. Write `log10(3500)`, `3.5 x 10^3`, `1/2`, and `<=`; do not use LaTeX backslashes, Unicode inequality symbols, or unescaped control characters.
+        - NO BACKSLASHES: No generated string may contain a backslash character. Do not write LaTeX command notation for log, times, fractions, or inline math wrappers.
         - LESSON BOUNDARY: Stay within the exact topic title. If the topic contains a number range, unit, chapter, class level, experiment, case, or named concept, do not test outside that scope.
         - EXACT ANSWER IN OPTIONS: Before returning JSON, solve every technical question yourself and verify the exact correct answer appears in one option. If the exact answer is missing, rewrite the options. Never mark the nearest answer as correct.
         - NO AMBIGUOUS MIDDLE QUESTIONS: Do not ask for "the middle number" of an even-length range. If midpoint reasoning is required, ask for the two middle terms or the average/midpoint value and ensure the exact answer is an option.
+        - NO AMBIGUOUS DIGIT QUESTIONS: For place-value questions, never ask for the place value of a repeated digit unless you specify its position, such as "leftmost 5" or "second 5 from the left".
+        - NO DUPLICATE CORRECT WORD FORMS: Do not place equivalent number-word variants in different options. For example, "four hundred fifty thousand" and "four hundred and fifty thousand" are equivalent and must not both appear as choices.
         - NO REPETITION: Create entirely NEW mastery-level questions that test the concepts in different ways.
         - DRILL DEEP: Test for deep conceptual understanding (the "why") rather than surface-level recall (the "what").
         - PUSH LIMITS: The difficulty should be slightly above what was explicitly taught, requiring the student to apply logic to new scenarios.
@@ -624,34 +728,46 @@ Do NOT use casual filler, disclaimers, or emojis unless for small celebratory ma
         - Difficulty must be ADAPTIVE and INCREASING:
             * Questions 1-3: EASY (Building blocks, vocabulary in context)
             * Questions 4-7: MEDIUM (Application of concepts, identifying relationships between ideas)
-            * Questions 8-10: HARD (Critical thinking, multi-step problem solving, complex synthesis. These must be intellectually "heavy" to build mental strength.)
+            * Questions 8-10: HARD (Critical thinking, multi-step problem solving, complex synthesis.)
         - Each question must have:
             1. A clear question text.
             2. 4 distinct options (A, B, C, D).
             3. The correct option label. The correct option must contain the exact correct answer; never choose the nearest option or say the correct answer is unavailable.
-            4. A short explanation of why it's correct. Use creative, concrete Nigerian analogies (e.g., traffic, construction, markets, music, tech) to clarify the logic. AVOID repetitive fruit examples like mangoes.
+            4. A short explanation of why it's correct. For senior/exam/technical/professional topics, make this a direct academic explanation using the actual method or rule. Use analogies only for younger learners and only after the direct explanation.
             5. A difficulty level label ('easy', 'medium', 'hard').
 
         Exactly 10 questions.
-        OUTPUT FORMAT: JSON array only.
-        IMPORTANT: Do not include trailing backslashes, escape sequences outside of strings, or any conversational filler.
+        OUTPUT FORMAT: Return one JSON object with a single key named "questions".
+        IMPORTANT: Do not include trailing backslashes, escape sequences outside of strings, markdown fences, comments, or conversational filler.
         Ensure every option is properly closed with quotes.
         
-        Format as JSON array:
-        [
-          {{
-            "id": "q1",
-            "text": "...",
-            "options": {{"A": "...", "B": "...", "C": "...", "D": "..."}},
-            "correct_option": "A",
-            "explanation": "...",
-            "difficulty": "easy"
-          }},
-          ...
-        ]
+        Format exactly like this object:
+        {{
+          "questions": [
+            {{
+              "id": "q1",
+              "text": "Write 3500 in standard form.",
+              "options": {{"A": "3.5 x 10^3", "B": "35 x 10^2", "C": "0.35 x 10^4", "D": "350 x 10^1"}},
+              "correct_option": "A",
+              "explanation": "In standard form, the first factor must satisfy 1 <= a < 10, so 3500 = 3.5 x 10^3.",
+              "difficulty": "easy"
+            }}
+          ]
+        }}
         """
 
-        response = await self.generate(prompt, model=self.primary_model, temperature=0.5, format="json_object", user_id=user_id)
+        response = await self.generate(
+            prompt,
+            model=self.primary_model,
+            temperature=0.2,
+            max_tokens=2200,
+            system_prompt=(
+                "You are an assessment generator. Return valid JSON only. "
+                "For math, use plain ASCII notation and never use backslashes."
+            ),
+            format="json_object",
+            user_id=user_id,
+        )
         try:
             questions = json.loads(response)
             if isinstance(questions, list):

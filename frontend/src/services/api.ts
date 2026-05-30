@@ -1,7 +1,10 @@
-const raw_api_url = import.meta.env.VITE_API_URL || 
-  (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-    ? 'http://localhost:8000/api/v1' 
-    : 'https://edunexus-krb1.onrender.com/api/v1');
+const isLocalBrowserHost =
+  typeof window !== 'undefined' &&
+  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+const raw_api_url = isLocalBrowserHost
+  ? 'http://localhost:8000/api/v1'
+  : (import.meta.env.VITE_API_URL || 'https://edunexus-krb1.onrender.com/api/v1');
 
 // Automatically append /api/v1 if missing to prevent 404 errors
 const API_BASE_URL = raw_api_url.includes('/api/v1') 
@@ -14,6 +17,9 @@ const FETCH_TIMEOUT_MS = 25000; // 25 seconds
 const AI_CHAT_TIMEOUT_MS = 60000; // AI tutoring can take longer on cold starts or larger prompts
 const REGISTER_TIMEOUT_MS = 60000; // Registration may wake Render and seed student profile data
 const LOGIN_TIMEOUT_MS = 45000; // 45 seconds — Render cold starts can take 30-60s
+const SESSION_CREATE_TIMEOUT_MS = 90000; // session creation can include continuity lookup and prep scheduling
+const SESSION_START_TIMEOUT_MS = 210000; // live session startup can stall behind room creation and teacher prep refresh
+const SUBJECT_CREATE_TIMEOUT_MS = 210000; // linking an existing subject can wait behind slow teacher-side requests
 
 function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number = FETCH_TIMEOUT_MS): Promise<Response> {
   const controller = new AbortController();
@@ -100,8 +106,8 @@ if (typeof window !== 'undefined' && !window.location.hostname.includes('localho
 }
 
 // Generic fetch wrapper with credentials (HttpOnly Cookies)
-export async function fetchWithAuth(endpoint: string, options: RequestInit & { silentAuth?: boolean; timeoutMs?: number; skipAuthRefresh?: boolean } = {}) {
-  const { silentAuth, timeoutMs, skipAuthRefresh, ...fetchOptions } = options;
+export async function fetchWithAuth(endpoint: string, options: RequestInit & { silentAuth?: boolean; timeoutMs?: number; skipAuthRefresh?: boolean; suppressFailureToast?: boolean } = {}) {
+  const { silentAuth, timeoutMs, skipAuthRefresh, suppressFailureToast, ...fetchOptions } = options;
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(fetchOptions.headers as Record<string, string>),
@@ -165,19 +171,23 @@ export async function fetchWithAuth(endpoint: string, options: RequestInit & { s
     if (err.name === 'AbortError') {
       const timeoutMsg = 'The server is taking too long to respond. It may be waking up — please try again in a moment.';
       console.error(`⏱️ Timeout: ${targetUrl}`, err);
-      window.dispatchEvent(new CustomEvent('api:fetch_failed', {
-        detail: { url: targetUrl, error: timeoutMsg }
-      }));
+      if (!suppressFailureToast) {
+        window.dispatchEvent(new CustomEvent('api:fetch_failed', {
+          detail: { url: targetUrl, error: timeoutMsg }
+        }));
+      }
       throw createApiError(timeoutMsg);
     }
     // Distinguish between API errors and Network/CORS errors
     if (err.name === 'TypeError' || err.message?.includes('Failed to fetch')) {
       const errorMsg = `Unable to connect to the server. Please check your internet connection and try again.`;
       console.error(`🚨 Network Error: ${targetUrl}`, err);
-      // Dispatch custom event so App.tsx can show a visible diagnostic toast
-      window.dispatchEvent(new CustomEvent('api:fetch_failed', { 
-        detail: { url: targetUrl, error: errorMsg } 
-      }));
+      if (!suppressFailureToast) {
+        // Dispatch custom event so App.tsx can show a visible diagnostic toast
+        window.dispatchEvent(new CustomEvent('api:fetch_failed', { 
+          detail: { url: targetUrl, error: errorMsg } 
+        }));
+      }
       throw createApiError(errorMsg);
     }
     throw err;
@@ -362,11 +372,12 @@ export const authAPI = {
 // Teacher API
 export const teacherAPI = {
   // Get all my students
-  getMyStudents: (filters?: { search?: string; education_level?: string; learning_style?: string }) => {
+  getMyStudents: (filters?: { search?: string; education_level?: string; learning_style?: string; summary?: boolean }) => {
     const params = new URLSearchParams();
     if (filters?.search) params.append('search', filters.search);
     if (filters?.education_level) params.append('education_level', filters.education_level);
     if (filters?.learning_style) params.append('learning_style', filters.learning_style);
+    if (filters?.summary) params.append('summary', 'true');
 
     return fetchWithAuth(`/teachers/students?${params.toString()}`);
   },
@@ -392,7 +403,12 @@ export const teacherAPI = {
   }),
 
   // Teacher-Student Linking
-  getMyLinkedStudents: () => fetchWithAuth('/teacher-students/my-students'),
+  getMyLinkedStudents: (options?: { summary?: boolean }) => fetchWithAuth(
+    `/teacher-students/my-students${options?.summary ? '?summary=true' : ''}`,
+    {
+    suppressFailureToast: true,
+    }
+  ),
 
   addStudentById: (studentId: string) =>
     fetchWithAuth('/teacher-students/add-by-id', {
@@ -420,8 +436,28 @@ export const teacherAPI = {
   getStudentProgressSummary: (studentId: string) =>
     fetchWithAuth(`/teachers/students/${studentId}/progress-summary`),
 
+  getTopicRequests: (filters?: { status?: string; subject?: string }) => {
+    const params = new URLSearchParams();
+    if (filters?.status) params.append('request_status', filters.status);
+    if (filters?.subject) params.append('subject', filters.subject);
+    const query = params.toString();
+    return fetchWithAuth(`/students/topics/teacher/requests${query ? `?${query}` : ''}`, {
+      suppressFailureToast: true,
+    });
+  },
+
+  assignTopicRequest: (requestId: string) =>
+    fetchWithAuth(`/students/topics/${requestId}/assign`, {
+      method: 'PUT',
+    }),
+
+  completeTopicRequest: (requestId: string) =>
+    fetchWithAuth(`/students/topics/${requestId}/complete`, {
+      method: 'PUT',
+    }),
+
   // Alias for compatibility
-  getStudents: (filters?: { search?: string; education_level?: string; learning_style?: string }) =>
+  getStudents: (filters?: { search?: string; education_level?: string; learning_style?: string; summary?: boolean }) =>
     teacherAPI.getMyStudents(filters),
 };
 
@@ -496,6 +532,76 @@ export const adminAPI = {
       method: 'POST',
     }),
 
+  getCustomCourseRequests: (includeCompleted = false) =>
+    fetchWithAuth(`/admin/custom-course-requests?include_completed=${includeCompleted}`),
+
+  previewCustomCourseRejectionDraft: (requestId: string, adminReason: string) =>
+    fetchWithAuth(`/admin/custom-course-requests/${requestId}/rejection-draft`, {
+      method: 'POST',
+      body: JSON.stringify({ admin_reason: adminReason }),
+    }),
+
+  reviewCustomCourseRequest: (
+    requestId: string,
+    data: {
+      action: string;
+      admin_reason?: string;
+      selected_suggestion?: string;
+      clarification_message?: string;
+      email_message?: string;
+      send_email?: boolean;
+    }
+  ) =>
+    fetchWithAuth(`/admin/custom-course-requests/${requestId}/review`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  getVideoCreatorProfiles: (includeInactive = true) =>
+    fetchWithAuth(`/admin/video-creator-profiles?include_inactive=${includeInactive}`),
+
+  createVideoCreatorProfile: (data: {
+    creator_name: string;
+    channel_aliases: string[];
+    domains: string[];
+    topic_keywords: string[];
+    recommended_query_terms: string[];
+    community_evidence_count: number;
+    community_evidence_summary?: string;
+    source_notes?: string;
+    is_active: boolean;
+    sort_order: number;
+  }) =>
+    fetchWithAuth('/admin/video-creator-profiles', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  updateVideoCreatorProfile: (
+    profileId: string,
+    data: {
+      creator_name: string;
+      channel_aliases: string[];
+      domains: string[];
+      topic_keywords: string[];
+      recommended_query_terms: string[];
+      community_evidence_count: number;
+      community_evidence_summary?: string;
+      source_notes?: string;
+      is_active: boolean;
+      sort_order: number;
+    }
+  ) =>
+    fetchWithAuth(`/admin/video-creator-profiles/${profileId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  seedVideoCreatorProfiles: () =>
+    fetchWithAuth('/admin/video-creator-profiles/seed', {
+      method: 'POST',
+    }),
+
   // Delete user
   deleteUser: (userId: string, reason?: string) =>
     fetchWithAuth(`/admin/users/${userId}?reason=${encodeURIComponent(reason || '')}`, {
@@ -532,33 +638,21 @@ export const adminAPI = {
 
   // Get system stats
   getStats: () => fetchWithAuth('/admin/stats/overview'),
-
-  // Security Review Endpoints (C-12)
-  getAuditLogs: () => fetchWithAuth('/admin/audit-logs'),
-  getFlaggedUsers: () => fetchWithAuth('/admin/flagged-users'),
-  getSystemCriticalEvents: () => fetchWithAuth('/admin/critical-events'),
-
-  // Material Management
-  uploadMaterial: (formData: FormData) => 
-    fetch(`${API_BASE_URL}/admin/materials/upload`, {
-      method: 'POST',
-      body: formData,
-      credentials: 'include',
-    }).then(r => {
-      if (!r.ok) throw new Error('Upload failed');
-      return r.json();
-    }),
-
-  listMaterials: (filters?: { subject?: string; education_level?: string; search?: string }) => {
+  getReportQualityOverview: (filters?: { limit_months?: number }) => {
     const params = new URLSearchParams();
-    if (filters?.subject) params.append('subject', filters.subject);
-    if (filters?.education_level) params.append('education_level', filters.education_level);
-    if (filters?.search) params.append('search', filters.search);
-    return fetchWithAuth(`/admin/materials?${params.toString()}`);
+    if (filters?.limit_months !== undefined) params.append('limit_months', String(filters.limit_months));
+    return fetchWithAuth(`/admin/report-quality?${params.toString()}`);
   },
 
-  deleteMaterial: (materialId: string) =>
-    fetchWithAuth(`/materials/${materialId}`, { method: 'DELETE' }),
+  // Material management is retired from the admin surface for now.
+  uploadMaterial: (_formData: FormData) =>
+    Promise.reject(new Error('Admin material management is retired for now.')),
+
+  listMaterials: (_filters?: { subject?: string; education_level?: string; search?: string }) =>
+    Promise.resolve([]),
+
+  deleteMaterial: (_materialId: string) =>
+    Promise.reject(new Error('Admin material management is retired for now.')),
 
   // Get AI usage analytics
   getAIUsage: (params: { days?: number; model_name?: string } = {}) => {
@@ -620,7 +714,10 @@ export const readingsAPI = {
 // Subjects API
 export const subjectsAPI = {
   // Get all subjects
-  getAll: (filters?: { education_level?: string; grade_level?: string; department?: string; curriculum_type?: string; search?: string; mine?: boolean }) => {
+  getAll: (
+    filters?: { education_level?: string; grade_level?: string; department?: string; curriculum_type?: string; search?: string; mine?: boolean; summary?: boolean; light?: boolean; exact_grade?: boolean },
+    requestOptions?: { timeoutMs?: number; suppressFailureToast?: boolean }
+  ) => {
     const params = new URLSearchParams();
     if (filters?.education_level) params.append('education_level', filters.education_level);
     if (filters?.grade_level) params.append('grade_level', filters.grade_level);
@@ -628,8 +725,12 @@ export const subjectsAPI = {
     if (filters?.curriculum_type) params.append('curriculum_type', filters.curriculum_type);
     if (filters?.search) params.append('search', filters.search);
     if (filters?.mine) params.append('mine', 'true');
+    if (filters?.summary) params.append('summary', 'true');
+    if (filters?.light) params.append('light', 'true');
+    if (filters?.exact_grade) params.append('exact_grade', 'true');
 
-    return fetchWithAuth(`/subjects?${params.toString()}`);
+    const queryString = params.toString();
+    return fetchWithAuth(`/subjects/${queryString ? `?${queryString}` : ''}`, requestOptions);
   },
 
   create: (data: {
@@ -640,9 +741,10 @@ export const subjectsAPI = {
     description?: string;
     grade_levels?: string[];
     auto_generate_topics?: boolean;
-  }) => fetchWithAuth('/subjects', {
+  }) => fetchWithAuth('/subjects/', {
     method: 'POST',
     body: JSON.stringify(data),
+    timeoutMs: SUBJECT_CREATE_TIMEOUT_MS,
   }),
 
   update: (subjectId: string, data: { name?: string; description?: string; is_active?: boolean }) =>
@@ -689,42 +791,62 @@ export const sessionAPI = {
   }) => fetchWithAuth('/sessions', {
     method: 'POST',
     body: JSON.stringify(data),
+    timeoutMs: SESSION_CREATE_TIMEOUT_MS,
   }),
 
   // List sessions
-  list: (status?: string, limit?: number, offset?: number) => {
+  list: (status?: string, limit?: number, offset?: number, summary?: boolean) => {
     const params = new URLSearchParams();
     if (status) params.append('status', status);
     if (limit) params.append('limit', String(limit));
     if (offset) params.append('offset', String(offset));
-    return fetchWithAuth(`/sessions?${params.toString()}`);
+    if (summary) params.append('summary', 'true');
+    return fetchWithAuth(`/sessions/?${params.toString()}`);
   },
 
   // Get session details
-  get: (sessionId: string) => fetchWithAuth(`/sessions/${sessionId}`),
+  get: (sessionId: string, options?: { lite?: boolean }) =>
+    fetchWithAuth(`/sessions/${sessionId}${options?.lite ? '?lite=true' : ''}`),
+  getLite: (sessionId: string) => fetchWithAuth(`/sessions/${sessionId}?lite=true`),
 
   // Start session
   start: (sessionId: string) => fetchWithAuth(`/sessions/${sessionId}/start`, {
     method: 'POST',
+    timeoutMs: SESSION_START_TIMEOUT_MS,
   }),
 
   // Resume session
   resume: (sessionId: string) => fetchWithAuth(`/sessions/${sessionId}/resume`, {
     method: 'POST',
+    timeoutMs: SESSION_START_TIMEOUT_MS,
   }),
 
   // End session
-  end: (sessionId: string, continuity_notes?: string) => fetchWithAuth(`/sessions/${sessionId}/end`, {
+  end: (
+    sessionId: string,
+    payload?: {
+      covered_full_plan?: boolean;
+      continuity_notes?: string;
+      actual_stop_segment?: string;
+      remaining_coverage?: string;
+      next_class_priority?: string;
+      learner_difficulties?: string[];
+    }
+  ) => fetchWithAuth(`/sessions/${sessionId}/end`, {
     method: 'POST',
-    body: JSON.stringify({ continuity_notes }),
+    body: JSON.stringify(payload || {}),
   }),
 
-  getLastHistory: (subjectId: string, studentIds: string[]) => {
+  getLastHistory: (
+    subjectId: string,
+    studentIds: string[],
+    requestOptions?: { timeoutMs?: number; suppressFailureToast?: boolean }
+  ) => {
     const params = new URLSearchParams({
       subject_id: subjectId,
       student_ids: studentIds.join(','),
     });
-    return fetchWithAuth(`/sessions/last-history?${params.toString()}`);
+    return fetchWithAuth(`/sessions/last-history?${params.toString()}`, requestOptions);
   },
 
   // Pause session
@@ -758,7 +880,7 @@ export const sessionAPI = {
   getToken: (sessionId: string) => fetchWithAuth(`/sessions/${sessionId}/token`),
 
   // Submit quiz answers
-  submitQuiz: (sessionId: string, studentId: string, quizType: string, answers: Record<string | number, string>) =>
+  submitQuiz: (sessionId: string, studentId: string, quizType: string, answers: Record<string | number, string | number>) =>
     fetchWithAuth(`/sessions/${sessionId}/submit-quiz`, {
       method: 'POST',
       body: JSON.stringify({
@@ -781,6 +903,24 @@ export const sessionAPI = {
       }),
     }),
 
+  submitGuestLiveQuiz: (sessionId: string, data: {
+    access_code: string;
+    student_name: string;
+    guest_identity: string;
+    answers: any;
+  }) =>
+    fetch(`${API_BASE_URL}/sessions/${sessionId}/guest-submit-quiz`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    }).then(async (response) => {
+      const payload = await response.json().catch(() => ({ detail: 'Failed to submit quiz' }));
+      if (!response.ok) {
+        throw new Error(payload.detail || 'Failed to submit quiz');
+      }
+      return payload.result || payload;
+    }),
+
   pushContent: (sessionId: string, data: any) =>
     fetchWithAuth(`/sessions/${sessionId}/push-content`, {
       method: 'POST',
@@ -792,19 +932,30 @@ export const sessionAPI = {
 
   // DESIGN DECISION: These endpoints are intentionally unauthenticated to allow 
   // guest student session joining via code. See C-11 in the security audit.
-  verifyCode: (code: string) =>
-    fetch(`${API_BASE_URL}/sessions/verify-code/${code}`)
-      .then(r => r.json()),
+  verifyCode: async (code: string) => {
+    const response = await fetch(`${API_BASE_URL}/sessions/verify-code/${code}`);
+    const data = await response.json().catch(() => ({ detail: 'Failed to verify session code' }));
+    if (!response.ok) {
+      throw new Error(data.detail || 'Failed to verify session code');
+    }
+    return data;
+  },
   
-  joinByCode: (data: { 
+  joinByCode: async (data: { 
     access_code: string, 
     student_name: string 
-  }) =>
-    fetch(`${API_BASE_URL}/sessions/join-by-code`, {
+  }) => {
+    const response = await fetch(`${API_BASE_URL}/sessions/join-by-code`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
-    }).then(r => r.json()),
+    });
+    const payload = await response.json().catch(() => ({ detail: 'Failed to join session' }));
+    if (!response.ok) {
+      throw new Error(payload.detail || 'Failed to join session');
+    }
+    return payload;
+  },
 };
 
 // AI Coordinator API
@@ -900,14 +1051,26 @@ export const aiAPI = {
     }),
 
   // Generate mastery test
-  generateMasteryTest: (data: { topic: string; subject: string; chat_history?: { role: string; content: string }[] }) =>
+  generateMasteryTest: (data: {
+    topic: string;
+    subject: string;
+    subject_id?: string;
+    topic_id?: string;
+    chat_history?: { role: string; content: string }[];
+  }) =>
     fetchWithAuth('/ai/mastery-test', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
 
   // Evaluate mastery test
-  evaluateMasteryTest: (data: { topic: string; topicId?: string; subjectId?: string; subtopic?: string; results: any[] }) =>
+  evaluateMasteryTest: (data: {
+    topic: string;
+    topic_id?: string;
+    subject_id?: string;
+    subtopic?: string;
+    results: any[];
+  }) =>
     fetchWithAuth('/ai/evaluate-mastery', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -974,66 +1137,6 @@ export const engagementAPI = {
     fetchWithAuth(`/sessions/${sessionId}/engagement/student/${studentId}/`),
 };
 
-// Materials API
-export const materialsAPI = {
-  // Get available materials for students
-  getAll: (filters?: { subject?: string; topic?: string; search?: string }) => {
-    const params = new URLSearchParams();
-    if (filters?.subject) params.append('subject', filters.subject);
-    if (filters?.topic) params.append('topic', filters.topic);
-    if (filters?.search) params.append('search', filters.search);
-    const queryString = params.toString();
-    return fetchWithAuth(`/materials/available${queryString ? '?' + queryString : ''}`);
-  },
-
-  // Get teacher's own materials
-  getMine: (filters?: { subject?: string; search?: string }) => {
-    const params = new URLSearchParams();
-    if (filters?.subject) params.append('subject', filters.subject);
-    if (filters?.search) params.append('search', filters.search);
-    const queryString = params.toString();
-    return fetchWithAuth(`/materials/my-materials${queryString ? '?' + queryString : ''}`);
-  },
-
-  // Upload material
-  upload: async (data: any) => {
-    let formData: FormData;
-
-    if (data instanceof FormData) {
-      formData = data;
-    } else {
-      formData = new FormData();
-      formData.append('title', data.title);
-      if (data.description) formData.append('description', data.description);
-      formData.append('subject', data.subject);
-      if (data.subject_id) formData.append('subject_id', data.subject_id);
-      if (data.topic) formData.append('topic', data.topic);
-      if (data.education_level) formData.append('education_level', data.education_level);
-      if (data.grade_level) formData.append('grade_level', data.grade_level);
-      if (data.video_url) formData.append('video_url', data.video_url);
-      formData.append('is_public', String(data.is_public || false));
-      if (data.file) formData.append('file', data.file);
-    }
-
-    const response = await fetch(`${API_BASE_URL}/materials/upload`, {
-      method: 'POST',
-      body: formData,
-      credentials: 'include',
-    });
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ detail: 'Upload failed' }));
-      throw new Error(error.detail || 'Upload failed');
-    }
-
-    return response.json();
-  },
-
-  // Delete material
-  delete: (materialId: string) =>
-    fetchWithAuth(`/materials/${materialId}`, { method: 'DELETE' }),
-};
-
 // User API
 export const userAPI = {
   // Get current user
@@ -1088,7 +1191,12 @@ export const subscriptionAPI = {
 // Student API
 export const studentAPI = {
   // Get student's own profile
-  getProfile: () => fetchWithAuth('/students/profile'),
+  getProfile: (options?: { summary?: boolean }) => {
+    const params = new URLSearchParams();
+    if (options?.summary) params.append('summary', 'true');
+    const suffix = params.toString() ? `?${params.toString()}` : '';
+    return fetchWithAuth(`/students/profile${suffix}`);
+  },
 
   // Update student profile
   updateProfile: (data: any) =>
@@ -1103,8 +1211,11 @@ export const studentAPI = {
   // Get topic requests
   getTopicRequests: () => fetchWithAuth('/students/topics/my-requests'),
 
+  // Get linked teachers for help requests
+  getMyTeachers: () => fetchWithAuth('/students/my-teachers'),
+
   // Create topic request
-  createTopicRequest: (data: { topic_name: string; subject: string; description?: string; priority?: string }) =>
+  createTopicRequest: (data: { topic_name: string; subject: string; description?: string; priority?: string; preferred_teacher_id?: string }) =>
     fetchWithAuth('/students/topics/request', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -1123,7 +1234,22 @@ export const studentAPI = {
   // Get recommendations
   getRecommendations: (studentId: string) => fetchWithAuth(`/students/${studentId}/recommendations`),
 
-  // Generate and enroll in custom professional course
+  // Submit a governed custom-course request
+  submitCustomCourseRequest: (data: {
+    course_name: string;
+    requested_description?: string;
+    intended_outcome?: string;
+    motivation?: string;
+  }) =>
+    fetchWithAuth('/students/custom-course-requests', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  getCustomCourseRequests: () =>
+    fetchWithAuth('/students/custom-course-requests'),
+
+  // Backward-compatible alias
   enrollCustomProfessionalCourse: (courseName: string) =>
     fetchWithAuth('/students/professional/enroll', {
       method: 'POST',
@@ -1151,10 +1277,8 @@ export const studentAPI = {
   getBrainPower: () => fetchWithAuth('/students/me/brain-power'),
 
   // Get student sessions
-  getSessions: () => sessionAPI.list(),
-
-  // Get student materials
-  getMaterials: () => materialsAPI.getAll(),
+  getSessions: (options?: { limit?: number; offset?: number; summary?: boolean; status?: string }) =>
+    sessionAPI.list(options?.status, options?.limit, options?.offset, options?.summary),
 
   // Get student progress
   getProgress: () => progressAPI.getProgress(),
@@ -1185,9 +1309,12 @@ export const studentAPI = {
       topic: params.topic,
       limit: String(params.limit ?? 6),
       ...(params.subject && { subject: params.subject }),
-      ...(params.educationLevel && { education_level: params.educationLevel }),
+      ...(params.educationLevel && { level: params.educationLevel }),
     });
-    return fetchWithAuth(`/ai/suggest-videos?${query.toString()}`);
+    return fetchWithAuth(`/videos/recommendations?${query.toString()}`).then((videos) => ({
+      videos: Array.isArray(videos) ? videos : [],
+      topic: params.topic,
+    }));
   },
 };
 
@@ -1196,9 +1323,10 @@ export const reportsAPI = {
   // Get all reports
   getAll: (filters?: { month?: number; year?: number; status?: string }) => {
     const params = new URLSearchParams();
+    params.append('summary', 'true');
     if (filters?.month) params.append('month', String(filters.month));
     if (filters?.year) params.append('year', String(filters.year));
-    if (filters?.status) params.append('status', filters.status);
+    if (filters?.status) params.append('report_status', filters.status);
     return fetchWithAuth(`/reports/?${params.toString()}`);
   },
 
@@ -1313,7 +1441,7 @@ export const progressAPI = {
   getProgressBySubject: (subjectId: string) => fetchWithAuth(`/student/progress/${subjectId}`),
 
   // Get performance analytics
-  getPerformanceAnalytics: () => fetchWithAuth('/student/analytics/performance/'),
+  getPerformanceAnalytics: () => fetchWithAuth('/student/analytics/performance'),
 
   // Get monthly reports
   getMonthlyReports: () => fetchWithAuth('/student/reports/monthly'),
@@ -1375,7 +1503,7 @@ export const messageAPI = {
     method: 'POST',
     body: JSON.stringify({ recipient_id: recipientId, content })
   }),
-  searchContacts: (query: string) => fetchWithAuth(`/messages/contacts/search?query=${query}`),
+  searchContacts: (query: string) => fetchWithAuth(`/messages/contacts/search?query=${encodeURIComponent(query)}`),
 };
 
 // Video API
@@ -1387,6 +1515,36 @@ export const videoAPI = {
     if (subject) url += `&subject=${encodeURIComponent(subject)}`;
     return fetchWithAuth(url);
   },
+
+  recordEvent: (data: {
+    video_id: string;
+    topic_name: string;
+    subject_name?: string;
+    source?: string;
+    event_type: 'impression' | 'click' | 'watch_start' | 'watch_60s' | 'watch_complete';
+    watch_seconds?: number;
+    video_title?: string;
+    channel_title?: string;
+    metadata?: Record<string, any>;
+  }) =>
+    fetchWithAuth('/videos/events', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  setFeedback: (data: {
+    video_id: string;
+    topic_name: string;
+    subject_name?: string;
+    feedback: 'like' | 'dislike';
+    video_title?: string;
+    channel_title?: string;
+    metadata?: Record<string, any>;
+  }) =>
+    fetchWithAuth('/videos/feedback', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
 };
 
 // Mock Exam API
@@ -1431,13 +1589,15 @@ export const mockExamAPI = {
 
   // Get student history
   getHistory: () => fetchWithAuth('/mock-exams/history'),
+
+  // Get student trend and preparedness insights
+  getHistoryInsights: () => fetchWithAuth('/mock-exams/history-insights'),
 };
 
 export default {
   auth: authAPI,
   teacher: teacherAPI,
   student: studentAPI,
-  materials: materialsAPI,
   user: userAPI,
   subscription: subscriptionAPI,
   admin: adminAPI,

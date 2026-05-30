@@ -163,6 +163,21 @@ async def retrieve_relevant_materials(
     return results
 
 
+async def teacher_can_access_student(
+    db: AsyncSession,
+    teacher_id: uuid.UUID,
+    student_id: uuid.UUID,
+) -> bool:
+    result = await db.execute(
+        select(TeacherStudent.id).filter(
+            TeacherStudent.teacher_id == teacher_id,
+            TeacherStudent.student_id == student_id,
+            TeacherStudent.status == "active",
+        )
+    )
+    return result.scalar() is not None
+
+
 def build_rag_context(chunks: List[dict], context_type: str) -> str:
     """
     Build context string from material chunks for RAG
@@ -366,6 +381,11 @@ async def explain_topic_with_materials(
     if current_user.role == UserRole.TEACHER and student_id:
         try:
             student_uuid = uuid.UUID(student_id)
+            if not await teacher_can_access_student(db, current_user.id, student_uuid):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="You do not have access to this student",
+                )
             res_prof = await db.execute(
                 select(StudentProfile).filter(StudentProfile.user_id == student_uuid)
             )
@@ -383,7 +403,7 @@ async def explain_topic_with_materials(
                 elif avg_prof > 0.7:
                     difficulty_level = "advanced"
         except ValueError:
-            pass
+            raise HTTPException(status_code=400, detail="Invalid student ID")
 
     request = RAGQueryRequest(
         query=f"Explain {topic}",

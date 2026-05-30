@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
+from sqlalchemy.orm import noload
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime, timezone
@@ -193,6 +194,7 @@ async def add_student_by_id(
 
 @router.get("/my-students")
 async def get_my_students(
+    summary: bool = Query(False),
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_async_db)
 ):
     """Get list of students linked to this teacher"""
@@ -201,8 +203,18 @@ async def get_my_students(
             status_code=403, detail="Only teachers can view their students"
         )
 
+    if summary:
+        res_count = await db.execute(
+            select(func.count(TeacherStudent.id)).filter(
+                TeacherStudent.teacher_id == current_user.id,
+                TeacherStudent.status == "active",
+            )
+        )
+        return {"students": [], "count": res_count.scalar_one()}
+
     res_links = await db.execute(
         select(TeacherStudent, User, StudentProfile)
+        .options(noload("*"))
         .join(User, User.id == TeacherStudent.student_id)
         .outerjoin(StudentProfile, StudentProfile.user_id == TeacherStudent.student_id)
         .filter(

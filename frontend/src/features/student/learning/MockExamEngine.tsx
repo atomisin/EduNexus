@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { AlertCircle, Clock, CheckCircle2, ChevronRight, ChevronLeft, Flag, Send } from 'lucide-react';
+import { Clock, ChevronRight, ChevronLeft, Flag, Send } from 'lucide-react';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { mockExamAPI } from '@/services/api';
 import { toast } from 'sonner';
 import MathText from '@/components/MathText';
@@ -13,6 +14,8 @@ import MathText from '@/components/MathText';
 interface Question {
   id: string;
   question_text: string;
+  question_type?: 'objective' | 'theory';
+  answer_guidance?: string;
   option_a: string;
   option_b: string;
   option_c: string;
@@ -51,28 +54,29 @@ const MockExamEngine: React.FC<MockExamEngineProps> = ({ seriesId, onComplete, o
   useEffect(() => {
     const startExam = async () => {
       try {
-        // Step 1: Start attempt (returns attempt_id)
         const startData = await mockExamAPI.startAttempt(seriesId);
         const attemptId = startData.attempt_id;
-
-        // Step 2: Fetch attempt details (returns questions)
         const details = await mockExamAPI.getAttempt(attemptId);
         setAttempt(details);
         setAnswers(details.answers || {});
         setTimeLeft(details.time_limit_minutes * 60);
         setLoading(false);
-      } catch (err) {
-        toast.error("Failed to start mock exam");
+      } catch {
+        toast.error('Failed to start mock exam');
         onCancel();
       }
     };
     startExam();
-  }, [seriesId]);
+  }, [seriesId, onCancel]);
 
   const handleSubmit = useCallback(async () => {
     if (!attempt || submitting) return;
 
-    const unansweredCount = attempt.questions.length - Object.keys(answers).length;
+    const answeredCount = attempt.questions.filter((q) => {
+      const value = answers[q.id];
+      return typeof value === 'string' && value.trim().length > 0;
+    }).length;
+    const unansweredCount = attempt.questions.length - answeredCount;
     if (timeLeft > 0 && unansweredCount > 0) {
       if (!confirm(`You have ${unansweredCount} unanswered question(s). Submit anyway?`)) return;
     }
@@ -81,8 +85,8 @@ const MockExamEngine: React.FC<MockExamEngineProps> = ({ seriesId, onComplete, o
     try {
       const results = await mockExamAPI.submitAttempt(attempt.id, answers);
       onComplete(results);
-    } catch (err) {
-      toast.error("Failed to submit exam");
+    } catch {
+      toast.error('Failed to submit exam');
       setSubmitting(false);
     }
   }, [attempt, answers, timeLeft, submitting, onComplete]);
@@ -94,7 +98,7 @@ const MockExamEngine: React.FC<MockExamEngineProps> = ({ seriesId, onComplete, o
     }
 
     const timer = setInterval(() => {
-      setTimeLeft(prev => prev - 1);
+      setTimeLeft((prev) => prev - 1);
     }, 1000);
 
     return () => clearInterval(timer);
@@ -104,14 +108,19 @@ const MockExamEngine: React.FC<MockExamEngineProps> = ({ seriesId, onComplete, o
     const h = Math.floor(seconds / 3600);
     const m = Math.floor((seconds % 3600) / 60);
     const s = seconds % 60;
-    return `${h > 0 ? h + ':' : ''}${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    return `${h > 0 ? `${h}:` : ''}${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
   const currentQuestion = attempt?.questions[currentIdx];
 
   const handleOptionSelect = (optionKey: string) => {
     if (!currentQuestion) return;
-    setAnswers(prev => ({ ...prev, [currentQuestion.id]: optionKey }));
+    setAnswers((prev) => ({ ...prev, [currentQuestion.id]: optionKey }));
+  };
+
+  const handleTheoryAnswerChange = (value: string) => {
+    if (!currentQuestion) return;
+    setAnswers((prev) => ({ ...prev, [currentQuestion.id]: value }));
   };
 
   const toggleFlag = () => {
@@ -125,7 +134,6 @@ const MockExamEngine: React.FC<MockExamEngineProps> = ({ seriesId, onComplete, o
     setFlags(newFlags);
   };
 
-  // Build options map from flat fields
   const getOptions = (q: Question) => ({
     A: q.option_a,
     B: q.option_b,
@@ -146,10 +154,10 @@ const MockExamEngine: React.FC<MockExamEngineProps> = ({ seriesId, onComplete, o
 
   const progress = ((currentIdx + 1) / attempt.questions.length) * 100;
   const options = getOptions(currentQuestion);
+  const isTheoryQuestion = (currentQuestion.question_type || 'objective') === 'theory';
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in duration-500">
-      {/* Header Info */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm gap-4">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-primary/10 rounded-lg">
@@ -171,8 +179,8 @@ const MockExamEngine: React.FC<MockExamEngineProps> = ({ seriesId, onComplete, o
           <Progress value={progress} className="h-2 bg-slate-100 dark:bg-slate-800" />
         </div>
 
-        <Button 
-          variant="outline" 
+        <Button
+          variant="outline"
           className="rounded-xl border-red-200 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
           onClick={onCancel}
         >
@@ -181,16 +189,23 @@ const MockExamEngine: React.FC<MockExamEngineProps> = ({ seriesId, onComplete, o
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Main Question Area */}
         <div className="lg:col-span-3 space-y-4">
           <Card className="rounded-2xl border-slate-200 dark:border-slate-800 shadow-lg overflow-hidden">
             <div className="h-1 bg-primary/20"></div>
             <CardHeader className="pb-2">
-              <div className="flex justify-between items-start">
-                <Badge variant="secondary" className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 capitalize">
-                  Question {currentIdx + 1}{currentQuestion.topic_tag ? ` — ${currentQuestion.topic_tag}` : ''}
-                </Badge>
-                <button 
+              <div className="flex justify-between items-start gap-3">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Badge variant="secondary" className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 capitalize">
+                    Question {currentIdx + 1}
+                    {currentQuestion.topic_tag ? ` - ${currentQuestion.topic_tag}` : ''}
+                  </Badge>
+                  {isTheoryQuestion && (
+                    <Badge variant="outline" className="border-primary/30 text-primary bg-primary/5">
+                      Theory
+                    </Badge>
+                  )}
+                </div>
+                <button
                   onClick={toggleFlag}
                   className={`p-2 rounded-lg transition-colors ${flags.has(currentQuestion.id) ? 'text-orange-500 bg-orange-50 dark:bg-orange-950/30' : 'text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
                 >
@@ -202,45 +217,60 @@ const MockExamEngine: React.FC<MockExamEngineProps> = ({ seriesId, onComplete, o
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 pt-4">
-              <RadioGroup
-                value={answers[currentQuestion.id]}
-                onValueChange={(val) => handleOptionSelect(val)}
-                className="space-y-4"
-              >
-                {Object.entries(options).map(([key, value]) => (
-                  <div key={key}>
-                    <RadioGroupItem value={key} id={`opt-${key}`} className="peer sr-only" />
-                    <Label
-                      htmlFor={`opt-${key}`}
-                      className="flex items-center p-6 rounded-2xl border-2 border-slate-100 hover:border-primary/30 bg-white dark:bg-slate-900 cursor-pointer transition-all duration-200 peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 relative overflow-hidden group shadow-sm"
-                    >
-                      <div className="w-10 h-10 rounded-xl bg-slate-50 dark:bg-slate-800 group-hover:bg-primary/10 text-slate-500 group-hover:text-primary flex items-center justify-center font-black text-lg mr-4 border border-slate-100 dark:border-slate-800 group-hover:border-primary/20 transition-colors">
-                        {key}
-                      </div>
-                      <div className="flex-1 font-semibold text-lg text-slate-800 dark:text-slate-100">
-                        <MathText>{value}</MathText>
-                      </div>
-                      <div className="w-6 h-6 rounded-full border-2 border-slate-200 dark:border-slate-700 peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary flex items-center justify-center transition-all ml-2">
-                        <div className="w-2 h-2 rounded-full bg-white scale-0 peer-data-[state=checked]:scale-100 transition-transform" />
-                      </div>
-                    </Label>
+              {isTheoryQuestion ? (
+                <div className="space-y-4">
+                  <div className="rounded-2xl border border-primary/15 bg-primary/5 px-4 py-3 text-sm text-slate-700 dark:text-slate-200">
+                    <p className="font-semibold text-primary mb-1">Writing guidance</p>
+                    <p>{currentQuestion.answer_guidance || 'Answer in your own words and stay close to the point of the question.'}</p>
                   </div>
-                ))}
-              </RadioGroup>
+                  <Textarea
+                    value={answers[currentQuestion.id] || ''}
+                    onChange={(e) => handleTheoryAnswerChange(e.target.value)}
+                    placeholder="Write your answer here..."
+                    className="min-h-[220px] rounded-2xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-4 text-base leading-7 shadow-sm"
+                  />
+                </div>
+              ) : (
+                <RadioGroup
+                  value={answers[currentQuestion.id]}
+                  onValueChange={(val) => handleOptionSelect(val)}
+                  className="space-y-4"
+                >
+                  {Object.entries(options).map(([key, value]) => (
+                    <div key={key}>
+                      <RadioGroupItem value={key} id={`opt-${key}`} className="peer sr-only" />
+                      <Label
+                        htmlFor={`opt-${key}`}
+                        className="flex items-center p-6 rounded-2xl border-2 border-slate-100 hover:border-primary/30 bg-white dark:bg-slate-900 cursor-pointer transition-all duration-200 peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 relative overflow-hidden group shadow-sm"
+                      >
+                        <div className="w-10 h-10 rounded-xl bg-slate-50 dark:bg-slate-800 group-hover:bg-primary/10 text-slate-500 group-hover:text-primary flex items-center justify-center font-black text-lg mr-4 border border-slate-100 dark:border-slate-800 group-hover:border-primary/20 transition-colors">
+                          {key}
+                        </div>
+                        <div className="flex-1 font-semibold text-lg text-slate-800 dark:text-slate-100">
+                          <MathText>{value}</MathText>
+                        </div>
+                        <div className="w-6 h-6 rounded-full border-2 border-slate-200 dark:border-slate-700 peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary flex items-center justify-center transition-all ml-2">
+                          <div className="w-2 h-2 rounded-full bg-white scale-0 peer-data-[state=checked]:scale-100 transition-transform" />
+                        </div>
+                      </Label>
+                    </div>
+                  ))}
+                </RadioGroup>
+              )}
             </CardContent>
           </Card>
 
           <div className="flex justify-between items-center px-2">
             <Button
               variant="outline"
-              onClick={() => setCurrentIdx(prev => prev - 1)}
+              onClick={() => setCurrentIdx((prev) => prev - 1)}
               disabled={currentIdx === 0}
               className="rounded-xl px-6"
             >
               <ChevronLeft className="w-4 h-4 mr-2" />
               Previous
             </Button>
-            
+
             {currentIdx === attempt.questions.length - 1 ? (
               <Button
                 onClick={handleSubmit}
@@ -252,7 +282,7 @@ const MockExamEngine: React.FC<MockExamEngineProps> = ({ seriesId, onComplete, o
               </Button>
             ) : (
               <Button
-                onClick={() => setCurrentIdx(prev => prev + 1)}
+                onClick={() => setCurrentIdx((prev) => prev + 1)}
                 className="rounded-xl px-8"
               >
                 Next
@@ -262,7 +292,6 @@ const MockExamEngine: React.FC<MockExamEngineProps> = ({ seriesId, onComplete, o
           </div>
         </div>
 
-        {/* Navigation Sidebar */}
         <div className="lg:col-span-1 space-y-4">
           <Card className="rounded-2xl border-slate-200 dark:border-slate-800 shadow-sm sticky top-6">
             <CardHeader className="pb-2">
@@ -270,26 +299,29 @@ const MockExamEngine: React.FC<MockExamEngineProps> = ({ seriesId, onComplete, o
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-5 gap-2">
-                {attempt.questions.map((q, idx) => (
-                  <button
-                    key={q.id}
-                    onClick={() => setCurrentIdx(idx)}
-                    className={`h-10 rounded-lg flex items-center justify-center text-sm font-bold transition-all relative ${
-                      currentIdx === idx
-                        ? 'bg-primary text-white scale-110 shadow-md z-10'
-                        : answers[q.id]
-                        ? 'bg-green-100 dark:bg-green-950/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-900/50'
-                        : 'bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 text-slate-400 hover:border-slate-300 dark:hover:border-slate-700'
-                    }`}
-                  >
-                    {idx + 1}
-                    {flags.has(q.id) && (
-                      <div className="absolute -top-1 -right-1 w-3 h-3 bg-orange-500 rounded-full border-2 border-white dark:border-slate-900"></div>
-                    )}
-                  </button>
-                ))}
+                {attempt.questions.map((q, idx) => {
+                  const isAnswered = typeof answers[q.id] === 'string' && answers[q.id].trim().length > 0;
+                  return (
+                    <button
+                      key={q.id}
+                      onClick={() => setCurrentIdx(idx)}
+                      className={`h-10 rounded-lg flex items-center justify-center text-sm font-bold transition-all relative ${
+                        currentIdx === idx
+                          ? 'bg-primary text-white scale-110 shadow-md z-10'
+                          : isAnswered
+                          ? 'bg-green-100 dark:bg-green-950/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-900/50'
+                          : 'bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 text-slate-400 hover:border-slate-300 dark:hover:border-slate-700'
+                      }`}
+                    >
+                      {idx + 1}
+                      {flags.has(q.id) && (
+                        <div className="absolute -top-1 -right-1 w-3 h-3 bg-orange-500 rounded-full border-2 border-white dark:border-slate-900"></div>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
-              
+
               <div className="mt-6 space-y-3">
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   <div className="w-3 h-3 rounded bg-green-500"></div>

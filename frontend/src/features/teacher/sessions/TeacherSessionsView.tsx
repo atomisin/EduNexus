@@ -1,30 +1,54 @@
-import React, { useState, useEffect } from 'react';
-import { Video, Loader2, Mic, Zap, Trash2, FileText, ListChecks, ClipboardCheck } from 'lucide-react';
+﻿import React, { useState, useEffect } from 'react';
+import { Video, Loader2, Mic, Zap, Trash2, FileText, ListChecks, ClipboardCheck, ShieldCheck, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { sessionAPI } from '@/services/api';
-import type { Session } from '@/types';
+import type { Session, SessionPlanSummary, AssessmentArtifactSummary, SessionCompetencyUpdate } from '@/types';
 import AcademicMarkdown from '@/components/AcademicMarkdown';
 
 interface TeacherSessionsViewProps {
   onStart: (id: string, title: string, status?: string) => void;
   onDelete: (sessionId: string) => Promise<void>;
+  refreshKey?: number;
 }
 
-export const TeacherSessionsView = ({ onStart, onDelete }: TeacherSessionsViewProps) => {
+const wait = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
+
+const loadSessionsWithRetry = async (attempts: number = 3): Promise<Session[]> => {
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      const data = await sessionAPI.list(undefined, 24, 0, true);
+      const allSessions = Array.isArray(data) ? data : (data.sessions || []);
+      const filtered = allSessions.filter((s: any) => s.status !== 'ended');
+      if (filtered.length > 0 || attempt === attempts - 1) {
+        return filtered;
+      }
+    } catch (error) {
+      lastError = error;
+      if (attempt === attempts - 1) {
+        throw error;
+      }
+    }
+    await wait(1500 * (attempt + 1));
+  }
+  if (lastError) throw lastError;
+  return [];
+};
+
+export const TeacherSessionsView = ({ onStart, onDelete, refreshKey }: TeacherSessionsViewProps) => {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
   const [prepSession, setPrepSession] = useState<Session | null>(null);
+  const [startingSessionId, setStartingSessionId] = useState<string | null>(null);
 
   useEffect(() => {
     const loadSessions = async () => {
       try {
-        const data = await sessionAPI.list();
-        const allSessions = Array.isArray(data) ? data : (data.sessions || []);
-        setSessions(allSessions.filter((s: any) => s.status !== 'ended'));
+        setSessions(await loadSessionsWithRetry());
       } catch (error) {
         console.error('Failed to load sessions:', error);
       } finally {
@@ -32,11 +56,20 @@ export const TeacherSessionsView = ({ onStart, onDelete }: TeacherSessionsViewPr
       }
     };
     loadSessions();
-  }, []);
+  }, [refreshKey]);
 
   const handleDelete = async (id: string) => {
     await onDelete(id);
     setSessions(prev => prev.filter(s => s.id !== id));
+  };
+
+  const handleStart = async (session: Session) => {
+    setStartingSessionId(session.id);
+    try {
+      await onStart(session.id || '', session.context?.subject || 'Session', session.status);
+    } finally {
+      setStartingSessionId(null);
+    }
   };
 
   const toList = (value: any): string[] => {
@@ -47,11 +80,22 @@ export const TeacherSessionsView = ({ onStart, onDelete }: TeacherSessionsViewPr
   };
 
   const prepMaterial = prepSession?.context?.lesson_materials;
+  const prepPlan: SessionPlanSummary | undefined = prepSession?.context?.session_plan;
+  const prepAssessments: Record<string, AssessmentArtifactSummary> = prepSession?.context?.assessment_artifacts || {};
   const prepOutline = toList(prepSession?.session_outline || prepMaterial?.outline);
   const prepClassNote = prepSession?.class_notes || prepMaterial?.class_note;
   const prepAssignment = prepSession?.take_home_assignment || prepMaterial?.assignment;
   const prepQuiz = prepSession?.pre_session_quiz?.questions || prepMaterial?.pop_quiz || [];
   const prepTips = toList(prepSession?.context?.teacher_tips || prepMaterial?.teacher_tips);
+  const competencyUpdates = Object.values((prepSession?.context?.competency_updates || {}) as Record<string, SessionCompetencyUpdate>);
+  const assessmentEntries = [
+    { key: 'pre_session', label: 'Pre-session check' },
+    { key: 'pop_quiz', label: 'Live pop quiz' },
+    { key: 'post_session', label: 'Post-session check' },
+  ].map((item) => ({
+    ...item,
+    meta: prepAssessments[item.key],
+  })).filter((item) => item.meta);
 
   return (
     <div className="space-y-4">
@@ -59,9 +103,10 @@ export const TeacherSessionsView = ({ onStart, onDelete }: TeacherSessionsViewPr
         {loading ? (
           <div className="col-span-full flex justify-center p-12"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>
         ) : sessions.length === 0 ? (
-          <Card className="col-span-full rounded-lg p-12 text-center text-muted-foreground border-dashed border-2 bg-transparent">
+          <Card className="col-span-full rounded-lg border-dashed border-2 bg-transparent p-12 text-center text-muted-foreground">
             <Video className="w-12 h-12 mx-auto mb-4 opacity-20" />
-            <p className="text-sm font-medium">No sessions scheduled.</p>
+            <p className="text-sm font-medium">No teaching sessions scheduled yet.</p>
+            <p className="mt-1 text-xs text-muted-foreground">Create one when you are ready to bring the lesson, learner list, and prep materials together.</p>
           </Card>
         ) : (
           sessions.map(session => (
@@ -69,11 +114,11 @@ export const TeacherSessionsView = ({ onStart, onDelete }: TeacherSessionsViewPr
               <div className={`h-1 w-full ${session.status === 'live' ? 'bg-emerald-500 animate-pulse' : 'bg-primary'}`} />
               <CardContent className="p-4">
                 <div className="flex justify-between items-start mb-4">
-                  <Badge variant="outline" className={session.status === 'live' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-slate-50 border-slate-200'}>
+                  <Badge variant="outline" className={session.status === 'live' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-muted border-border text-foreground'}>
                     {session.status?.toUpperCase() || 'SCHEDULED'}
                   </Badge>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-slate-400 font-mono">{session.scheduled_start ? new Date(session.scheduled_start).toLocaleTimeString() : 'NOT SET'}</span>
+                    <span className="text-xs font-mono text-muted-foreground">{session.scheduled_start ? new Date(session.scheduled_start).toLocaleTimeString() : 'NOT SET'}</span>
                     <Button
                       variant="ghost"
                       size="sm"
@@ -84,11 +129,26 @@ export const TeacherSessionsView = ({ onStart, onDelete }: TeacherSessionsViewPr
                     </Button>
                   </div>
                 </div>
-                <h3 className="font-semibold text-base mb-1 group-hover:text-primary transition-colors line-clamp-1">{session.context?.subject || 'Session'}</h3>
+                <h3 className="mb-1 text-base font-semibold transition-colors group-hover:text-primary line-clamp-1">{session.context?.subject || 'Session'}</h3>
                 <p className="text-sm text-muted-foreground mb-4 line-clamp-1">{session.context?.topic || 'General Session'}</p>
+                {session.context?.session_plan?.session_goal && (
+                  <p className="mb-3 rounded-lg bg-muted/40 px-3 py-2 text-xs leading-5 text-muted-foreground">
+                    {session.context.session_plan.session_goal}
+                  </p>
+                )}
+                <div className="mb-3 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
+                  <span className="rounded-full border border-border bg-subtle px-2.5 py-1">
+                    {session.duration_minutes || 60} min plan
+                  </span>
+                  {session.context?.student_count ? (
+                    <span className="rounded-full border border-border bg-subtle px-2.5 py-1">
+                      {session.context.student_count} learner{session.context.student_count === 1 ? '' : 's'}
+                    </span>
+                  ) : null}
+                </div>
                 {(session.session_outline || session.class_notes || session.context?.lesson_materials) && (
                   <div className="mb-4 space-y-2 rounded-lg border border-primary/15 bg-primary/5 px-3 py-2 text-xs text-primary">
-                    <p>Prep ready: outline, class note, quiz, and assignment saved for review.</p>
+                    <p>Prep ready: session-scoped outline, note, quiz, and assignment saved for review.</p>
                     <Button
                       type="button"
                       variant="outline"
@@ -106,12 +166,23 @@ export const TeacherSessionsView = ({ onStart, onDelete }: TeacherSessionsViewPr
                 )}
 
                 <Button
-                  onClick={() => onStart(session.id || '', session.context?.subject || 'Session', session.status)}
+                  onClick={() => void handleStart(session)}
+                  disabled={startingSessionId === session.id}
                   className="w-full rounded-lg gap-2 font-semibold transition-all"
                   variant={session.status === 'live' ? 'default' : 'outline'}
                 >
-                  {session.status === 'live' ? <><Mic className="w-4 h-4" /> RE-ENTER ROOM</> : <><Zap className="w-4 h-4" /> GO LIVE NOW</>}
+                  {startingSessionId === session.id ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      {session.status === 'paused' ? 'Reconnecting room...' : 'Starting room...'}
+                    </>
+                  ) : session.status === 'live' ? <><Mic className="w-4 h-4" /> Re-enter room</> : <><Zap className="w-4 h-4" /> Go live now</>}
                 </Button>
+                {startingSessionId === session.id ? (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    We are bringing the room, notes, and learner access together. This can take a moment on a cold start.
+                  </p>
+                ) : null}
               </CardContent>
             </Card>
           ))
@@ -121,13 +192,38 @@ export const TeacherSessionsView = ({ onStart, onDelete }: TeacherSessionsViewPr
       <Dialog open={Boolean(prepSession)} onOpenChange={(open) => !open && setPrepSession(null)}>
         <DialogContent className="max-h-[90vh] max-w-3xl overflow-hidden p-0">
           <DialogHeader className="border-b p-5">
-            <DialogTitle className="text-xl">Teacher Preparation Pack</DialogTitle>
+            <DialogTitle className="text-xl">Teaching preparation pack</DialogTitle>
             <DialogDescription>
               {prepSession?.context?.subject || 'Subject'} - {prepSession?.context?.topic || prepSession?.title || 'Session'}
             </DialogDescription>
           </DialogHeader>
           <ScrollArea className="max-h-[72vh] px-5 py-4">
             <div className="space-y-5 pb-4">
+              {prepPlan && (
+                <section className="rounded-lg border p-4">
+                  <h3 className="mb-3 text-sm font-semibold">Session planning view</h3>
+                  <div className="space-y-3 text-sm text-muted-foreground">
+                    <p>
+                      <span className="font-medium text-foreground">Goal:</span> {prepPlan.session_goal || 'No session goal yet.'}
+                    </p>
+                    {prepPlan.continuity_from_previous?.previous_teacher_note && (
+                      <div className="rounded-lg bg-muted/40 p-3">
+                        <p className="font-medium text-foreground">Previous class note</p>
+                        <p>{prepPlan.continuity_from_previous.previous_teacher_note}</p>
+                      </div>
+                    )}
+                    {prepPlan.skipped_segments?.length ? (
+                      <div>
+                        <p className="font-medium text-foreground">Still remaining after this session</p>
+                        <ul className="mt-2 list-disc space-y-1 pl-5">
+                          {prepPlan.skipped_segments.map((segment) => <li key={segment.segment_id}>{segment.title}</li>)}
+                        </ul>
+                      </div>
+                    ) : null}
+                  </div>
+                </section>
+              )}
+
               <section className="rounded-lg border p-4">
                 <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold">
                   <ListChecks className="h-4 w-4 text-primary" />
@@ -159,7 +255,52 @@ export const TeacherSessionsView = ({ onStart, onDelete }: TeacherSessionsViewPr
                   Checks and assignment
                 </h3>
                 <div className="space-y-3 text-sm text-muted-foreground">
+                  {assessmentEntries.length > 0 && (
+                    <div className="space-y-2 rounded-lg border border-primary/15 bg-primary/5 p-3">
+                      <p className="font-medium text-foreground">Assessment quality</p>
+                      <div className="space-y-2">
+                        {assessmentEntries.map(({ key, label, meta }) => {
+                          const validated = meta?.validated === 'validated';
+                          const usedFallback = Boolean(meta?.validation?.used_fallback);
+                          const issues = meta?.validation?.issues || [];
+                          return (
+                            <div key={key} className="rounded-md border bg-background p-3">
+                              <div className="flex flex-wrap items-center gap-2">
+                                {validated ? (
+                                  <ShieldCheck className="h-4 w-4 text-emerald-600" />
+                                ) : (
+                                  <AlertTriangle className="h-4 w-4 text-amber-600" />
+                                )}
+                                <span className="font-medium text-foreground">{label}</span>
+                                <Badge variant="outline" className={validated ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50 text-amber-700'}>
+                                  {validated ? 'Validated' : 'Needs review'}
+                                </Badge>
+                                {usedFallback && (
+                                  <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700">
+                                    Fallback used
+                                  </Badge>
+                                )}
+                              </div>
+                              {issues.length > 0 && (
+                                <ul className="mt-2 list-disc space-y-1 pl-5 text-xs leading-5">
+                                  {issues.slice(0, 3).map((issue, index) => <li key={index}>{issue}</li>)}
+                                </ul>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                   <p>{prepQuiz.length} pre-session question{prepQuiz.length === 1 ? '' : 's'} prepared.</p>
+                  {prepPlan?.classwork_plan?.length ? (
+                    <div>
+                      <p className="font-medium text-foreground">Classwork planned for this session</p>
+                      <ul className="mt-2 list-disc space-y-1 pl-5">
+                        {prepPlan.classwork_plan.map((task, index) => <li key={index}>{task}</li>)}
+                      </ul>
+                    </div>
+                  ) : null}
                   {prepAssignment ? (
                     <div>
                       <p className="font-medium text-foreground">{prepAssignment.title || 'Take-home assignment'}</p>
@@ -181,6 +322,47 @@ export const TeacherSessionsView = ({ onStart, onDelete }: TeacherSessionsViewPr
                   )}
                 </div>
               </section>
+
+              {competencyUpdates.length > 0 && (
+                <section className="rounded-lg border p-4">
+                  <h3 className="mb-3 text-sm font-semibold">Learner competency shifts</h3>
+                  <div className="space-y-3">
+                    {competencyUpdates.map((update) => (
+                      <div key={update.student_id} className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-medium text-foreground">{update.student_name}</p>
+                          <Badge variant="outline" className="border-primary/20 bg-primary/5 text-primary">
+                            {update.readiness || 'Building'}
+                          </Badge>
+                          {typeof update.last_score_pct === 'number' && (
+                            <Badge variant="outline">
+                              {Math.round(update.last_score_pct)}%
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="mt-2">
+                          <span className="font-medium text-foreground">Current domain:</span> {update.domain_name}
+                        </p>
+                        {Array.isArray(update.gap_signals) && update.gap_signals.length > 0 && (
+                          <p className="mt-1">
+                            <span className="font-medium text-foreground">Needs support with:</span> {update.gap_signals.join('; ')}
+                          </p>
+                        )}
+                        {Array.isArray(update.next_focus) && update.next_focus.length > 0 && (
+                          <p className="mt-1">
+                            <span className="font-medium text-foreground">Next focus:</span> {update.next_focus.join('; ')}
+                          </p>
+                        )}
+                        {Array.isArray(update.suggested_focus_areas) && update.suggested_focus_areas.length > 0 && (
+                          <p className="mt-1">
+                            <span className="font-medium text-foreground">Suggested follow-up:</span> {update.suggested_focus_areas.join('; ')}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
             </div>
           </ScrollArea>
         </DialogContent>
@@ -188,3 +370,7 @@ export const TeacherSessionsView = ({ onStart, onDelete }: TeacherSessionsViewPr
     </div>
   );
 };
+
+
+
+

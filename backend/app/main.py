@@ -256,7 +256,16 @@ def _is_allowed_browser_origin(origin: str) -> bool:
     """Return True when a browser Origin is allowed to make credentialed calls."""
     allowed = settings.allowed_origins_list
     is_vercel_preview = origin.startswith("https://edu-nexus-") and origin.endswith(".vercel.app")
-    return origin in allowed or "*" in allowed or is_vercel_preview
+    wildcard_allowed = settings.ENVIRONMENT != "production" and "*" in allowed
+    return origin in allowed or wildcard_allowed or is_vercel_preview
+
+
+def _cors_allowed_origins() -> list[str]:
+    """Do not allow wildcard credentialed CORS in production."""
+    allowed = settings.allowed_origins_list
+    if settings.ENVIRONMENT == "production":
+        return [origin for origin in allowed if origin != "*"]
+    return allowed
 
 
 @app.middleware("http")
@@ -277,6 +286,19 @@ async def csrf_origin_guard(request: Request, call_next):
                 content={"detail": "Cross-site request is not allowed."},
             )
     return await call_next(request)
+
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    """Set baseline browser security headers for all responses."""
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault("Permissions-Policy", "geolocation=()")
+    if settings.ENVIRONMENT == "production":
+        response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+    return response
 
 async def custom_rate_limit_handler(request: Request, exc: RateLimitExceeded):
     if request.url.path.startswith("/api/v1/ai/"):
@@ -307,7 +329,7 @@ async def custom_rate_limit_handler(request: Request, exc: RateLimitExceeded):
         # NOTE: _add_cors_headers defined below — rate limiter is registered after
         origin = request.headers.get("origin", "")
         allowed = settings.allowed_origins_list
-        if origin in allowed or "*" in allowed:
+        if _is_allowed_browser_origin(origin):
             resp.headers["Access-Control-Allow-Origin"] = origin
             resp.headers["Access-Control-Allow-Credentials"] = "true"
             resp.headers["Vary"] = "Origin"
@@ -398,7 +420,7 @@ app.add_exception_handler(RateLimitExceeded, custom_rate_limit_handler)
 # CORS middleware — R-01: origins from env variable
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.allowed_origins_list,
+    allow_origins=_cors_allowed_origins(),
     allow_origin_regex=r"https://edu-nexus-.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],

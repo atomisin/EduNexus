@@ -2,6 +2,7 @@ import httpx
 from typing import List, Dict, Any, Optional
 import logging
 import re
+import json
 from datetime import datetime, timezone
 import math
 from urllib.parse import quote_plus
@@ -17,6 +18,7 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 YOUTUBE_API_KEY = settings.YOUTUBE_API_KEY
 YOUTUBE_SEARCH_URL = "https://www.googleapis.com/youtube/v3/search"
 YOUTUBE_VIDEOS_URL = "https://www.googleapis.com/youtube/v3/videos"
+YOUTUBE_WEB_SEARCH_URL = "https://www.youtube.com/results"
 YOUTUBE_MAX_VIDEO_DETAILS_IDS = 50
 
 
@@ -433,6 +435,209 @@ def _calculate_duration_score(duration_sec: int, level: Optional[str]) -> float:
     return min(1.0, score)
 
 
+def _extract_text(value: Any) -> str:
+    if isinstance(value, str):
+        return value.strip()
+    if isinstance(value, dict):
+        simple = value.get("simpleText")
+        if isinstance(simple, str):
+            return simple.strip()
+        runs = value.get("runs")
+        if isinstance(runs, list):
+            return "".join(str(run.get("text") or "") for run in runs if isinstance(run, dict)).strip()
+    return ""
+
+
+def _parse_count_text(value: str) -> int:
+    text_value = (value or "").lower().replace(",", "").strip()
+    match = re.search(r"(\d+(?:\.\d+)?)\s*([kmb])?", text_value)
+    if not match:
+        return 0
+    amount = float(match.group(1))
+    multiplier = {"k": 1_000, "m": 1_000_000, "b": 1_000_000_000}.get(match.group(2) or "", 1)
+    return int(amount * multiplier)
+
+
+def _parse_length_text(value: str) -> int:
+    parts = [int(part) for part in re.findall(r"\d+", value or "")]
+    if not parts:
+        return 0
+    if len(parts) == 1:
+        return parts[0]
+    if len(parts) == 2:
+        return parts[0] * 60 + parts[1]
+    return parts[-3] * 3600 + parts[-2] * 60 + parts[-1]
+
+
+def _web_duration_score(duration_sec: int, level: Optional[str]) -> float:
+    if duration_sec <= 0:
+        return 0.55
+    if duration_sec < 90:
+        return 0.0
+    if level and any(marker in level.lower() for marker in ("pre", "creche", "primary")):
+        if duration_sec < 150:
+            return 0.25
+        return min(1.0, max(0.35, 900 / max(duration_sec, 900)))
+    return _calculate_duration_score(duration_sec, level) or 0.25
+
+
+def _iter_video_renderers(value: Any) -> List[Dict[str, Any]]:
+    renderers: List[Dict[str, Any]] = []
+    if isinstance(value, dict):
+        renderer = value.get("videoRenderer")
+        if isinstance(renderer, dict):
+            renderers.append(renderer)
+        for child in value.values():
+            renderers.extend(_iter_video_renderers(child))
+    elif isinstance(value, list):
+        for child in value:
+            renderers.extend(_iter_video_renderers(child))
+    return renderers
+
+
+def _extract_yt_initial_data(html_text: str) -> Optional[Dict[str, Any]]:
+    marker_index = html_text.find("ytInitialData")
+    if marker_index < 0:
+        return None
+    start_index = html_text.find("{", marker_index)
+    if start_index < 0:
+        return None
+
+    depth = 0
+    in_string = False
+    escape = False
+    for index in range(start_index, len(html_text)):
+        char = html_text[index]
+        if in_string:
+            if escape:
+                escape = False
+            elif char == "\\":
+                escape = True
+            elif char == '"':
+                in_string = False
+            continue
+        if char == '"':
+            in_string = True
+        elif char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                try:
+                    return json.loads(html_text[start_index : index + 1])
+                except json.JSONDecodeError:
+                    return None
+    return None
+
+
+async def _search_youtube_web_videos(
+    search_queries: List[str],
+    topic: str,
+    subject: Optional[str],
+    level: Optional[str],
+    matched_profiles: List[Dict[str, Any]],
+    limit: int,
+) -> List[Dict[str, Any]]:
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+        ),
+        "Accept-Language": "en-US,en;q=0.9",
+    }
+    ranked_videos: List[Dict[str, Any]] = []
+    seen_video_ids = set()
+    topic_for_relevance = _video_search_phrase(topic, subject).replace(" explained", "")
+
+    async with httpx.AsyncClient(timeout=12.0, follow_redirects=True, headers=headers) as client:
+        for search_query in search_queries[:3]:
+            response = await client.get(YOUTUBE_WEB_SEARCH_URL, params={"search_query": search_query})
+            response.raise_for_status()
+            initial_data = _extract_yt_initial_data(response.text)
+            if not initial_data:
+                continue
+
+            for renderer in _iter_video_renderers(initial_data):
+                video_id = str(renderer.get("videoId") or "").strip()
+                if not video_id or video_id in seen_video_ids:
+                    continue
+                seen_video_ids.add(video_id)
+
+                title = _extract_text(renderer.get("title"))
+                if not title or _is_mixed_language(title) or not _title_is_relevant(title, topic_for_relevance):
+                    continue
+
+                channel_title = _extract_text(renderer.get("ownerText")) or _extract_text(renderer.get("shortBylineText"))
+                duration_text = _extract_text(renderer.get("lengthText")) or "Video lesson"
+                duration_sec = _parse_length_text(duration_text)
+                duration_score = _web_duration_score(duration_sec, level)
+                if duration_score <= 0:
+                    continue
+
+                view_text = _extract_text(renderer.get("viewCountText"))
+                views = _parse_count_text(view_text)
+                thumbnails = (renderer.get("thumbnail") or {}).get("thumbnails") or []
+                thumbnail = ""
+                if thumbnails:
+                    thumbnail = str((thumbnails[-1] or {}).get("url") or "")
+                    if thumbnail.startswith("//"):
+                        thumbnail = f"https:{thumbnail}"
+
+                matched_profile = _creator_profile_match(channel_title, matched_profiles)
+                score = math.log10(views + 1) * 0.75 + duration_score
+                why_recommended = ["Found from a live YouTube search for this lesson"]
+                community_evidence = None
+                if matched_profile:
+                    score += 1.8 + min(1.2, matched_profile["community_evidence_count"] * 0.12)
+                    why_recommended.append("Trusted creator evidence matched this topic")
+                    community_evidence = {
+                        "creator": matched_profile["creator"],
+                        "community_evidence_count": matched_profile["community_evidence_count"],
+                        "community_evidence_summary": matched_profile["community_evidence_summary"],
+                    }
+                if duration_score >= 0.55:
+                    why_recommended.append("Duration looks suitable for this learner level")
+                why_recommended.append("Title matches the lesson topic")
+
+                ranked_videos.append(
+                    {
+                        "id": video_id,
+                        "title": title,
+                        "thumbnail": thumbnail,
+                        "channel": channel_title,
+                        "channel_title": channel_title,
+                        "description": _extract_text(renderer.get("descriptionSnippet"))[:220],
+                        "views": views,
+                        "published_at": _extract_text(renderer.get("publishedTimeText")) or None,
+                        "duration": duration_sec,
+                        "duration_text": duration_text,
+                        "score": score,
+                        "url": f"https://www.youtube.com/watch?v={video_id}",
+                        "why_recommended": why_recommended[:3],
+                        "community_evidence": community_evidence,
+                        "platform_evidence": {
+                            "impressions": 0,
+                            "clicks": 0,
+                            "watch_starts": 0,
+                            "watch_60s": 0,
+                            "watch_completions": 0,
+                            "likes": 0,
+                            "dislikes": 0,
+                        },
+                        "learner_feedback": None,
+                        "is_search_fallback": False,
+                        "source": "youtube_web_search",
+                    }
+                )
+                if len(ranked_videos) >= limit * 4:
+                    break
+            if len(ranked_videos) >= limit * 2:
+                break
+
+    ranked_videos.sort(key=lambda item: item["score"], reverse=True)
+    return ranked_videos[:limit]
+
+
 async def search_educational_videos(
     query: str, 
     limit: int = 5, 
@@ -452,7 +657,16 @@ async def search_educational_videos(
     logger.info("YouTube search queries for '%s': %s", query, search_queries)
 
     if not YOUTUBE_API_KEY:
-        logger.warning("YouTube API key missing; returning evidence-backed search fallbacks.")
+        logger.info("YouTube API key missing; using direct YouTube web search fallback.")
+        web_search_q = _video_search_phrase(query, subject)
+        web_search_queries = _expand_search_queries(web_search_q, _clean_video_topic_text(query), subject, matched_profiles)
+        try:
+            web_results = await _search_youtube_web_videos(web_search_queries, query, subject, level, matched_profiles, limit)
+            if web_results:
+                logger.info("Returning %s direct YouTube web-search recommendations for topic '%s'.", len(web_results), query)
+                return web_results
+        except Exception as exc:
+            logger.warning("Direct YouTube web search fallback failed: %s", exc)
         return _build_youtube_search_fallbacks(query, subject, level, matched_profiles, limit)
     
     try:

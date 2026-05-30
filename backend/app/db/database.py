@@ -3,7 +3,6 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker
 )
 from sqlalchemy.orm import DeclarativeBase
-from sqlalchemy.pool import NullPool
 from app.core.config import settings
 import os
 
@@ -69,12 +68,3 @@ SessionLocal = AsyncSessionLocal
 
 def init_db():
     pass
-
-# Sync engine for Alembic ONLY
-# Do NOT use in application code
-from sqlalchemy import create_engine as _sync_engine
-sync_engine = _sync_engine(
-    settings.DATABASE_URL.replace("+asyncpg", "")\
-                         .replace("postgres://", "postgresql://"),
-    poolclass=NullPool,
-)

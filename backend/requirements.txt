@@ -3,7 +3,6 @@ uvicorn[standard]
 sqlalchemy
 pydantic
 pydantic-settings
-psycopg2-binary  # Required for Alembic migrations only
 asyncpg
 greenlet
 python-multipart

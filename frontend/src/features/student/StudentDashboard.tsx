@@ -182,7 +182,7 @@ export const StudentDashboard = ({
       queryClient.invalidateQueries({ queryKey: ['student', 'profile'] });
       queryClient.invalidateQueries({ queryKey: ['student', 'custom-course-requests'] });
 
-      if (result?.status === 'auto_rejected') {
+      if (result?.status === 'auto_rejected' || result?.status === 'blocked') {
         const alternatives = Array.isArray(result?.safe_alternatives) && result.safe_alternatives.length
           ? ` Safe alternatives: ${result.safe_alternatives.slice(0, 3).join(', ')}.`
           : '';

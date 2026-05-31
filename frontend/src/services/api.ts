@@ -497,6 +497,19 @@ export const adminAPI = {
   },
 
   // List all users
+  getAdminPermissions: () => fetchWithAuth('/admin/me/permissions'),
+
+  createDelegatedAdmin: (data: {
+    email: string;
+    password: string;
+    full_name: string;
+    permissions: string[];
+  }) =>
+    fetchWithAuth('/admin/admins', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
   getAllUsers: (filters?: {
     role?: string;
     status?: string;

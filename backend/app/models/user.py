@@ -79,6 +79,8 @@ class User(Base):
     authorized_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     authorized_at = Column(DateTime(timezone=True), nullable=True)
     rejection_reason = Column(Text, nullable=True)
+    admin_scope = Column(String(50), nullable=True)
+    admin_permissions = Column(JSONB, default=list)
 
     is_active = Column(Boolean, default=False)
     force_password_change = Column(Boolean, default=False)

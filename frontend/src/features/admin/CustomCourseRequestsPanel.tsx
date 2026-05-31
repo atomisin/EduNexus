@@ -58,13 +58,16 @@ export const CustomCourseRequestsPanel: React.FC = () => {
   }, []);
 
   const suspiciousCount = useMemo(
-    () => requests.filter((request) => request.safety_status === 'suspicious').length,
+    () => requests.filter((request) => ['suspicious', 'needs_review', 'blocked'].includes(request.safety_status)).length,
     [requests],
   );
 
   const statusBadge = (request: CustomCourseRequest) => {
-    if (request.safety_status === 'suspicious') {
-      return <Badge className="bg-red-600 text-white hover:bg-red-600">Suspicious</Badge>;
+    if (request.safety_status === 'blocked' || request.status === 'auto_rejected') {
+      return <Badge className="bg-red-600 text-white hover:bg-red-600">Blocked</Badge>;
+    }
+    if (request.safety_status === 'suspicious' || request.safety_status === 'needs_review') {
+      return <Badge className="bg-red-600 text-white hover:bg-red-600">Needs review</Badge>;
     }
     if (request.status === 'clarification_requested') {
       return <Badge className="bg-primary text-primary-foreground">Clarification requested</Badge>;
@@ -170,6 +173,7 @@ export const CustomCourseRequestsPanel: React.FC = () => {
       </div>
 
       {requests.map((request) => {
+        const isBlocked = request.safety_status === 'blocked' || request.status === 'auto_rejected';
         const activeSuggestion =
           suggestionById[request.id] ||
           request.admin_selected_suggestion ||
@@ -194,7 +198,7 @@ export const CustomCourseRequestsPanel: React.FC = () => {
               {request.safety_flags?.length ? (
                 <div className="flex flex-wrap gap-2">
                   {request.safety_flags.map((flag) => (
-                    <Badge key={flag} variant="outline" className={request.safety_status === 'suspicious' ? 'border-red-500 text-red-600' : ''}>
+                    <Badge key={flag} variant="outline" className={request.safety_status !== 'clear' ? 'border-red-500 text-red-600' : ''}>
                       {flag.replaceAll('_', ' ')}
                     </Badge>
                   ))}
@@ -263,7 +267,7 @@ export const CustomCourseRequestsPanel: React.FC = () => {
                     <Button
                       variant="outline"
                       className="rounded-lg"
-                      disabled={working}
+                      disabled={working || isBlocked}
                       onClick={() =>
                         submitAction(
                           request.id,

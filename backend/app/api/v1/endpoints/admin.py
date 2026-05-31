@@ -4,24 +4,29 @@ Admins can manage all users (teachers and students) and set limits
 """
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field
 from typing import Optional, List, Any, Dict
 import uuid
 from datetime import datetime, timezone
 import json
+from types import SimpleNamespace
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, or_, text
 from app.db.database import get_async_db
 from app.api.v1.endpoints.auth import get_current_user
 from app.models.user import User, UserRole, UserStatus, TeacherStudent, TeacherProfile
+from app.models.notification import Notification
 from app.services.account_deletion import delete_user_account
 from app.services.storage_service import storage_service
 from app.models.student import StudentProfile
 from app.models.token_usage import TokenUsageLog
 from app.models.user import Material
 from app.services.parsing_service import parsing_service
+from app.services.custom_course_service import generate_and_enroll_custom_course
+from app.services.email_service import email_service
 from app.constants import EDUCATION_LEVELS
+from app.core.security import pwd_context
 from fastapi import UploadFile, File, Form, BackgroundTasks
 import os
 import tempfile
@@ -60,6 +65,8 @@ class UserListResponse(BaseModel):
     class_level: Optional[str] = None
     department: Optional[str] = None
     curriculum_type: Optional[str] = None
+    admin_scope: Optional[str] = None
+    admin_permissions: List[str] = Field(default_factory=list)
     
     class Config:
         from_attributes = True
@@ -71,6 +78,13 @@ class UserUpdateRequest(BaseModel):
     phone_number: Optional[str] = None
     is_active: Optional[bool] = None
     status: Optional[str] = None
+
+
+class AdminCreateRequest(BaseModel):
+    email: EmailStr
+    password: str = Field(..., min_length=8)
+    full_name: str = Field(..., min_length=2, max_length=255)
+    permissions: List[str] = Field(default_factory=list)
 
 
 class TeacherLimitUpdate(BaseModel):
@@ -114,6 +128,77 @@ def require_admin(current_user: User = Depends(get_current_user)):
     return current_user
 
 
+ADMIN_PERMISSION_LABELS = {
+    "user_approvals": "User approvals",
+    "custom_courses": "Custom course governance",
+    "video_evidence": "Video evidence governance",
+    "teacher_licenses": "Teacher licenses",
+    "report_quality": "Report quality",
+    "messages": "Admin messages",
+}
+DELEGATED_ADMIN_PERMISSIONS = set(ADMIN_PERMISSION_LABELS.keys())
+
+
+def _configured_super_admin_email() -> str:
+    return ((settings.SUPER_ADMIN_EMAIL or settings.BOOTSTRAP_ADMIN_EMAIL or "").strip().lower())
+
+
+def _admin_permissions(user: User) -> list[str]:
+    raw_permissions = getattr(user, "admin_permissions", None) or []
+    if isinstance(raw_permissions, list):
+        return [str(item) for item in raw_permissions if item]
+    return []
+
+
+def _is_super_admin(user: User) -> bool:
+    if user.role != UserRole.ADMIN:
+        return False
+    configured_email = _configured_super_admin_email()
+    if configured_email and (user.email or "").strip().lower() == configured_email:
+        return True
+    return getattr(user, "admin_scope", None) == "super" or "*" in _admin_permissions(user)
+
+
+def _require_super_admin(current_user: User) -> None:
+    if not _is_super_admin(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the primary super admin can perform this action",
+        )
+
+
+def _require_admin_permission(current_user: User, permission: str) -> None:
+    if _is_super_admin(current_user):
+        return
+    if permission not in _admin_permissions(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your admin account does not have permission for this area",
+        )
+
+
+def _queue_account_approval_email(background_tasks: BackgroundTasks, user: User) -> None:
+    user_snapshot = SimpleNamespace(
+        id=user.id,
+        email=user.email,
+        username=user.username,
+        first_name=user.first_name,
+        last_name=user.last_name,
+        full_name=user.full_name,
+    )
+
+    def _send_approval_email() -> None:
+        sent = email_service.send_account_approved_email(user_snapshot)
+        if not sent:
+            import logging
+
+            logging.getLogger(__name__).warning(
+                "Account approval email could not be sent to %s", user_snapshot.email
+            )
+
+    background_tasks.add_task(_send_approval_email)
+
+
 def _json_list(value: Any) -> List[str]:
     if isinstance(value, list):
         return [str(item) for item in value if item]
@@ -138,6 +223,77 @@ def _report_dict(value: Any) -> Dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
+@router.get("/me/permissions", response_model=dict)
+async def get_admin_permissions(current_user: User = Depends(require_admin)):
+    permissions = ["*"] if _is_super_admin(current_user) else _admin_permissions(current_user)
+    return {
+        "is_super_admin": _is_super_admin(current_user),
+        "admin_scope": "super" if _is_super_admin(current_user) else (current_user.admin_scope or "delegated"),
+        "permissions": permissions,
+        "permission_labels": ADMIN_PERMISSION_LABELS,
+    }
+
+
+@router.post("/admins", response_model=dict, status_code=status.HTTP_201_CREATED)
+async def create_delegated_admin(
+    payload: AdminCreateRequest,
+    db: AsyncSession = Depends(get_async_db),
+    current_user: User = Depends(require_admin),
+):
+    _require_super_admin(current_user)
+
+    requested_permissions = list(dict.fromkeys(payload.permissions or []))
+    invalid_permissions = [
+        permission
+        for permission in requested_permissions
+        if permission not in DELEGATED_ADMIN_PERMISSIONS
+    ]
+    if invalid_permissions:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported admin permissions: {', '.join(invalid_permissions)}",
+        )
+
+    email = payload.email.strip().lower()
+    existing_result = await db.execute(select(User).filter(User.email == email))
+    existing = existing_result.scalars().first()
+    if existing:
+        raise HTTPException(status_code=409, detail="A user with this email already exists")
+
+    username = email.split("@", 1)[0]
+    username_result = await db.execute(select(User).filter(User.username == username))
+    if username_result.scalars().first():
+        username = f"{username}-{uuid.uuid4().hex[:6]}"
+
+    admin = User(
+        id=uuid.uuid4(),
+        email=email,
+        username=username,
+        hashed_password=pwd_context.hash(payload.password),
+        full_name=payload.full_name.strip(),
+        first_name=payload.full_name.strip().split()[0],
+        last_name=payload.full_name.strip().split()[-1] if " " in payload.full_name.strip() else "",
+        role=UserRole.ADMIN,
+        status=UserStatus.ACTIVE,
+        is_active=True,
+        email_verified_at=datetime.now(timezone.utc),
+        admin_scope="delegated",
+        admin_permissions=requested_permissions,
+        force_password_change=True,
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
+    )
+    db.add(admin)
+    await db.commit()
+    return {
+        "success": True,
+        "admin_id": str(admin.id),
+        "email": admin.email,
+        "admin_scope": admin.admin_scope,
+        "permissions": requested_permissions,
+    }
+
+
 @router.get("/users", response_model=List[UserListResponse])
 async def list_all_users(
     role: Optional[str] = Query(None, description="Filter by role: student, teacher, admin"),
@@ -153,6 +309,7 @@ async def list_all_users(
     List all users in the system with filtering options
     Admins can view and filter teachers, students, and other admins
     """
+    _require_admin_permission(current_user, "user_approvals")
     stmt = (
         select(
             User.id,
@@ -173,6 +330,8 @@ async def list_all_users(
             StudentProfile.education_category,
             StudentProfile.department,
             StudentProfile.curriculum_type,
+            User.admin_scope,
+            User.admin_permissions,
         )
         .outerjoin(StudentProfile, StudentProfile.user_id == User.id)
     )
@@ -232,6 +391,8 @@ async def list_all_users(
             "class_level": class_level,
             "department": row.department,
             "curriculum_type": row.curriculum_type,
+            "admin_scope": row.admin_scope,
+            "admin_permissions": _json_list(row.admin_permissions),
         })
 
     return users
@@ -243,6 +404,7 @@ async def list_custom_course_requests(
     db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(require_admin),
 ):
+    _require_admin_permission(current_user, "custom_courses")
     statuses_to_hide = {
         "approved",
         "rejected",
@@ -316,6 +478,7 @@ async def preview_custom_course_rejection_draft(
     db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(require_admin),
 ):
+    _require_admin_permission(current_user, "custom_courses")
     try:
         request_uuid = uuid.UUID(request_id)
     except ValueError:
@@ -351,6 +514,7 @@ async def review_custom_course_request(
     db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(require_admin),
 ):
+    _require_admin_permission(current_user, "custom_courses")
     try:
         request_uuid = uuid.UUID(request_id)
     except ValueError:
@@ -366,8 +530,72 @@ async def review_custom_course_request(
     if action not in status_by_action:
         raise HTTPException(status_code=400, detail="Unsupported review action")
 
-    selected_course = payload.selected_suggestion
+    request_result = await db.execute(
+        text(
+            """
+            SELECT
+                id,
+                student_id,
+                requested_title,
+                normalized_title,
+                status,
+                safety_status,
+                safety_flags
+            FROM custom_course_requests
+            WHERE id = :request_id
+            """
+        ),
+        {"request_id": request_uuid},
+    )
+    request_row = request_result.mappings().first()
+    if not request_row:
+        raise HTTPException(status_code=404, detail="Custom course request not found")
+
+    selected_course = (
+        (payload.selected_suggestion or "").strip()
+        or (request_row["normalized_title"] or "").strip()
+        or (request_row["requested_title"] or "").strip()
+    )
     admin_message = payload.email_message or payload.clarification_message
+
+    if action == "approve":
+        if (request_row["safety_status"] or "").lower() == "blocked" or (
+            request_row["status"] or ""
+        ) == "auto_rejected":
+            raise HTTPException(
+                status_code=400,
+                detail="Blocked safety-governance requests cannot be approved.",
+            )
+        if not selected_course:
+            raise HTTPException(status_code=400, detail="Approved course name is required")
+
+        try:
+            course_result = await generate_and_enroll_custom_course(
+                db,
+                student_id=request_row["student_id"],
+                course_name=selected_course,
+                user_id_for_llm=current_user.id,
+            )
+            selected_course = course_result["course_name"]
+        except Exception as exc:
+            await db.rollback()
+            raise HTTPException(
+                status_code=503,
+                detail=f"Could not generate approved course curriculum: {exc}",
+            ) from exc
+        db.add(
+            Notification(
+                user_id=request_row["student_id"],
+                type="custom_course_approved",
+                title="Your custom course is ready",
+                message=(
+                    f"Your professional course '{selected_course}' has been approved "
+                    "and added to your learning dashboard."
+                ),
+                link="/student/learn",
+            )
+        )
+
     result = await db.execute(
         text(
             """
@@ -409,6 +637,7 @@ async def list_video_creator_profiles(
     db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(require_admin),
 ):
+    _require_admin_permission(current_user, "video_evidence")
     where_clause = "" if include_inactive else "WHERE is_active = TRUE"
     result = await db.execute(
         text(
@@ -455,6 +684,7 @@ async def create_video_creator_profile(
     db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(require_admin),
 ):
+    _require_admin_permission(current_user, "video_evidence")
     profile_id = uuid.uuid4()
     await db.execute(
         text(
@@ -516,6 +746,7 @@ async def update_video_creator_profile(
     db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(require_admin),
 ):
+    _require_admin_permission(current_user, "video_evidence")
     try:
         profile_uuid = uuid.UUID(profile_id)
     except ValueError:
@@ -567,6 +798,7 @@ async def seed_video_creator_profiles(
     db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(require_admin),
 ):
+    _require_admin_permission(current_user, "video_evidence")
     result = await db.execute(text("SELECT COUNT(*) FROM video_creator_profiles"))
     return {
         "success": True,
@@ -586,6 +818,7 @@ async def get_user_details(
     Get detailed information about any user (teacher or student)
     Includes role-specific profile information
     """
+    _require_admin_permission(current_user, "user_approvals")
     try:
         user_uuid = uuid.UUID(user_id)
     except ValueError:
@@ -687,6 +920,7 @@ async def get_user_details(
 async def update_user(
     user_id: str,
     update_data: UserUpdateRequest,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(require_admin)
 ):
@@ -694,6 +928,7 @@ async def update_user(
     Update any user's information
     Admins can modify user details, activate/deactivate accounts
     """
+    _require_admin_permission(current_user, "user_approvals")
     try:
         user_uuid = uuid.UUID(user_id)
     except ValueError:
@@ -710,6 +945,9 @@ async def update_user(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found"
         )
+    if user.role == UserRole.ADMIN and not _is_super_admin(current_user):
+        raise HTTPException(status_code=403, detail="Only the primary super admin can modify admin accounts")
+    was_active = user.status == UserStatus.ACTIVE and user.is_active
     
     # Prevent admins from modifying themselves through this endpoint
     if user.id == current_user.id:
@@ -769,6 +1007,8 @@ async def update_user(
     user.updated_at = datetime.now(timezone.utc)
     await db.commit()
     await db.refresh(user)
+    if _is_approval_status(update_data.status) and not was_active:
+        _queue_account_approval_email(background_tasks, user)
     
     return {
         "success": True,
@@ -789,6 +1029,7 @@ async def delete_user(
     Delete any user from the system (teacher or student)
     This permanently removes the user and all associated data
     """
+    _require_super_admin(current_user)
     try:
         user_uuid = uuid.UUID(user_id)
     except ValueError:
@@ -847,6 +1088,7 @@ async def deactivate_user(
     Deactivate a user account (soft delete)
     User data is preserved but they cannot log in
     """
+    _require_admin_permission(current_user, "user_approvals")
     try:
         user_uuid = uuid.UUID(user_id)
     except ValueError:
@@ -863,6 +1105,8 @@ async def deactivate_user(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found"
         )
+    if user.role == UserRole.ADMIN and not _is_super_admin(current_user):
+        raise HTTPException(status_code=403, detail="Only the primary super admin can deactivate admin accounts")
     
     if user.id == current_user.id:
         raise HTTPException(
@@ -886,6 +1130,7 @@ async def deactivate_user(
 @router.post("/users/{user_id}/approve", response_model=dict)
 async def approve_user(
     user_id: str,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(require_admin)
 ):
@@ -893,6 +1138,7 @@ async def approve_user(
     Approve a pending user registration (Gate 2)
     Only users with verified emails (PENDING) can be approved.
     """
+    _require_admin_permission(current_user, "user_approvals")
     try:
         user_uuid = uuid.UUID(user_id)
     except ValueError:
@@ -903,6 +1149,8 @@ async def approve_user(
     
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    if user.role == UserRole.ADMIN and not _is_super_admin(current_user):
+        raise HTTPException(status_code=403, detail="Only the primary super admin can approve admin accounts")
         
     if user.status == UserStatus.ACTIVE:
         return {"success": True, "detail": "User is already active", "user_id": str(user.id)}
@@ -917,6 +1165,7 @@ async def approve_user(
     user.updated_at = datetime.now(timezone.utc)
     
     await db.commit()
+    _queue_account_approval_email(background_tasks, user)
     
     return {
         "message": f"User {user.full_name} has been approved and is now active",
@@ -935,6 +1184,7 @@ async def reject_user(
     """
     Reject a pending user registration
     """
+    _require_admin_permission(current_user, "user_approvals")
     try:
         user_uuid = uuid.UUID(user_id)
     except ValueError:
@@ -945,6 +1195,8 @@ async def reject_user(
     
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    if user.role == UserRole.ADMIN and not _is_super_admin(current_user):
+        raise HTTPException(status_code=403, detail="Only the primary super admin can reject admin accounts")
         
     user.status = UserStatus.REJECTED
     user.is_active = False
@@ -963,12 +1215,14 @@ async def reject_user(
 @router.post("/users/{user_id}/activate", response_model=dict)
 async def activate_user(
     user_id: str,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(require_admin)
 ):
     """
     Reactivate a deactivated user account
     """
+    _require_admin_permission(current_user, "user_approvals")
     try:
         user_uuid = uuid.UUID(user_id)
     except ValueError:
@@ -985,11 +1239,16 @@ async def activate_user(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found"
         )
+    if user.role == UserRole.ADMIN and not _is_super_admin(current_user):
+        raise HTTPException(status_code=403, detail="Only the primary super admin can activate admin accounts")
+    was_active = user.status == UserStatus.ACTIVE and user.is_active
     
     user.is_active = True
     user.status = UserStatus.ACTIVE
     user.updated_at = datetime.now(timezone.utc)
     await db.commit()
+    if not was_active:
+        _queue_account_approval_email(background_tasks, user)
     
     return {
         "message": f"User {user.full_name} has been activated",
@@ -1008,6 +1267,7 @@ async def list_teachers_with_limits(
     """
     List all teachers with their student limits and current usage
     """
+    _require_admin_permission(current_user, "teacher_licenses")
     active_student_count = func.count(TeacherStudent.id)
     stmt = (
         select(
@@ -1092,6 +1352,7 @@ async def update_teacher_limits(
     Update a teacher's student limit and plan type
     Use this for managing pricing tiers and licensing
     """
+    _require_admin_permission(current_user, "teacher_licenses")
     try:
         teacher_uuid = uuid.UUID(teacher_id)
     except ValueError:
@@ -1218,6 +1479,7 @@ async def get_report_quality_overview(
     """
     Summarize stored report evidence without loading full report/user ORM graphs.
     """
+    _require_admin_permission(current_user, "report_quality")
     result = await db.execute(
         text(
             """
@@ -1359,6 +1621,7 @@ async def get_token_usage(
     """
     Get token usage statistics across the platform with daily trends and top consumers
     """
+    _require_super_admin(current_user)
     from datetime import datetime, timedelta, timezone
     from sqlalchemy import func, desc
     

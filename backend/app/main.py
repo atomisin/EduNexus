@@ -4,8 +4,9 @@ from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 import logging
 import datetime
+import uuid
 from datetime import timezone, timedelta
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from apscheduler.schedulers.asyncio import (
     AsyncIOScheduler
@@ -18,6 +19,8 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from app.db.database import AsyncSessionLocal
 from app.services.brain_power import current_brain_power_date
+from app.core.security import pwd_context
+from app.models.user import User, UserRole, UserStatus
 
 # CRITICAL: Import all models to ensure SQLAlchemy registry is populated (C-03)
 from app.models import (
@@ -110,6 +113,66 @@ async def reset_brain_power():
             logger.error(f"❌ Failed to reset Brain Power: {e}")
             await db.rollback()
 
+async def _bootstrap_admin_from_env() -> None:
+    """Create or reactivate an admin from explicit environment variables."""
+    email = (settings.BOOTSTRAP_ADMIN_EMAIL or "").strip().lower()
+    password = (settings.BOOTSTRAP_ADMIN_PASSWORD or "").strip()
+    full_name = (settings.BOOTSTRAP_ADMIN_FULL_NAME or "EduNexus Admin").strip()
+    if not email:
+        return
+    if not password:
+        logger.warning("BOOTSTRAP_ADMIN_EMAIL is set, but BOOTSTRAP_ADMIN_PASSWORD is missing.")
+        return
+
+    async with AsyncSessionLocal() as db:
+        try:
+            result = await db.execute(select(User).filter(User.email == email))
+            existing = result.scalars().first()
+            if existing:
+                if existing.role != UserRole.ADMIN:
+                    logger.warning("Bootstrap admin email already belongs to a non-admin user: %s", email)
+                    return
+                existing.status = UserStatus.ACTIVE
+                existing.is_active = True
+                existing.admin_scope = "super"
+                existing.admin_permissions = ["*"]
+                existing.email_verified_at = existing.email_verified_at or datetime.datetime.now(timezone.utc)
+                existing.updated_at = datetime.datetime.now(timezone.utc)
+                await db.commit()
+                logger.info("Bootstrap admin verified/reactivated for %s", email)
+                return
+
+            username = email.split("@", 1)[0]
+            username_result = await db.execute(select(User).filter(User.username == username))
+            if username_result.scalars().first():
+                username = f"{username}-{uuid.uuid4().hex[:6]}"
+
+            admin = User(
+                id=uuid.uuid4(),
+                email=email,
+                username=username,
+                hashed_password=pwd_context.hash(password),
+                full_name=full_name,
+                first_name=full_name.split()[0] if full_name else "EduNexus",
+                last_name=full_name.split()[-1] if " " in full_name else "",
+                role=UserRole.ADMIN,
+                status=UserStatus.ACTIVE,
+                admin_scope="super",
+                admin_permissions=["*"],
+                is_active=True,
+                email_verified_at=datetime.datetime.now(timezone.utc),
+                force_password_change=False,
+                created_at=datetime.datetime.now(timezone.utc),
+                updated_at=datetime.datetime.now(timezone.utc),
+            )
+            db.add(admin)
+            await db.commit()
+            logger.info("Bootstrap admin created for %s", email)
+        except Exception as exc:
+            await db.rollback()
+            logger.exception("Bootstrap admin failed: %s", exc)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan events"""
@@ -127,12 +190,31 @@ async def lifespan(app: FastAPI):
             logger.warning("⚠️ SECRET_KEY is weak (< 32 chars). For development only.")
     
     init_db()
-    
     # HOT PATCH: Keep production tables aligned with ORM columns that were added after initial deploys.
     async with AsyncSessionLocal() as db:
         try:
             await db.execute(text("ALTER TABLE teaching_sessions ADD COLUMN IF NOT EXISTS title VARCHAR(255)"))
             await db.execute(text("ALTER TABLE student_profiles ADD COLUMN IF NOT EXISTS brain_power_reset_date DATE"))
+            await db.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS admin_scope VARCHAR(50)"))
+            await db.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS admin_permissions JSONB DEFAULT '[]'::jsonb"))
+            super_admin_email = (
+                settings.SUPER_ADMIN_EMAIL
+                or settings.BOOTSTRAP_ADMIN_EMAIL
+                or ""
+            ).strip().lower()
+            if super_admin_email:
+                await db.execute(
+                    text(
+                        """
+                        UPDATE users
+                        SET admin_scope = 'super',
+                            admin_permissions = '["*"]'::jsonb
+                        WHERE role = 'admin'
+                          AND lower(email) = :email
+                        """
+                    ),
+                    {"email": super_admin_email},
+                )
             await db.execute(text("ALTER TABLE student_topic_progress ADD COLUMN IF NOT EXISTS progress_pct INTEGER DEFAULT 0"))
             await db.execute(text("ALTER TABLE student_topic_progress ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'locked'"))
             await db.execute(text("ALTER TABLE student_topic_progress ADD COLUMN IF NOT EXISTS last_accessed TIMESTAMP WITH TIME ZONE"))
@@ -157,6 +239,47 @@ async def lifespan(app: FastAPI):
                         UNIQUE (subject_id, topic_id, education_level, curriculum_hash)
                 )
             """))
+            await db.execute(text("""
+                CREATE TABLE IF NOT EXISTS custom_course_requests (
+                    id UUID PRIMARY KEY,
+                    student_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    requested_title VARCHAR(255) NOT NULL,
+                    normalized_title VARCHAR(255),
+                    requested_description TEXT,
+                    intended_outcome TEXT,
+                    motivation TEXT,
+                    status VARCHAR(50) DEFAULT 'pending_admin_review',
+                    safety_status VARCHAR(50) DEFAULT 'clear',
+                    safety_flags JSONB DEFAULT '[]'::jsonb,
+                    suggested_courses JSONB DEFAULT '[]'::jsonb,
+                    safe_alternatives JSONB DEFAULT '[]'::jsonb,
+                    refined_admin_message TEXT,
+                    admin_selected_suggestion VARCHAR(255),
+                    approved_course_name VARCHAR(255),
+                    admin_decision VARCHAR(50),
+                    admin_reason TEXT,
+                    reviewed_by UUID REFERENCES users(id),
+                    reviewed_at TIMESTAMP WITH TIME ZONE,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            await db.execute(text("ALTER TABLE custom_course_requests ADD COLUMN IF NOT EXISTS normalized_title VARCHAR(255)"))
+            await db.execute(text("ALTER TABLE custom_course_requests ADD COLUMN IF NOT EXISTS requested_description TEXT"))
+            await db.execute(text("ALTER TABLE custom_course_requests ADD COLUMN IF NOT EXISTS intended_outcome TEXT"))
+            await db.execute(text("ALTER TABLE custom_course_requests ADD COLUMN IF NOT EXISTS motivation TEXT"))
+            await db.execute(text("ALTER TABLE custom_course_requests ADD COLUMN IF NOT EXISTS safety_status VARCHAR(50) DEFAULT 'clear'"))
+            await db.execute(text("ALTER TABLE custom_course_requests ADD COLUMN IF NOT EXISTS safety_flags JSONB DEFAULT '[]'::jsonb"))
+            await db.execute(text("ALTER TABLE custom_course_requests ADD COLUMN IF NOT EXISTS suggested_courses JSONB DEFAULT '[]'::jsonb"))
+            await db.execute(text("ALTER TABLE custom_course_requests ADD COLUMN IF NOT EXISTS safe_alternatives JSONB DEFAULT '[]'::jsonb"))
+            await db.execute(text("ALTER TABLE custom_course_requests ADD COLUMN IF NOT EXISTS refined_admin_message TEXT"))
+            await db.execute(text("ALTER TABLE custom_course_requests ADD COLUMN IF NOT EXISTS admin_selected_suggestion VARCHAR(255)"))
+            await db.execute(text("ALTER TABLE custom_course_requests ADD COLUMN IF NOT EXISTS approved_course_name VARCHAR(255)"))
+            await db.execute(text("ALTER TABLE custom_course_requests ADD COLUMN IF NOT EXISTS admin_decision VARCHAR(50)"))
+            await db.execute(text("ALTER TABLE custom_course_requests ADD COLUMN IF NOT EXISTS admin_reason TEXT"))
+            await db.execute(text("ALTER TABLE custom_course_requests ADD COLUMN IF NOT EXISTS reviewed_by UUID REFERENCES users(id)"))
+            await db.execute(text("ALTER TABLE custom_course_requests ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMP WITH TIME ZONE"))
+            await db.execute(text("ALTER TABLE custom_course_requests ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP"))
             await db.execute(text("""
                 UPDATE student_topic_progress
                 SET status = CASE
@@ -215,11 +338,27 @@ async def lifespan(app: FastAPI):
                 "subject_id, sort_order",
                 ["subject_id", "sort_order"],
             )
+            await _create_index_if_columns_exist(
+                db,
+                "ix_custom_course_requests_student_status",
+                "custom_course_requests",
+                "student_id, status",
+                ["student_id", "status"],
+            )
+            await _create_index_if_columns_exist(
+                db,
+                "ix_custom_course_requests_status_created",
+                "custom_course_requests",
+                "status, created_at DESC",
+                ["status", "created_at"],
+            )
             await db.commit()
             logger.info("Database Hotpatch: production schema columns and indexes verified.")
         except Exception as e:
             logger.error(f"Database Hotpatch failed: {e}")
             await db.rollback()
+
+    await _bootstrap_admin_from_env()
     
     # Initialize and start scheduler
     try:

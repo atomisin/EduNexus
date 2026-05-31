@@ -199,6 +199,44 @@ class EmailService:
         
         return self.send_email(user.email, subject, html_content, text_content)
 
+    def send_account_approved_email(self, user: User) -> bool:
+        """Notify a user that admin approval is complete and the account is active."""
+        subject = "Your EduNexus Account Has Been Approved"
+        login_url = f"{settings.APP_BASE_URL}/?auth=login"
+        display_name = user.full_name or user.email
+
+        html_content = f"""
+        <html>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+            <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+                <h2 style="color: #2c5aa0;">Your EduNexus account is ready</h2>
+                <p>Hi {display_name},</p>
+                <p>Your account has been approved by the EduNexus admin team. You can now sign in and continue learning.</p>
+                <p><a href="{login_url}" style="background-color: #2c5aa0; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Sign in to EduNexus</a></p>
+                <p>If you requested a professional custom course, that course still needs its own course approval before it appears in your learning dashboard.</p>
+                <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+                <p style="font-size: 12px; color: #666;">
+                    This is an automated message from EduNexus. Please do not reply to this email.
+                </p>
+            </div>
+        </body>
+        </html>
+        """
+
+        text_content = f"""
+        Your EduNexus account is ready
+
+        Hi {display_name},
+
+        Your account has been approved by the EduNexus admin team. You can now sign in and continue learning.
+
+        Sign in: {login_url}
+
+        If you requested a professional custom course, that course still needs its own course approval before it appears in your learning dashboard.
+        """
+
+        return self.send_email(user.email, subject, html_content, text_content)
+
     async def notify_admins_of_pending_user(self, user: User, db: Session) -> bool:
         """Notify all administrators of a new user pending approval (C-04-B)"""
         # Note: We use Session type hint but it could be AsyncSession

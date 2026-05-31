@@ -89,6 +89,12 @@ class Settings(BaseSettings):
     VERIFICATION_TOKEN_EXPIRE_HOURS: int = 24
     APP_BASE_URL: str = "http://localhost:5174"
 
+    # Optional one-time admin bootstrap for hosted environments without shell access.
+    BOOTSTRAP_ADMIN_EMAIL: Optional[str] = None
+    BOOTSTRAP_ADMIN_PASSWORD: Optional[str] = None
+    BOOTSTRAP_ADMIN_FULL_NAME: str = "EduNexus Admin"
+    SUPER_ADMIN_EMAIL: Optional[str] = None
+
     # CORS
     CORS_ORIGINS: str = "http://localhost:3000,http://localhost:5173,http://localhost:5174,https://edu-nexus-beta.vercel.app"
     

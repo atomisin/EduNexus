@@ -18,6 +18,7 @@ import { UsageAnalytics } from './UsageAnalytics';
 import { CustomCourseRequestsPanel } from './CustomCourseRequestsPanel';
 import { ReportQualityAnalytics } from './ReportQualityAnalytics';
 import { VideoCreatorProfilesPanel } from './VideoCreatorProfilesPanel';
+import { AdminDelegationPanel } from './AdminDelegationPanel';
 import { MessagingView } from '@/components/messaging/MessagingView';
 
 interface UserType {
@@ -60,18 +61,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [teachers, setTeachers] = useState<any[]>([]);
   const [teachersLoading, setTeachersLoading] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [adminAccess, setAdminAccess] = useState<{
+    is_super_admin: boolean;
+    permissions: string[];
+    permission_labels?: Record<string, string>;
+  } | null>(null);
   const fetchDataPromiseRef = useRef<Promise<void> | null>(null);
   const loadedAdminIdRef = useRef<string | null>(null);
 
-  useEffect(() => {
-    if (authUser?.role === 'admin') {
-      setIsLoggedIn(true);
-      if (loadedAdminIdRef.current !== authUser.id) {
-        loadedAdminIdRef.current = authUser.id;
-        void fetchData();
-      }
-    }
-  }, [authUser]);
+  const hasAdminAccess = useCallback((permission: string) => {
+    if (!adminAccess) return false;
+    return adminAccess.is_super_admin || adminAccess.permissions.includes('*') || adminAccess.permissions.includes(permission);
+  }, [adminAccess]);
 
   const fetchUsers = useCallback(async () => {
     try {
@@ -111,10 +112,45 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     return request;
   }, [fetchUsers]);
 
+  const loadAdminAccess = useCallback(async () => {
+    setLoading(true);
+    try {
+      const access = await adminAPI.getAdminPermissions();
+      setAdminAccess(access);
+      const canReviewUsers = access?.is_super_admin || access?.permissions?.includes('*') || access?.permissions?.includes('user_approvals');
+      if (canReviewUsers) {
+        await fetchData();
+      } else {
+        const firstAllowed =
+          access?.permissions?.includes('custom_courses') ? 'custom-courses' :
+          access?.permissions?.includes('video_evidence') ? 'video-evidence' :
+          access?.permissions?.includes('teacher_licenses') ? 'licenses' :
+          access?.permissions?.includes('report_quality') ? 'report-quality' :
+          access?.permissions?.includes('messages') ? 'messages' :
+          'custom-courses';
+        setActiveTab(firstAllowed);
+      }
+    } catch (error: any) {
+      toast.error('Failed to load admin permissions: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchData]);
+
   useEffect(() => {
-    if (!isLoggedIn || activeTab !== 'licenses' || teachers.length > 0 || teachersLoading) return;
+    if (authUser?.role === 'admin') {
+      setIsLoggedIn(true);
+      if (loadedAdminIdRef.current !== authUser.id) {
+        loadedAdminIdRef.current = authUser.id;
+        void loadAdminAccess();
+      }
+    }
+  }, [authUser, loadAdminAccess]);
+
+  useEffect(() => {
+    if (!isLoggedIn || activeTab !== 'licenses' || teachers.length > 0 || teachersLoading || !hasAdminAccess('teacher_licenses')) return;
     void fetchTeachers();
-  }, [activeTab, fetchTeachers, isLoggedIn, teachers.length, teachersLoading]);
+  }, [activeTab, fetchTeachers, hasAdminAccess, isLoggedIn, teachers.length, teachersLoading]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -124,6 +160,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       const success = await login(email, password);
       if (!success) return;
       setIsLoggedIn(true);
+      await loadAdminAccess();
       toast.success('Welcome, Admin!');
     } catch (error: any) {
       toast.error(error.message || 'Invalid admin credentials');
@@ -183,6 +220,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const suspendedUsers = filteredUsers.filter(u => u.status === 'suspended');
   const teacherCount = users.filter(u => u.role?.toLowerCase() === 'teacher').length;
   const studentCount = users.filter(u => u.role?.toLowerCase() === 'student').length;
+  const canManageUsers = hasAdminAccess('user_approvals');
+  const isSuperAdmin = Boolean(adminAccess?.is_super_admin || adminAccess?.permissions?.includes('*'));
 
   if (!isLoggedIn) {
     return (
@@ -348,15 +387,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         ) : (
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full min-w-0">
             <TabsList className="mb-5 grid h-auto w-full grid-cols-2 gap-1 bg-secondary/50 p-1 sm:grid-cols-3 xl:grid-cols-9">
-              <TabsTrigger value="pending" className="min-w-0 whitespace-normal rounded-md px-2 py-2 text-xs leading-tight data-[state=active]:bg-primary data-[state=active]:text-primary-foreground sm:text-sm">Pending Approval ({pendingUsers.length})</TabsTrigger>
-              <TabsTrigger value="approved" className="min-w-0 whitespace-normal rounded-md px-2 py-2 text-xs leading-tight data-[state=active]:bg-primary data-[state=active]:text-primary-foreground sm:text-sm">Approved Users ({approvedUsers.length})</TabsTrigger>
-              <TabsTrigger value="suspended" className="min-w-0 whitespace-normal rounded-md px-2 py-2 text-xs leading-tight data-[state=active]:bg-primary data-[state=active]:text-primary-foreground sm:text-sm">Suspended ({suspendedUsers.length})</TabsTrigger>
-              <TabsTrigger value="custom-courses" className="min-w-0 whitespace-normal rounded-md px-2 py-2 text-xs leading-tight data-[state=active]:bg-primary data-[state=active]:text-primary-foreground sm:text-sm">Custom Courses</TabsTrigger>
-              <TabsTrigger value="video-evidence" className="min-w-0 whitespace-normal rounded-md px-2 py-2 text-xs leading-tight data-[state=active]:bg-primary data-[state=active]:text-primary-foreground sm:text-sm">Video Evidence</TabsTrigger>
-              <TabsTrigger value="licenses" className="min-w-0 whitespace-normal rounded-md px-2 py-2 text-xs leading-tight data-[state=active]:bg-primary data-[state=active]:text-primary-foreground sm:text-sm">Teacher Licenses ({teacherCount})</TabsTrigger>
-              <TabsTrigger value="report-quality" className="min-w-0 whitespace-normal rounded-md px-2 py-2 text-xs leading-tight data-[state=active]:bg-primary data-[state=active]:text-primary-foreground sm:text-sm">Report Quality</TabsTrigger>
-              <TabsTrigger value="messages" className="min-w-0 whitespace-normal rounded-md px-2 py-2 text-xs leading-tight data-[state=active]:bg-primary data-[state=active]:text-primary-foreground sm:text-sm">Messages</TabsTrigger>
-              <TabsTrigger value="usage" className="min-w-0 whitespace-normal rounded-md px-2 py-2 text-xs leading-tight data-[state=active]:bg-primary data-[state=active]:text-primary-foreground sm:text-sm">AI Usage & Cost</TabsTrigger>
+              {canManageUsers ? <TabsTrigger value="pending" className="min-w-0 whitespace-normal rounded-md px-2 py-2 text-xs leading-tight data-[state=active]:bg-primary data-[state=active]:text-primary-foreground sm:text-sm">Pending Approval ({pendingUsers.length})</TabsTrigger> : null}
+              {canManageUsers ? <TabsTrigger value="approved" className="min-w-0 whitespace-normal rounded-md px-2 py-2 text-xs leading-tight data-[state=active]:bg-primary data-[state=active]:text-primary-foreground sm:text-sm">Approved Users ({approvedUsers.length})</TabsTrigger> : null}
+              {canManageUsers ? <TabsTrigger value="suspended" className="min-w-0 whitespace-normal rounded-md px-2 py-2 text-xs leading-tight data-[state=active]:bg-primary data-[state=active]:text-primary-foreground sm:text-sm">Suspended ({suspendedUsers.length})</TabsTrigger> : null}
+              {hasAdminAccess('custom_courses') ? <TabsTrigger value="custom-courses" className="min-w-0 whitespace-normal rounded-md px-2 py-2 text-xs leading-tight data-[state=active]:bg-primary data-[state=active]:text-primary-foreground sm:text-sm">Custom Courses</TabsTrigger> : null}
+              {hasAdminAccess('video_evidence') ? <TabsTrigger value="video-evidence" className="min-w-0 whitespace-normal rounded-md px-2 py-2 text-xs leading-tight data-[state=active]:bg-primary data-[state=active]:text-primary-foreground sm:text-sm">Video Evidence</TabsTrigger> : null}
+              {hasAdminAccess('teacher_licenses') ? <TabsTrigger value="licenses" className="min-w-0 whitespace-normal rounded-md px-2 py-2 text-xs leading-tight data-[state=active]:bg-primary data-[state=active]:text-primary-foreground sm:text-sm">Teacher Licenses ({teacherCount})</TabsTrigger> : null}
+              {hasAdminAccess('report_quality') ? <TabsTrigger value="report-quality" className="min-w-0 whitespace-normal rounded-md px-2 py-2 text-xs leading-tight data-[state=active]:bg-primary data-[state=active]:text-primary-foreground sm:text-sm">Report Quality</TabsTrigger> : null}
+              {hasAdminAccess('messages') ? <TabsTrigger value="messages" className="min-w-0 whitespace-normal rounded-md px-2 py-2 text-xs leading-tight data-[state=active]:bg-primary data-[state=active]:text-primary-foreground sm:text-sm">Messages</TabsTrigger> : null}
+              {isSuperAdmin ? <TabsTrigger value="admins" className="min-w-0 whitespace-normal rounded-md px-2 py-2 text-xs leading-tight data-[state=active]:bg-primary data-[state=active]:text-primary-foreground sm:text-sm">Admins</TabsTrigger> : null}
+              {isSuperAdmin ? <TabsTrigger value="usage" className="min-w-0 whitespace-normal rounded-md px-2 py-2 text-xs leading-tight data-[state=active]:bg-primary data-[state=active]:text-primary-foreground sm:text-sm">AI Usage & Cost</TabsTrigger> : null}
             </TabsList>
 
             <TabsContent value="pending" className="space-y-4">
@@ -424,8 +464,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               {activeTab === 'messages' && authUser ? <MessagingView currentUser={authUser} /> : null}
             </TabsContent>
 
+            <TabsContent value="admins" className="space-y-6">
+              {activeTab === 'admins' && isSuperAdmin ? (
+                <AdminDelegationPanel permissionLabels={adminAccess?.permission_labels} />
+              ) : null}
+            </TabsContent>
+
             <TabsContent value="usage" className="space-y-6">
-              {activeTab === 'usage' ? <UsageAnalytics /> : null}
+              {activeTab === 'usage' && isSuperAdmin ? <UsageAnalytics /> : null}
             </TabsContent>
           </Tabs>
         )}

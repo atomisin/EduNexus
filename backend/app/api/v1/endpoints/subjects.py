@@ -561,21 +561,15 @@ async def create_subject(
     db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Create a new subject (teacher only, or professional for students)"""
+    """Create a new subject for staff-managed catalogs and classes."""
     # FIX 4: Tighten authorization for subject creation
     if current_user.role in ["teacher", "admin"]:
         pass  # allowed
     elif current_user.role == "student":
-        # Students can only create subjects for themselves and only if they are professional level
-        from app.models.student import StudentProfile
-        res_prof = await db.execute(select(StudentProfile).filter(StudentProfile.user_id == current_user.id))
-        student_profile = res_prof.scalars().first()
-        
-        if not student_profile or student_profile.education_level != "professional":
-            raise HTTPException(
-                status_code=403,
-                detail="Only professional students can create custom courses"
-            )
+        raise HTTPException(
+            status_code=403,
+            detail="Custom courses must be submitted for admin approval before access is created",
+        )
     else:
         raise HTTPException(status_code=403, detail="Not authorized")
 

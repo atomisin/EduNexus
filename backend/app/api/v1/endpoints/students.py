@@ -4,6 +4,7 @@ from sqlalchemy import select, any_, or_
 from pydantic import BaseModel
 from typing import Optional, List
 import uuid
+import json
 from datetime import datetime, timezone, timedelta, time
 from typing import List, Optional, Dict, Any
 from sqlalchemy import select, update, delete, func, or_, and_, text, case
@@ -24,6 +25,7 @@ from app.services.storage_service import storage_service
 from app.services.brain_power import brain_power_budget_summary, ensure_daily_brain_power
 from app.services.curriculum_service import curriculum_service
 from app.services.gamification import sync_student_streak_from_activity_logs
+from app.services.custom_course_governance import screen_custom_course_request
 from app.utils.topic_filters import filter_learning_topics
 
 router = APIRouter()
@@ -78,6 +80,142 @@ class SubjectEnrollmentUpdate(BaseModel):
 
 class CustomCourseEnrollment(BaseModel):
     course_name: str
+    requested_description: Optional[str] = None
+    intended_outcome: Optional[str] = None
+    motivation: Optional[str] = None
+
+
+def _json_list(value: Any) -> list:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return value
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+            return parsed if isinstance(parsed, list) else []
+        except json.JSONDecodeError:
+            return []
+    return []
+
+
+async def _submit_custom_course_request(
+    db: AsyncSession,
+    *,
+    student_id: uuid.UUID,
+    course_name: str,
+    requested_description: str | None = None,
+    intended_outcome: str | None = None,
+    motivation: str | None = None,
+) -> dict:
+    clean_name = course_name.strip()
+    if not clean_name:
+        raise HTTPException(status_code=400, detail="Course name is required")
+
+    profile_result = await db.execute(
+        select(StudentProfile).filter(StudentProfile.user_id == student_id)
+    )
+    profile = profile_result.scalars().first()
+    if not profile or profile.education_level != "professional":
+        raise HTTPException(
+            status_code=400,
+            detail="Custom course requests are only available for professional-track students",
+        )
+
+    existing_result = await db.execute(
+        text(
+            """
+            SELECT id, status, safety_status, safety_flags, safe_alternatives
+            FROM custom_course_requests
+            WHERE student_id = :student_id
+              AND LOWER(requested_title) = LOWER(:requested_title)
+              AND status IN ('pending_admin_review', 'suspicious_review', 'auto_rejected')
+            ORDER BY created_at DESC
+            LIMIT 1
+            """
+        ),
+        {"student_id": student_id, "requested_title": clean_name},
+    )
+    existing = existing_result.mappings().first()
+    if existing:
+        status_value = existing["status"]
+        return {
+            "success": status_value not in {"auto_rejected"},
+            "id": str(existing["id"]),
+            "status": status_value,
+            "safety_status": existing["safety_status"] or "clear",
+            "safety_flags": _json_list(existing["safety_flags"]),
+            "safe_alternatives": _json_list(existing["safe_alternatives"]),
+            "reason": "This course request is already awaiting admin review."
+            if status_value != "auto_rejected"
+            else "This course request was rejected by safety governance.",
+        }
+
+    safety = screen_custom_course_request(
+        clean_name,
+        description=requested_description,
+        intended_outcome=intended_outcome,
+        motivation=motivation,
+    )
+    request_id = uuid.uuid4()
+    await db.execute(
+        text(
+            """
+            INSERT INTO custom_course_requests (
+                id,
+                student_id,
+                requested_title,
+                normalized_title,
+                requested_description,
+                intended_outcome,
+                motivation,
+                status,
+                safety_status,
+                safety_flags,
+                safe_alternatives,
+                created_at,
+                updated_at
+            )
+            VALUES (
+                :id,
+                :student_id,
+                :requested_title,
+                :normalized_title,
+                :requested_description,
+                :intended_outcome,
+                :motivation,
+                :status,
+                :safety_status,
+                CAST(:safety_flags AS JSONB),
+                CAST(:safe_alternatives AS JSONB),
+                CURRENT_TIMESTAMP,
+                CURRENT_TIMESTAMP
+            )
+            """
+        ),
+        {
+            "id": request_id,
+            "student_id": student_id,
+            "requested_title": clean_name,
+            "normalized_title": clean_name,
+            "requested_description": requested_description,
+            "intended_outcome": intended_outcome,
+            "motivation": motivation,
+            "status": safety.status,
+            "safety_status": safety.safety_status,
+            "safety_flags": json.dumps(safety.safety_flags),
+            "safe_alternatives": json.dumps(safety.safe_alternatives),
+        },
+    )
+    return {
+        "success": safety.allowed,
+        "id": str(request_id),
+        "status": safety.status,
+        "safety_status": safety.safety_status,
+        "safety_flags": safety.safety_flags,
+        "safe_alternatives": safety.safe_alternatives,
+        "reason": safety.reason,
+    }
 
 
 class LearningStyleAnswer(BaseModel):
@@ -286,6 +424,7 @@ async def update_student_profile(
 
     # Update fields
     update_data = profile_data.dict(exclude_unset=True)
+    update_data.pop("enrolled_subjects", None)
 
     # Sync grade_level / current_grade_level
     grade = update_data.pop("grade_level", None) or update_data.get(
@@ -310,73 +449,21 @@ async def update_student_profile(
 
     profile.updated_at = datetime.now(timezone.utc)
 
-    # Trigger AI Curriculum Generation for Professional track
+    # Professional custom courses must pass admin governance before curriculum access.
     if (
         profile.education_level == "professional"
         and profile.course_name
         and not profile.professional_curriculum
     ):
         try:
-            from app.services.llm_service import llm_service
-            from app.models.subject import Subject, Topic
-
-            response_data = await llm_service.generate_subtopics(
-                topic=profile.course_name,
-                subject="Professional Career Track",
-                education_level="professional",
-                user_id=current_user.id
+            await _submit_custom_course_request(
+                db,
+                student_id=current_user.id,
+                course_name=profile.course_name,
             )
-
-            subtopics = response_data.get("subtopics", [])
-            corrected_course_name = response_data.get(
-                "corrected_topic", profile.course_name
-            )
-
-            # Save the corrected name back to the profile
-            profile.course_name = corrected_course_name
-
-            if subtopics:
-                profile.professional_curriculum = {"subtopics": subtopics}
-
-                # Create a specific Subject for this student if it doesn't exist
-                # Filter by name, level AND creator to ensure isolation
-                res_subj = await db.execute(
-                    select(Subject).filter(
-                        Subject.name == corrected_course_name,
-                        Subject.education_level == "professional",
-                        Subject.created_by == current_user.id,
-                    )
-                )
-                existing_subject = res_subj.scalars().first()
-
-                if not existing_subject:
-                    new_subject = Subject(
-                        id=uuid.uuid4(),
-                        name=corrected_course_name,
-                        code=f"PROF-{corrected_course_name[:3].upper()}-{str(uuid.uuid4())[:4]}",
-                        description=f"Comprehensive 'Zero to Hero' curriculum for {corrected_course_name}",
-                        education_level="professional",
-                        created_by=current_user.id,
-                        is_private=True,
-                    )
-                    db.add(new_subject)
-                    await db.flush()
-
-                    # Add topics based on subtopics
-                    for i, st_name in enumerate(subtopics):
-                        topic = Topic(
-                            id=uuid.uuid4(),
-                            subject_id=new_subject.id,
-                            name=st_name,
-                            description=f"Core module for {corrected_course_name}: {st_name}",
-                            sort_order=i,
-                        )
-                        db.add(topic)
-
-                await db.commit()
         except Exception as e:
-            logger.error(f"Failed to generate professional curriculum: {e}")
-            logger.exception("Professional curriculum generation failed")
+            logger.error(f"Failed to queue professional course request: {e}")
+            logger.exception("Professional course request submission failed")
 
     await db.commit()
     await db.refresh(profile)
@@ -537,120 +624,103 @@ async def enroll_custom_professional(
     db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Generate and enroll in a custom professional course"""
+    """Backward-compatible alias: submit custom professional course for admin review."""
     if current_user.role != "student":
         raise HTTPException(
             status_code=403, detail="Only students can enroll in courses"
         )
 
-    result = await db.execute(
-        select(StudentProfile).filter(StudentProfile.user_id == current_user.id)
+    result = await _submit_custom_course_request(
+        db,
+        student_id=current_user.id,
+        course_name=course_data.course_name,
+        requested_description=course_data.requested_description,
+        intended_outcome=course_data.intended_outcome,
+        motivation=course_data.motivation,
     )
-    profile = result.scalars().first()
+    await db.commit()
+    return {
+        **result,
+        "detail": result["reason"],
+    }
 
-    if not profile or profile.education_level != "professional":
-        raise HTTPException(
-            status_code=400, detail="Student must be on the professional track"
-        )
 
-    course_name = course_data.course_name.strip()
-    if not course_name:
-        raise HTTPException(status_code=400, detail="Course name is required")
+@router.post("/custom-course-requests")
+async def submit_custom_course_request(
+    course_data: CustomCourseEnrollment,
+    db: AsyncSession = Depends(get_async_db),
+    current_user: User = Depends(get_current_user),
+):
+    if current_user.role != "student":
+        raise HTTPException(status_code=403, detail="Only students can request custom courses")
 
-    try:
-        from app.services.llm_service import llm_service
-        from app.models.subject import Subject, Topic
+    result = await _submit_custom_course_request(
+        db,
+        student_id=current_user.id,
+        course_name=course_data.course_name,
+        requested_description=course_data.requested_description,
+        intended_outcome=course_data.intended_outcome,
+        motivation=course_data.motivation,
+    )
+    await db.commit()
+    return result
 
-        # First, generate the subtopics and get the AI-corrected topic name
-        response_data = await llm_service.generate_subtopics(
-            topic=course_name,
-            subject="Professional Career Track",
-            education_level="professional",
-            user_id=current_user.id
-        )
-        subtopics = response_data.get("subtopics", [])
-        corrected_course_name = response_data.get("corrected_topic", course_name)
 
-        if not subtopics:
-            raise HTTPException(
-                status_code=500, detail="Failed to generate curriculum using AI"
-            )
+@router.get("/custom-course-requests")
+async def list_student_custom_course_requests(
+    db: AsyncSession = Depends(get_async_db),
+    current_user: User = Depends(get_current_user),
+):
+    if current_user.role != "student":
+        raise HTTPException(status_code=403, detail="Only students can view custom course requests")
 
-        # Filter by name, level AND creator to ensure isolation
-        res_subj = await db.execute(
-            select(Subject).filter(
-                Subject.name == corrected_course_name,
-                Subject.education_level == "professional",
-                Subject.created_by == current_user.id,
-            )
-        )
-        existing_subject = res_subj.scalars().first()
-
-        new_subject_id = None
-        if existing_subject:
-            new_subject_id = existing_subject.id
-        else:
-            new_subject = Subject(
-                id=uuid.uuid4(),
-                name=corrected_course_name,
-                code=f"PROF-{corrected_course_name[:3].upper()}-{str(uuid.uuid4())[:4]}",
-                description=f"Comprehensive 'Zero to Hero' curriculum for {corrected_course_name}",
-                education_level="professional",
-                created_by=current_user.id,
-                is_private=True,
-            )
-            db.add(new_subject)
-            await db.flush()
-            new_subject_id = new_subject.id
-
-            # Add topics based on subtopics
-            for i, st_name in enumerate(subtopics):
-                topic = Topic(
-                    id=uuid.uuid4(),
-                    subject_id=new_subject.id,
-                    name=st_name,
-                    description=f"Core module for {corrected_course_name}: {st_name}",
-                    sort_order=i,
-                )
-                db.add(topic)
-
-        # Enroll student in the subject
-        current_enrolled = list(profile.enrolled_subjects or [])
-        if str(new_subject_id) not in current_enrolled:
-            current_enrolled.append(str(new_subject_id))
-            profile.enrolled_subjects = current_enrolled
-
-            # Task 1C: Auto-unlock first topic for professional course
-            try:
-                res_topic = await db.execute(
-                    select(Topic)
-                    .filter(Topic.subject_id == new_subject_id)
-                    .order_by(Topic.sort_order.asc())
-                )
-                first_topic = next(iter(filter_learning_topics(res_topic.scalars().all())), None)
-                if first_topic:
-                    progress = StudentTopicProgress(
-                        student_id=current_user.id,
-                        topic_id=first_topic.id,
-                        subject_id=new_subject_id,
-                        status="unlocked",
-                        unlocked_at=datetime.now(timezone.utc),
-                    )
-                    db.add(progress)
-            except Exception as e:
-                logger.error(f"Failed to auto-unlock first topic for professional: {e}")
-
-        await db.commit()
-        return {
-            "success": True,
-            "detail": f"Successfully enrolled in {corrected_course_name}",
-            "enrolled_subjects": current_enrolled,
+    result = await db.execute(
+        text(
+            """
+            SELECT
+                id,
+                requested_title,
+                normalized_title,
+                requested_description,
+                intended_outcome,
+                motivation,
+                status,
+                safety_status,
+                safety_flags,
+                safe_alternatives,
+                refined_admin_message,
+                admin_selected_suggestion,
+                approved_course_name,
+                created_at,
+                reviewed_at
+            FROM custom_course_requests
+            WHERE student_id = :student_id
+            ORDER BY created_at DESC
+            LIMIT 50
+            """
+        ),
+        {"student_id": current_user.id},
+    )
+    return [
+        {
+            "id": str(row["id"]),
+            "requested_title": row["requested_title"],
+            "normalized_title": row["normalized_title"],
+            "requested_description": row["requested_description"],
+            "intended_outcome": row["intended_outcome"],
+            "motivation": row["motivation"],
+            "status": row["status"],
+            "safety_status": row["safety_status"] or "clear",
+            "safety_flags": _json_list(row["safety_flags"]),
+            "safe_alternatives": _json_list(row["safe_alternatives"]),
+            "refined_admin_message": row["refined_admin_message"],
+            "admin_selected_suggestion": row["admin_selected_suggestion"],
+            "approved_course_name": row["approved_course_name"],
+            "created_at": row["created_at"].isoformat() if row["created_at"] else None,
+            "reviewed_at": row["reviewed_at"].isoformat() if row["reviewed_at"] else None,
         }
-
-    except Exception as e:
-        await db.rollback()
-        logger.exception("Error enrolling custom professional course")
-        raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
+        for row in result.mappings().all()
+    ]
 
 
 @router.get("/subjects/enrolled")

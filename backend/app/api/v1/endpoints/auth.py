@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Request, Depends, HTTPException, status, Response, Cookie, BackgroundTasks, Header
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.orm import noload
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import Optional, List, Literal
@@ -9,6 +9,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 import random
 import string
+import json
 from types import SimpleNamespace
 
 from app.db.database import get_db, get_async_db
@@ -21,9 +22,7 @@ from app.utils.validators import validate_email_registration, validate_password
 from app.services.email_service import email_service
 from app.services.storage_service import storage_service
 from app.services.curriculum_service import curriculum_service
-from app.models.subject import Subject
-from app.models.junction_tables import student_subject
-from app.db.database import AsyncSessionLocal
+from app.services.custom_course_governance import screen_custom_course_request
 import logging
 
 logger = logging.getLogger(__name__)
@@ -528,7 +527,9 @@ async def register_student(
         curriculum_type=student_data.curriculum_type or student_data.education_level,
         grade_level=student_data.grade_level,
         department=student_data.department,
-        enrolled_subjects=student_data.enrolled_subjects or [],
+        enrolled_subjects=[]
+        if (student_data.education_level or "").lower() == "professional"
+        else (student_data.enrolled_subjects or []),
         desired_topics=student_data.desired_topics or [],
         career_interests=student_data.career_interests or [],
         gender=student_data.gender,
@@ -541,6 +542,58 @@ async def register_student(
     )
 
     db.add(student_profile)
+    if (
+        student_data.education_level
+        and student_data.education_level.lower() == "professional"
+        and student_data.course_name
+    ):
+        safety = screen_custom_course_request(
+            student_data.course_name,
+            intended_outcome=", ".join(student_data.career_interests or []),
+        )
+        await db.execute(
+            text(
+                """
+                INSERT INTO custom_course_requests (
+                    id,
+                    student_id,
+                    requested_title,
+                    normalized_title,
+                    intended_outcome,
+                    status,
+                    safety_status,
+                    safety_flags,
+                    safe_alternatives,
+                    created_at,
+                    updated_at
+                )
+                VALUES (
+                    :id,
+                    :student_id,
+                    :requested_title,
+                    :normalized_title,
+                    :intended_outcome,
+                    :status,
+                    :safety_status,
+                    CAST(:safety_flags AS JSONB),
+                    CAST(:safe_alternatives AS JSONB),
+                    CURRENT_TIMESTAMP,
+                    CURRENT_TIMESTAMP
+                )
+                """
+            ),
+            {
+                "id": uuid.uuid4(),
+                "student_id": db_user.id,
+                "requested_title": student_data.course_name.strip(),
+                "normalized_title": student_data.course_name.strip(),
+                "intended_outcome": ", ".join(student_data.career_interests or []) or None,
+                "status": safety.status,
+                "safety_status": safety.safety_status,
+                "safety_flags": json.dumps(safety.safety_flags),
+                "safe_alternatives": json.dumps(safety.safe_alternatives),
+            },
+        )
     await db.commit()
     await db.refresh(db_user)
 
@@ -555,38 +608,13 @@ async def register_student(
     # Ensure curriculum is generated/loaded asynchronously
     from app.services.curriculum_initializer import initialize_standard_curriculum
     
-    if student_data.education_level and student_data.education_level.lower() == "professional" and student_data.course_name:
-        # FIX 3: Professional students get a real subject and curriculum generation
-        from app.api.v1.endpoints.subjects import generate_curriculum_for_subject
-        subject = Subject(
-            id=uuid.uuid4(),
-            name=student_data.course_name,
-            education_level='professional',
-            code=student_data.course_name.lower().replace(' ', '-') + '-' + str(db_user.id)[:8],
-            created_by=db_user.id,
-            is_private=True,
-            is_active=True
-        )
-        db.add(subject)
-        await db.flush() # Get the ID safely
-        
-        # Auto-enroll via junction table
-        await db.execute(student_subject.insert().values(
-            student_id=db_user.id,
-            subject_id=subject.id
-        ))
-        
-        # Enforce name in enrolled_subjects array too for backward compatibility
-        student_profile.enrolled_subjects = [str(subject.id)]
-        await db.commit()
-        
-        # Generate curriculum in background using the LLM logic
-        background_tasks.add_task(
-            generate_curriculum_for_subject,
-            str(subject.id),
-            student_data.course_name,
-            'professional',
-            AsyncSessionLocal
+    if (
+        student_data.education_level
+        and student_data.education_level.lower() == "professional"
+    ):
+        logger.info(
+            "Professional custom course request queued for admin review for user %s",
+            db_user.id,
         )
     elif student_data.grade_level:
         background_tasks.add_task(

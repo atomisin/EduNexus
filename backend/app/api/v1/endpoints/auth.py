@@ -15,6 +15,7 @@ from types import SimpleNamespace
 from app.db.database import get_db, get_async_db
 from app.models.user import User, UserRole, UserStatus, TeacherProfile
 from app.models.student import StudentProfile
+from app.models.notification import Notification
 from app.core.config import settings
 from app.core.limiter import limiter
 from app.core.security import verify_password
@@ -92,6 +93,59 @@ def queue_verification_email(background_tasks: BackgroundTasks, user: User, veri
 
     background_tasks.add_task(_send_verification_email)
     return True
+
+
+def add_welcome_notification(db: AsyncSession, user: User, verification_required: bool) -> None:
+    """Create the first in-app inbox item for a new account."""
+    if verification_required:
+        message = (
+            "Welcome to EduNexus. Please verify your email first; after that, "
+            "an administrator will review and approve your account."
+        )
+    else:
+        message = (
+            "Welcome to EduNexus. Your account has been received and is waiting "
+            "for administrator approval."
+        )
+
+    db.add(
+        Notification(
+            id=uuid.uuid4(),
+            user_id=user.id,
+            type="welcome",
+            title="Welcome to EduNexus",
+            message=message,
+            link="/",
+        )
+    )
+
+
+async def notify_admins_of_pending_user_in_app(user: User, db: AsyncSession) -> None:
+    """Create admin inbox notifications for accounts ready for approval."""
+    result = await db.execute(
+        select(User.id).filter(User.role == UserRole.ADMIN, User.is_active == True)
+    )
+    admin_ids = [row[0] for row in result.all()]
+    for admin_id in admin_ids:
+        db.add(
+            Notification(
+                id=uuid.uuid4(),
+                user_id=admin_id,
+                type="account_pending_approval",
+                title="New account pending approval",
+                message=(
+                    f"{user.full_name or user.email} has verified their email "
+                    "and is waiting for administrator approval."
+                ),
+                link="/admin",
+            )
+        )
+
+
+async def notify_admins_of_pending_user(user: User, db: AsyncSession) -> None:
+    """Send both admin inbox and email notifications for approval-ready accounts."""
+    await notify_admins_of_pending_user_in_app(user, db)
+    await email_service.notify_admins_of_pending_user(user, db)
 
 
 async def resend_verification_for_existing_user(
@@ -300,6 +354,7 @@ async def register(
     )
 
     db.add(db_user)
+    add_welcome_notification(db, db_user, verification_required)
     await db.commit()
     await db.refresh(db_user)
 
@@ -310,6 +365,14 @@ async def register(
         and verification_code
     ):
         email_sent = queue_verification_email(background_tasks, db_user, verification_code)
+
+    if not verification_required:
+        try:
+            await notify_admins_of_pending_user(db_user, db)
+            await db.commit()
+        except Exception as e:
+            await db.rollback()
+            logger.error("Failed to notify admins of pending user %s: %s", db_user.email, e)
 
     return {
         "success": True,
@@ -413,6 +476,7 @@ async def register_teacher(
     )
 
     db.add(teacher_profile)
+    add_welcome_notification(db, db_user, verification_required)
     await db.commit()
     await db.refresh(db_user)
 
@@ -423,6 +487,14 @@ async def register_teacher(
         and verification_code
     ):
         email_sent = queue_verification_email(background_tasks, db_user, verification_code)
+
+    if not verification_required:
+        try:
+            await notify_admins_of_pending_user(db_user, db)
+            await db.commit()
+        except Exception as e:
+            await db.rollback()
+            logger.error("Failed to notify admins of pending teacher %s: %s", db_user.email, e)
 
     return {
         "success": True,
@@ -594,6 +666,7 @@ async def register_student(
                 "safe_alternatives": json.dumps(safety.safe_alternatives),
             },
         )
+    add_welcome_notification(db, db_user, verification_required)
     await db.commit()
     await db.refresh(db_user)
 
@@ -604,6 +677,14 @@ async def register_student(
         and verification_code
     ):
         email_sent = queue_verification_email(background_tasks, db_user, verification_code)
+
+    if not verification_required:
+        try:
+            await notify_admins_of_pending_user(db_user, db)
+            await db.commit()
+        except Exception as e:
+            await db.rollback()
+            logger.error("Failed to notify admins of pending student %s: %s", db_user.email, e)
 
     # Ensure curriculum is generated/loaded asynchronously
     from app.services.curriculum_initializer import initialize_standard_curriculum
@@ -1186,8 +1267,10 @@ async def verify_email(
 
     # Notify administrators (C-04-B)
     try:
-        await email_service.notify_admins_of_pending_user(user, db)
+        await notify_admins_of_pending_user(user, db)
+        await db.commit()
     except Exception as e:
+        await db.rollback()
         # We don't want to fail the verification if notification fails
         import logging
 

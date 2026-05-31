@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { User, CheckCircle, XCircle, Clock, Search, Users, GraduationCap, Briefcase, Loader2, UserPlus } from 'lucide-react';
 import { toast } from 'sonner';
 import { adminAPI } from '@/services/api';
@@ -61,6 +62,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [teachers, setTeachers] = useState<any[]>([]);
   const [teachersLoading, setTeachersLoading] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [adminDialogOpen, setAdminDialogOpen] = useState(false);
   const [adminAccess, setAdminAccess] = useState<{
     is_super_admin: boolean;
     admin_scope?: string;
@@ -297,14 +299,24 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               <p className="text-sm text-muted-foreground">Review users, governed custom courses, video evidence sources, teacher licenses, AI cost trends, and assessment quality health.</p>
             </div>
             {isSuperAdmin ? (
-              <Button
-                type="button"
-                className="shrink-0 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90"
-                onClick={() => setActiveTab('admins')}
-              >
-                <UserPlus className="mr-2 h-4 w-4" />
-                Create admin
-              </Button>
+              <Dialog open={adminDialogOpen} onOpenChange={setAdminDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="shrink-0 rounded-lg border-border"
+                  >
+                    <UserPlus className="mr-2 h-4 w-4" />
+                    Delegate access
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-4xl">
+                  <DialogHeader>
+                    <DialogTitle>Create delegated admin</DialogTitle>
+                  </DialogHeader>
+                  <AdminDelegationPanel permissionLabels={adminAccess?.permission_labels} />
+                </DialogContent>
+              </Dialog>
             ) : null}
           </div>
         </div>
@@ -334,12 +346,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             </div>
           </CardContent>
         </Card>
-
-        {isSuperAdmin ? (
-          <div className="mb-5">
-            <AdminDelegationPanel permissionLabels={adminAccess?.permission_labels} />
-          </div>
-        ) : null}
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4 mb-5 sm:mb-6">
           <Card className="rounded-lg border-border shadow-none">
@@ -491,7 +497,30 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
             <TabsContent value="admins" className="space-y-6">
               {activeTab === 'admins' && isSuperAdmin ? (
-                <AdminDelegationPanel permissionLabels={adminAccess?.permission_labels} />
+                <Card className="rounded-lg border-border shadow-none">
+                  <CardHeader>
+                    <CardTitle>Admin Delegation</CardTitle>
+                    <CardDescription>
+                      Create delegated admins only when an operator needs a defined responsibility.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <Dialog open={adminDialogOpen} onOpenChange={setAdminDialogOpen}>
+                      <DialogTrigger asChild>
+                        <Button type="button" className="rounded-lg bg-primary text-primary-foreground hover:bg-primary/90">
+                          <UserPlus className="mr-2 h-4 w-4" />
+                          Create delegated admin
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-4xl">
+                        <DialogHeader>
+                          <DialogTitle>Create delegated admin</DialogTitle>
+                        </DialogHeader>
+                        <AdminDelegationPanel permissionLabels={adminAccess?.permission_labels} />
+                      </DialogContent>
+                    </Dialog>
+                  </CardContent>
+                </Card>
               ) : null}
             </TabsContent>
 

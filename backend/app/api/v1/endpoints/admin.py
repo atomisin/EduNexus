@@ -138,6 +138,7 @@ ADMIN_PERMISSION_LABELS = {
     "messages": "Admin messages",
 }
 DELEGATED_ADMIN_PERMISSIONS = set(ADMIN_PERMISSION_LABELS.keys())
+_VIDEO_CREATOR_PROFILES_READY = False
 
 
 def _configured_super_admin_email() -> str:
@@ -211,6 +212,55 @@ def _json_list(value: Any) -> List[str]:
         except json.JSONDecodeError:
             return [value] if value else []
     return []
+
+
+async def _ensure_video_creator_profiles_table(db: AsyncSession) -> None:
+    global _VIDEO_CREATOR_PROFILES_READY
+    if _VIDEO_CREATOR_PROFILES_READY:
+        return
+
+    await db.execute(
+        text(
+            """
+            CREATE TABLE IF NOT EXISTS video_creator_profiles (
+                id UUID PRIMARY KEY,
+                creator_name VARCHAR(255) NOT NULL,
+                channel_aliases JSONB NOT NULL DEFAULT '[]'::jsonb,
+                domains JSONB NOT NULL DEFAULT '[]'::jsonb,
+                topic_keywords JSONB NOT NULL DEFAULT '[]'::jsonb,
+                recommended_query_terms JSONB NOT NULL DEFAULT '[]'::jsonb,
+                community_evidence_count INTEGER NOT NULL DEFAULT 0,
+                community_evidence_summary TEXT,
+                source_notes TEXT,
+                is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                sort_order INTEGER NOT NULL DEFAULT 0,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+    )
+    await db.execute(
+        text(
+            """
+            CREATE INDEX IF NOT EXISTS ix_video_creator_profiles_active_sort
+            ON video_creator_profiles (is_active, sort_order, creator_name)
+            """
+        )
+    )
+    await db.execute(text("ALTER TABLE video_creator_profiles ADD COLUMN IF NOT EXISTS channel_aliases JSONB NOT NULL DEFAULT '[]'::jsonb"))
+    await db.execute(text("ALTER TABLE video_creator_profiles ADD COLUMN IF NOT EXISTS domains JSONB NOT NULL DEFAULT '[]'::jsonb"))
+    await db.execute(text("ALTER TABLE video_creator_profiles ADD COLUMN IF NOT EXISTS topic_keywords JSONB NOT NULL DEFAULT '[]'::jsonb"))
+    await db.execute(text("ALTER TABLE video_creator_profiles ADD COLUMN IF NOT EXISTS recommended_query_terms JSONB NOT NULL DEFAULT '[]'::jsonb"))
+    await db.execute(text("ALTER TABLE video_creator_profiles ADD COLUMN IF NOT EXISTS community_evidence_count INTEGER NOT NULL DEFAULT 0"))
+    await db.execute(text("ALTER TABLE video_creator_profiles ADD COLUMN IF NOT EXISTS community_evidence_summary TEXT"))
+    await db.execute(text("ALTER TABLE video_creator_profiles ADD COLUMN IF NOT EXISTS source_notes TEXT"))
+    await db.execute(text("ALTER TABLE video_creator_profiles ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE"))
+    await db.execute(text("ALTER TABLE video_creator_profiles ADD COLUMN IF NOT EXISTS sort_order INTEGER NOT NULL DEFAULT 0"))
+    await db.execute(text("ALTER TABLE video_creator_profiles ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP"))
+    await db.execute(text("ALTER TABLE video_creator_profiles ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP"))
+    await db.commit()
+    _VIDEO_CREATOR_PROFILES_READY = True
 
 
 def _report_number(value: Any) -> float:
@@ -639,6 +689,7 @@ async def list_video_creator_profiles(
     current_user: User = Depends(require_admin),
 ):
     _require_admin_permission(current_user, "video_evidence")
+    await _ensure_video_creator_profiles_table(db)
     where_clause = "" if include_inactive else "WHERE is_active = TRUE"
     result = await db.execute(
         text(
@@ -686,6 +737,7 @@ async def create_video_creator_profile(
     current_user: User = Depends(require_admin),
 ):
     _require_admin_permission(current_user, "video_evidence")
+    await _ensure_video_creator_profiles_table(db)
     profile_id = uuid.uuid4()
     await db.execute(
         text(
@@ -748,6 +800,7 @@ async def update_video_creator_profile(
     current_user: User = Depends(require_admin),
 ):
     _require_admin_permission(current_user, "video_evidence")
+    await _ensure_video_creator_profiles_table(db)
     try:
         profile_uuid = uuid.UUID(profile_id)
     except ValueError:
@@ -800,6 +853,7 @@ async def seed_video_creator_profiles(
     current_user: User = Depends(require_admin),
 ):
     _require_admin_permission(current_user, "video_evidence")
+    await _ensure_video_creator_profiles_table(db)
     result = await db.execute(text("SELECT COUNT(*) FROM video_creator_profiles"))
     return {
         "success": True,

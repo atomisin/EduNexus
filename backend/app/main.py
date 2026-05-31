@@ -281,6 +281,34 @@ async def lifespan(app: FastAPI):
             await db.execute(text("ALTER TABLE custom_course_requests ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMP WITH TIME ZONE"))
             await db.execute(text("ALTER TABLE custom_course_requests ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP"))
             await db.execute(text("""
+                CREATE TABLE IF NOT EXISTS video_creator_profiles (
+                    id UUID PRIMARY KEY,
+                    creator_name VARCHAR(255) NOT NULL,
+                    channel_aliases JSONB NOT NULL DEFAULT '[]'::jsonb,
+                    domains JSONB NOT NULL DEFAULT '[]'::jsonb,
+                    topic_keywords JSONB NOT NULL DEFAULT '[]'::jsonb,
+                    recommended_query_terms JSONB NOT NULL DEFAULT '[]'::jsonb,
+                    community_evidence_count INTEGER NOT NULL DEFAULT 0,
+                    community_evidence_summary TEXT,
+                    source_notes TEXT,
+                    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                    sort_order INTEGER NOT NULL DEFAULT 0,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            await db.execute(text("ALTER TABLE video_creator_profiles ADD COLUMN IF NOT EXISTS channel_aliases JSONB NOT NULL DEFAULT '[]'::jsonb"))
+            await db.execute(text("ALTER TABLE video_creator_profiles ADD COLUMN IF NOT EXISTS domains JSONB NOT NULL DEFAULT '[]'::jsonb"))
+            await db.execute(text("ALTER TABLE video_creator_profiles ADD COLUMN IF NOT EXISTS topic_keywords JSONB NOT NULL DEFAULT '[]'::jsonb"))
+            await db.execute(text("ALTER TABLE video_creator_profiles ADD COLUMN IF NOT EXISTS recommended_query_terms JSONB NOT NULL DEFAULT '[]'::jsonb"))
+            await db.execute(text("ALTER TABLE video_creator_profiles ADD COLUMN IF NOT EXISTS community_evidence_count INTEGER NOT NULL DEFAULT 0"))
+            await db.execute(text("ALTER TABLE video_creator_profiles ADD COLUMN IF NOT EXISTS community_evidence_summary TEXT"))
+            await db.execute(text("ALTER TABLE video_creator_profiles ADD COLUMN IF NOT EXISTS source_notes TEXT"))
+            await db.execute(text("ALTER TABLE video_creator_profiles ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE"))
+            await db.execute(text("ALTER TABLE video_creator_profiles ADD COLUMN IF NOT EXISTS sort_order INTEGER NOT NULL DEFAULT 0"))
+            await db.execute(text("ALTER TABLE video_creator_profiles ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP"))
+            await db.execute(text("ALTER TABLE video_creator_profiles ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP"))
+            await db.execute(text("""
                 UPDATE student_topic_progress
                 SET status = CASE
                     WHEN COALESCE(progress_pct, 0) >= 100 THEN 'completed'
@@ -351,6 +379,13 @@ async def lifespan(app: FastAPI):
                 "custom_course_requests",
                 "status, created_at DESC",
                 ["status", "created_at"],
+            )
+            await _create_index_if_columns_exist(
+                db,
+                "ix_video_creator_profiles_active_sort",
+                "video_creator_profiles",
+                "is_active, sort_order, creator_name",
+                ["is_active", "sort_order", "creator_name"],
             )
             await db.commit()
             logger.info("Database Hotpatch: production schema columns and indexes verified.")

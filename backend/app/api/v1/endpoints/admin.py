@@ -26,6 +26,7 @@ from app.services.parsing_service import parsing_service
 from app.services.custom_course_service import generate_and_enroll_custom_course
 from app.services.email_service import email_service
 from app.constants import EDUCATION_LEVELS
+from app.core.config import settings
 from app.core.security import pwd_context
 from fastapi import UploadFile, File, Form, BackgroundTasks
 import os

@@ -6,7 +6,7 @@ from sqlalchemy import text
 async def check_version():
     db_url = os.getenv("DATABASE_URL", "postgresql+asyncpg://postgres:postgres@127.0.0.1:5432/edunexus")
     try:
-        engine = create_async_engine(db_url)
+        engine = create_async_engine(db_url, connect_args={"statement_cache_size": 0})
         async with engine.connect() as conn:
             result = await conn.execute(text("SELECT version_num FROM alembic_version"))
             version = result.scalar()

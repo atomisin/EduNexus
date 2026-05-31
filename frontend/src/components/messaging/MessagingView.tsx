@@ -152,10 +152,10 @@ export const MessagingView = ({ currentUser }: { currentUser: any }) => {
     };
 
     return (
-        <div className="h-[calc(100vh-8rem)] flex gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <div className="flex h-[calc(100vh-8rem)] min-h-0 gap-6 overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
             {/* Sidebar - Contact List */}
-            <Card className="w-80 flex flex-col border-0 shadow-2xl rounded-3xl overflow-hidden bg-white/50 backdrop-blur-xl dark:bg-slate-900/50">
-                <div className="p-6 border-b dark:border-slate-800">
+            <Card className="flex min-h-0 w-80 shrink-0 flex-col overflow-hidden rounded-3xl border-0 bg-white/50 shadow-2xl backdrop-blur-xl dark:bg-slate-900/50">
+                <div className="shrink-0 p-6 border-b dark:border-slate-800">
                     <h2 className="text-2xl font-black mb-4 italic tracking-tight text-slate-900 dark:text-slate-100">Messages</h2>
                     <div className="relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -168,7 +168,7 @@ export const MessagingView = ({ currentUser }: { currentUser: any }) => {
                     </div>
                 </div>
 
-                <ScrollArea className="flex-1">
+                <ScrollArea className="min-h-0 flex-1">
                     {searchQuery.length > 2 && searchResults.length > 0 ? (
                         <div className="p-2 space-y-1">
                             <p className="text-[10px] uppercase font-bold text-slate-400 px-3 py-1 tracking-widest">Search Results</p>
@@ -250,11 +250,11 @@ export const MessagingView = ({ currentUser }: { currentUser: any }) => {
             </Card>
 
             {/* Main Chat Window */}
-            <Card className="flex-1 flex flex-col border-0 shadow-2xl rounded-3xl overflow-hidden bg-white/50 backdrop-blur-xl dark:bg-slate-900/50">
+            <Card className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border-0 bg-white/50 shadow-2xl backdrop-blur-xl dark:bg-slate-900/50">
                 {selectedContact ? (
                     <>
                         {/* Chat Header */}
-                        <div className="p-6 border-b dark:border-slate-800 flex items-center justify-between bg-white/80 dark:bg-slate-900/80 backdrop-blur-md">
+                        <div className="shrink-0 p-6 border-b dark:border-slate-800 flex items-center justify-between bg-white/80 dark:bg-slate-900/80 backdrop-blur-md">
                             <div className="flex items-center gap-4">
                                     <Avatar className="w-12 h-12 border-2 border-teal-100 dark:border-slate-700 shadow-sm">
                                         <AvatarImage src={selectedContact.avatar_url} />
@@ -276,7 +276,7 @@ export const MessagingView = ({ currentUser }: { currentUser: any }) => {
                         </div>
 
                         {/* Messages Area */}
-                        <div className="flex-1 p-6 overflow-hidden relative">
+                        <div className="relative min-h-0 flex-1 overflow-hidden p-6">
                             <ScrollArea className="h-full pr-4">
                                 <div className="space-y-6">
                                     {messages.map((m, i) => {
@@ -326,7 +326,7 @@ export const MessagingView = ({ currentUser }: { currentUser: any }) => {
                         </div>
 
                         {/* Chat Input */}
-                        <div className="p-6 bg-white/50 dark:bg-slate-900/50 backdrop-blur-md">
+                        <div className="shrink-0 p-6 bg-white/50 dark:bg-slate-900/50 backdrop-blur-md">
                             <form onSubmit={handleSendMessage} className="relative flex items-center gap-3 bg-white dark:bg-slate-800 p-2 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-700">
                                 <Button type="button" variant="ghost" size="icon" className="rounded-xl text-slate-400 hover:text-teal-600"><Paperclip className="w-5 h-5" /></Button>
                                 <Input

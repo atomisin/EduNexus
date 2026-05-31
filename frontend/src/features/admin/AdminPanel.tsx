@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { User, CheckCircle, XCircle, Clock, Search, Users, GraduationCap, Briefcase, Loader2 } from 'lucide-react';
+import { User, CheckCircle, XCircle, Clock, Search, Users, GraduationCap, Briefcase, Loader2, UserPlus } from 'lucide-react';
 import { toast } from 'sonner';
 import { adminAPI } from '@/services/api';
 import { NotificationBell } from '@/components/NotificationBell';
@@ -286,8 +286,22 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
       <main className="max-w-7xl mx-auto px-3 py-4 pb-24 sm:p-4 md:p-6 md:pb-8">
         <div className="mb-4 sm:mb-5">
-          <h2 className="text-xl sm:text-2xl font-semibold tracking-tight">Platform Operations</h2>
-          <p className="text-sm text-muted-foreground">Review users, governed custom courses, video evidence sources, teacher licenses, AI cost trends, and assessment quality health.</p>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <h2 className="text-xl sm:text-2xl font-semibold tracking-tight">Platform Operations</h2>
+              <p className="text-sm text-muted-foreground">Review users, governed custom courses, video evidence sources, teacher licenses, AI cost trends, and assessment quality health.</p>
+            </div>
+            {isSuperAdmin ? (
+              <Button
+                type="button"
+                className="shrink-0 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90"
+                onClick={() => setActiveTab('admins')}
+              >
+                <UserPlus className="mr-2 h-4 w-4" />
+                Create admin
+              </Button>
+            ) : null}
+          </div>
         </div>
 
         <Card className="mb-5 rounded-lg border border-border bg-background shadow-none">
@@ -386,7 +400,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           </div>
         ) : (
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full min-w-0">
-            <TabsList className="mb-5 grid h-auto w-full grid-cols-2 gap-1 bg-secondary/50 p-1 sm:grid-cols-3 xl:grid-cols-9">
+            <TabsList className="mb-5 flex h-auto w-full flex-wrap justify-start gap-1 bg-secondary/50 p-1">
               {canManageUsers ? <TabsTrigger value="pending" className="min-w-0 whitespace-normal rounded-md px-2 py-2 text-xs leading-tight data-[state=active]:bg-primary data-[state=active]:text-primary-foreground sm:text-sm">Pending Approval ({pendingUsers.length})</TabsTrigger> : null}
               {canManageUsers ? <TabsTrigger value="approved" className="min-w-0 whitespace-normal rounded-md px-2 py-2 text-xs leading-tight data-[state=active]:bg-primary data-[state=active]:text-primary-foreground sm:text-sm">Approved Users ({approvedUsers.length})</TabsTrigger> : null}
               {canManageUsers ? <TabsTrigger value="suspended" className="min-w-0 whitespace-normal rounded-md px-2 py-2 text-xs leading-tight data-[state=active]:bg-primary data-[state=active]:text-primary-foreground sm:text-sm">Suspended ({suspendedUsers.length})</TabsTrigger> : null}

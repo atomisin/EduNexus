@@ -1197,6 +1197,7 @@ async def chat(
 ):
     """Chat completion using LLM (C-06: Sanitized, Rate Limited, Strict Server Prompts)"""
     request_id = getattr(request.state, "request_id", "unknown")
+    is_generalist_mode = (chat_req.mode or "").strip().lower() == "generalist"
     # Sanitize all user messages
     for msg in chat_req.messages:
         if msg.get("role") == "user":
@@ -1220,13 +1221,15 @@ async def chat(
     # Token limit based on age (kept for logic, but persona handled)
     # max_tokens = 80 if age_group == "child" else 150 if age_group == "teen" else 250
 
-    brain_power_cost = brain_power_cost_for_tokens(
-        estimate_message_tokens(chat_req.messages),
-        900,
-        student_profile.education_level if student_profile else None,
-    )
-    if not await deduct_brain_power(current_user.id, brain_power_cost, db):
-        raise_brain_power_depleted()
+    brain_power_cost = 0
+    if not is_generalist_mode:
+        brain_power_cost = brain_power_cost_for_tokens(
+            estimate_message_tokens(chat_req.messages),
+            900,
+            student_profile.education_level if student_profile else None,
+        )
+        if not await deduct_brain_power(current_user.id, brain_power_cost, db):
+            raise_brain_power_depleted()
 
     try:
         lesson_context = chat_req.context or {}
@@ -1298,23 +1301,24 @@ async def chat(
             },
         )
         try:
-            activity = StudentActivityLog(
-                student_id=current_user.id,
-                activity_type="ai_chat",
-                activity_name=f"AI Tutor: {chat_req.topic_name or (topic.name if topic else 'Learning turn')}",
-                subject_id=subject.id if subject else None,
-                topic_id=topic.id if topic else None,
-                extra_data={
-                    "subject": chat_req.subject_name,
-                    "topic": chat_req.topic_name,
-                    "lesson_stage": result.get("lesson_stage", lesson_context.get("lesson_stage", "")),
-                    "ui_action": result.get("ui_action"),
-                },
-            )
-            db.add(activity)
-            if student_profile:
-                mark_student_learning_activity(student_profile)
-            await db.commit()
+            if not is_generalist_mode:
+                activity = StudentActivityLog(
+                    student_id=current_user.id,
+                    activity_type="ai_chat",
+                    activity_name=f"AI Tutor: {chat_req.topic_name or (topic.name if topic else 'Learning turn')}",
+                    subject_id=subject.id if subject else None,
+                    topic_id=topic.id if topic else None,
+                    extra_data={
+                        "subject": chat_req.subject_name,
+                        "topic": chat_req.topic_name,
+                        "lesson_stage": result.get("lesson_stage", lesson_context.get("lesson_stage", "")),
+                        "ui_action": result.get("ui_action"),
+                    },
+                )
+                db.add(activity)
+                if student_profile:
+                    mark_student_learning_activity(student_profile)
+                await db.commit()
         except Exception:
             logger.warning("Could not record AI tutor learning activity for streak.", exc_info=True)
             await db.rollback()
@@ -1334,7 +1338,8 @@ async def chat(
                 "error": str(exc.detail),
             },
         )
-        await refund_brain_power(current_user.id, brain_power_cost, db)
+        if brain_power_cost:
+            await refund_brain_power(current_user.id, brain_power_cost, db)
         raise
     except Exception:
         logger.error(
@@ -1351,7 +1356,8 @@ async def chat(
             },
             exc_info=True,
         )
-        await refund_brain_power(current_user.id, brain_power_cost, db)
+        if brain_power_cost:
+            await refund_brain_power(current_user.id, brain_power_cost, db)
         raise
 
 

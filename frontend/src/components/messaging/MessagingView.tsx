@@ -4,7 +4,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { messageAPI } from '@/services/api';
 import { toast } from 'sonner';
@@ -168,7 +167,7 @@ export const MessagingView = ({ currentUser }: { currentUser: any }) => {
                     </div>
                 </div>
 
-                <ScrollArea className="min-h-0 flex-1">
+                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
                     {searchQuery.length > 2 && searchResults.length > 0 ? (
                         <div className="p-2 space-y-1">
                             <p className="text-[10px] uppercase font-bold text-slate-400 px-3 py-1 tracking-widest">Search Results</p>
@@ -246,7 +245,7 @@ export const MessagingView = ({ currentUser }: { currentUser: any }) => {
                             )}
                         </div>
                     )}
-                </ScrollArea>
+                </div>
             </Card>
 
             {/* Main Chat Window */}
@@ -277,7 +276,7 @@ export const MessagingView = ({ currentUser }: { currentUser: any }) => {
 
                         {/* Messages Area */}
                         <div className="relative min-h-0 flex-1 overflow-hidden p-6">
-                            <ScrollArea className="h-full pr-4">
+                            <div className="h-full overflow-y-auto overscroll-contain pr-4">
                                 <div className="space-y-6">
                                     {messages.map((m, i) => {
                                         const isMe = m.sender_id === currentUser.id;
@@ -322,7 +321,7 @@ export const MessagingView = ({ currentUser }: { currentUser: any }) => {
                                     )}
                                     <div ref={messagesEndRef} />
                                 </div>
-                            </ScrollArea>
+                            </div>
                         </div>
 
                         {/* Chat Input */}

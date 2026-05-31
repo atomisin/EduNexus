@@ -63,6 +63,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [loading, setLoading] = useState(false);
   const [adminAccess, setAdminAccess] = useState<{
     is_super_admin: boolean;
+    admin_scope?: string;
     permissions: string[];
     permission_labels?: Record<string, string>;
   } | null>(null);
@@ -221,7 +222,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const teacherCount = users.filter(u => u.role?.toLowerCase() === 'teacher').length;
   const studentCount = users.filter(u => u.role?.toLowerCase() === 'student').length;
   const canManageUsers = hasAdminAccess('user_approvals');
-  const isSuperAdmin = Boolean(adminAccess?.is_super_admin || adminAccess?.permissions?.includes('*'));
+  const isSuperAdmin = Boolean(
+    adminAccess?.is_super_admin ||
+    adminAccess?.admin_scope === 'super' ||
+    adminAccess?.permissions?.includes('*')
+  );
 
   if (!isLoggedIn) {
     return (
@@ -329,6 +334,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             </div>
           </CardContent>
         </Card>
+
+        {isSuperAdmin ? (
+          <div className="mb-5">
+            <AdminDelegationPanel permissionLabels={adminAccess?.permission_labels} />
+          </div>
+        ) : null}
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4 mb-5 sm:mb-6">
           <Card className="rounded-lg border-border shadow-none">

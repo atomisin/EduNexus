@@ -55,6 +55,8 @@ export function SmartHelper({ isOpen, onClose, subject, topic, enableHistory = t
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const speechSynthesis = typeof window !== 'undefined' ? window.speechSynthesis : null;
   const recognitionRef = useRef<any>(null);
+  const lastInterimTranscriptRef = useRef('');
+  const emittedSpeechResultRef = useRef(false);
 
   const isSpeechRecognitionSupported = typeof window !== 'undefined' && ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window);
 
@@ -136,6 +138,12 @@ export function SmartHelper({ isOpen, onClose, subject, topic, enableHistory = t
     recognitionRef.current.interimResults = true;
     recognitionRef.current.lang = 'en-US';
 
+    recognitionRef.current.onstart = () => {
+      lastInterimTranscriptRef.current = '';
+      emittedSpeechResultRef.current = false;
+      setIsListening(true);
+    };
+
     recognitionRef.current.onresult = (event: any) => {
       let finalTranscript = '';
       let interim = '';
@@ -149,8 +157,15 @@ export function SmartHelper({ isOpen, onClose, subject, topic, enableHistory = t
         }
       }
 
-      if (finalTranscript) {
-        setInput(prev => prev + ' ' + finalTranscript);
+      const cleanInterim = interim.trim();
+      const cleanFinal = finalTranscript.trim();
+      if (cleanInterim) {
+        lastInterimTranscriptRef.current = cleanInterim;
+      }
+      if (cleanFinal) {
+        emittedSpeechResultRef.current = true;
+        lastInterimTranscriptRef.current = '';
+        setInput(prev => `${prev ? `${prev} ` : ''}${cleanFinal}`.trim());
       }
     };
 
@@ -160,6 +175,12 @@ export function SmartHelper({ isOpen, onClose, subject, topic, enableHistory = t
     };
 
     recognitionRef.current.onend = () => {
+      const fallbackTranscript = lastInterimTranscriptRef.current.trim();
+      if (fallbackTranscript && !emittedSpeechResultRef.current) {
+        setInput(prev => `${prev ? `${prev} ` : ''}${fallbackTranscript}`.trim());
+      }
+      lastInterimTranscriptRef.current = '';
+      emittedSpeechResultRef.current = false;
       setIsListening(false);
     };
 
@@ -177,8 +198,14 @@ export function SmartHelper({ isOpen, onClose, subject, topic, enableHistory = t
       recognitionRef.current.stop();
       setIsListening(false);
     } else {
-      recognitionRef.current.start();
-      setIsListening(true);
+      lastInterimTranscriptRef.current = '';
+      emittedSpeechResultRef.current = false;
+      try {
+        recognitionRef.current.start();
+      } catch {
+        recognitionRef.current.abort?.();
+        setIsListening(false);
+      }
     }
   }, [isListening]);
 

@@ -11,11 +11,13 @@ const getSpeechRecognitionConstructor = () => {
 };
 
 export const useSpeechRecognition = ({
-  lang = 'en-GB',
+  lang = 'en-US',
   onTranscript,
 }: UseSpeechRecognitionOptions = {}) => {
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const onTranscriptRef = useRef(onTranscript);
+  const lastInterimTranscriptRef = useRef('');
+  const emittedDuringSessionRef = useRef(false);
   const [isListening, setIsListening] = useState(false);
   const [interimTranscript, setInterimTranscript] = useState('');
   const [speechError, setSpeechError] = useState<string | null>(null);
@@ -38,6 +40,8 @@ export const useSpeechRecognition = ({
       setIsListening(true);
       setSpeechError(null);
       setInterimTranscript('');
+      lastInterimTranscriptRef.current = '';
+      emittedDuringSessionRef.current = false;
     };
 
     recognition.onresult = (event) => {
@@ -53,21 +57,38 @@ export const useSpeechRecognition = ({
         }
       }
 
-      setInterimTranscript(interimText.trim());
-      if (finalText.trim()) {
-        onTranscriptRef.current?.(finalText.trim());
+      const cleanInterim = interimText.trim();
+      const cleanFinal = finalText.trim();
+      setInterimTranscript(cleanInterim);
+      if (cleanInterim) {
+        lastInterimTranscriptRef.current = cleanInterim;
+      }
+      if (cleanFinal) {
+        emittedDuringSessionRef.current = true;
+        lastInterimTranscriptRef.current = '';
+        onTranscriptRef.current?.(cleanFinal);
       }
     };
 
     recognition.onerror = (event) => {
-      const message = event.error === 'not-allowed'
+      const message = event.error === 'not-allowed' || event.error === 'service-not-allowed'
         ? 'Microphone permission is blocked for this browser.'
-        : 'Voice input stopped. Please try again.';
+        : event.error === 'audio-capture'
+          ? 'No microphone was detected. Check your device microphone.'
+          : event.error === 'no-speech'
+            ? 'I did not hear anything. Try again and speak clearly.'
+            : 'Voice input stopped. Please try again.';
       setSpeechError(message);
       setIsListening(false);
     };
 
     recognition.onend = () => {
+      const fallbackTranscript = lastInterimTranscriptRef.current.trim();
+      if (fallbackTranscript && !emittedDuringSessionRef.current) {
+        onTranscriptRef.current?.(fallbackTranscript);
+      }
+      lastInterimTranscriptRef.current = '';
+      emittedDuringSessionRef.current = false;
       setIsListening(false);
       setInterimTranscript('');
     };
@@ -90,9 +111,16 @@ export const useSpeechRecognition = ({
     try {
       setSpeechError(null);
       setInterimTranscript('');
+      lastInterimTranscriptRef.current = '';
+      emittedDuringSessionRef.current = false;
       recognition.start();
-    } catch {
-      recognition.stop();
+    } catch (error) {
+      setSpeechError('Voice input is already starting. Please try again.');
+      try {
+        recognition.abort();
+      } catch {
+        // Browser recognition implementations can throw while already idle.
+      }
       setIsListening(false);
     }
   }, []);

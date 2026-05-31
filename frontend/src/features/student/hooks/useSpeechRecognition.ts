@@ -71,13 +71,28 @@ export const useSpeechRecognition = ({
     };
 
     recognition.onerror = (event) => {
+      const fallbackTranscript = lastInterimTranscriptRef.current.trim();
+      if (fallbackTranscript && !emittedDuringSessionRef.current) {
+        emittedDuringSessionRef.current = true;
+        onTranscriptRef.current?.(fallbackTranscript);
+      }
+      lastInterimTranscriptRef.current = '';
+      setInterimTranscript('');
+
+      if (event.error === 'aborted') {
+        setIsListening(false);
+        return;
+      }
+
       const message = event.error === 'not-allowed' || event.error === 'service-not-allowed'
         ? 'Microphone permission is blocked for this browser.'
         : event.error === 'audio-capture'
           ? 'No microphone was detected. Check your device microphone.'
           : event.error === 'no-speech'
             ? 'I did not hear anything. Try again and speak clearly.'
-            : 'Voice input stopped. Please try again.';
+            : event.error === 'network'
+              ? 'Voice input could not connect to the browser speech service. Check your connection or try Chrome/Edge.'
+              : `Voice input stopped (${event.error || 'unknown'}). Please try again.`;
       setSpeechError(message);
       setIsListening(false);
     };

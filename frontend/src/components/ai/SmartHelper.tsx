@@ -170,7 +170,16 @@ export function SmartHelper({ isOpen, onClose, subject, topic, enableHistory = t
     };
 
     recognitionRef.current.onerror = (event: any) => {
-      console.error('Speech recognition error:', event.error);
+      const fallbackTranscript = lastInterimTranscriptRef.current.trim();
+      if (fallbackTranscript && !emittedSpeechResultRef.current) {
+        emittedSpeechResultRef.current = true;
+        setInput(prev => `${prev ? `${prev} ` : ''}${fallbackTranscript}`.trim());
+      }
+      lastInterimTranscriptRef.current = '';
+
+      if (event.error !== 'aborted') {
+        console.warn('Speech recognition error:', event.error);
+      }
       setIsListening(false);
     };
 
